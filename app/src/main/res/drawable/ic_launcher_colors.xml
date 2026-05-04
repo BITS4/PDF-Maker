@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Add this color to your existing:
+    app/src/main/res/values/colors.xml
+    (just add the one line inside <resources>)
+-->
+<resources>
+    <color name="ic_launcher_background">#C62828</color>
+</resources>

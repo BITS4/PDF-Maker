@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    App icon foreground — a stylized PDF document with a red corner fold
+    and a bold "PDF" badge. Place at:
+    app/src/main/res/drawable/ic_launcher_foreground.xml
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Safe zone starts at 12dp from each edge (72×72dp inner area) -->
+
+    <!-- Document body (white card) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="
+        M28,20 L72,20
+        Q76,20 76,24
+        L76,88
+        Q76,92 72,92
+        L28,92
+        Q24,92 24,88
+        L24,24
+        Q24,20 28,20 Z" />
+
+    <!-- Top-right folded corner triangle (grey shadow) -->
+    <path
+        android:fillColor="#D0D0D0"
+        android:pathData="M62,20 L76,34 L62,34 Z" />
+
+    <!-- Red accent bar at top -->
+    <path
+        android:fillColor="#E53935"
+        android:pathData="M24,24 Q24,20 28,20 L62,20 L62,34 L24,34 Z" />
+
+    <!-- "PDF" text rendered as paths -->
+    <!-- P -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,22 L30,32 M30,22 L35,22 Q38,22 38,25 Q38,28 35,28 L30,28" />
+    <!-- D -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M40,22 L40,32 M40,22 L44,22 Q48,22 48,27 Q48,32 44,32 L40,32" />
+    <!-- F -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M51,22 L51,32 M51,22 L56,22 M51,27 L55,27" />
+
+    <!-- Horizontal text lines (document content) -->
+    <path
+        android:fillColor="#BDBDBD"
+        android:strokeColor="#BDBDBD"
+        android:strokeWidth="2"
+        android:pathData="M32,44 L68,44" />
+    <path
+        android:fillColor="#BDBDBD"
+        android:strokeColor="#BDBDBD"
+        android:strokeWidth="2"
+        android:pathData="M32,52 L68,52" />
+    <path
+        android:fillColor="#BDBDBD"
+        android:strokeColor="#BDBDBD"
+        android:strokeWidth="2"
+        android:pathData="M32,60 L58,60" />
+
+    <!-- Red circular badge bottom-right -->
+    <path
+        android:fillColor="#E53935"
+        android:pathData="M68,72 m-10,0 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0" />
+
+    <!-- White checkmark in badge -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M62,72 L66,76 L74,67"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor2="#00000000" />
+
+</vector>

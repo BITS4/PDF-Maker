@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Place this file at:  app/src/main/res/xml/file_paths.xml  -->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Camera / Smart Scan captures -->
+    <external-path          name="external_files"   path="." />
+    <!-- App-private files (internal storage) -->
+    <files-path             name="internal_files"   path="." />
+    <!-- cacheDir — converted .docx / .pptx / annotated PDFs -->
+    <cache-path             name="cache_files"      path="." />
+    <!-- External cache -->
+    <external-cache-path    name="external_cache"   path="." />
+    <!-- External app-specific files (getExternalFilesDir) -->
+    <external-files-path    name="ext_app_files"    path="." />
+</paths>
