@@ -1,4 +1,4 @@
-package com.tajapps.pdfmaker
+package com.example.pdfmaker
 
 import android.Manifest
 import android.content.Context

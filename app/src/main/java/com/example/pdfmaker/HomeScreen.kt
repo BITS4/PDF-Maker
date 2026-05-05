@@ -1,6 +1,6 @@
-package com.tajapps.pdfmaker
+package com.example.pdfmaker
 
-import com.tajapps.pdfmaker.R
+import com.example.pdfmaker.R
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -129,7 +129,7 @@ fun HomeScreen(
     var selectedFilter by remember { mutableStateOf(FileTypeFilter.ALL) }
     var fabExpanded    by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) { FileCache.load(context) }
+    LaunchedEffect(FileCache.version) { FileCache.load(context) }
 
     val files = remember(allFiles, sortOrder, selectedFilter) {
         allFiles.filteredBy(selectedFilter).sorted(sortOrder)

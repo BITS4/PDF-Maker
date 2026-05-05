@@ -1,13 +1,19 @@
-package com.tajapps.pdfmaker
+package com.example.pdfmaker
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.text.font.FontWeight
 import androidx.core.content.FileProvider
-import com.tajapps.pdfmaker.R
+import com.example.pdfmaker.R
 import java.io.File
 
 @Composable
@@ -30,6 +36,12 @@ fun AppNavigation(activity: MainActivity) {
         !activity.getSharedPreferences("pdfmaker_prefs", 0)
              .getBoolean("onboarding_done", false)
     ) }
+    var showStorageDialog by remember {
+        mutableStateOf(
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+            !Environment.isExternalStorageManager()
+        )
+    }
 
 
     fun navigate(to: Screen) {
@@ -65,6 +77,32 @@ fun AppNavigation(activity: MainActivity) {
             showOnboarding = false
         })
         return
+    }
+
+    // ── All-Files-Access dialog (Android 11+, once per session) ─────────────────
+    if (showStorageDialog) {
+        AlertDialog(
+            onDismissRequest = { showStorageDialog = false },
+            containerColor   = currentCard,
+            title = { Text("Allow File Access", color = currentText, fontWeight = FontWeight.Bold) },
+            text  = {
+                Text(
+                    "Grant \"All Files Access\" so PDFMaker can find all PDFs and documents on your device.",
+                    color = currentTextSecond
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showStorageDialog = false
+                    activity.openManageAllFilesSettings()
+                }) { Text("Grant Access", color = AccentBlue, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStorageDialog = false }) {
+                    Text("Not Now", color = currentTextSecond)
+                }
+            }
+        )
     }
 
     BackHandler(enabled = currentScreen != Screen.HOME) {
@@ -397,7 +435,7 @@ fun AppNavigation(activity: MainActivity) {
                 onShareFile = { file ->
                     try {
                         val shareUri = androidx.core.content.FileProvider.getUriForFile(
-                            activity, "\${activity.packageName}.provider", file
+                            activity, "${activity.packageName}.provider", file
                         )
                         activity.startActivity(android.content.Intent.createChooser(
                             android.content.Intent(android.content.Intent.ACTION_SEND).apply {

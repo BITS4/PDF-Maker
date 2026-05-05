@@ -1,3 +1,26 @@
 <resources>
     <string name="app_name">PDF Maker</string>
+
+    <!-- Home -->
+    <string name="home_title">PDF Maker</string>
+    <string name="home_all">All Files</string>
+    <string name="files_title">Files</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_files">Files</string>
+
+    <!-- Tools -->
+    <string name="tool_image_to_pdf">Image to PDF</string>
+    <string name="tool_smart_scan">Smart Scan</string>
+    <string name="tool_import_pdf">Import PDF</string>
+    <string name="tool_compress">Compress</string>
+    <string name="tool_pdf_to_jpg">PDF to JPG</string>
+    <string name="tool_merge_pdf">Merge PDF</string>
+    <string name="tool_docx_to_pdf">Docx to PDF</string>
+    <string name="tool_more">More</string>
+
+    <!-- Actions -->
+    <string name="share_pdf_via">Share PDF via</string>
+    <string name="could_not_share">Could not share file</string>
 </resources>

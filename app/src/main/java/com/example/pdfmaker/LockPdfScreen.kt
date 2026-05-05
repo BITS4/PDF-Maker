@@ -1,4 +1,4 @@
-package com.tajapps.pdfmaker
+package com.example.pdfmaker
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable

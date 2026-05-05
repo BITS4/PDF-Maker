@@ -1,4 +1,4 @@
-package com.tajapps.pdfmaker
+package com.example.pdfmaker
 
 import android.graphics.*
 import kotlin.math.*

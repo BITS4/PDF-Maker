@@ -1,6 +1,6 @@
-package com.tajapps.pdfmaker
+package com.example.pdfmaker
 
-import com.tajapps.pdfmaker.R
+import com.example.pdfmaker.R
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.animation.animateColorAsState
@@ -67,7 +67,7 @@ fun FilesScreen(
     var showRenameFor   by remember { mutableStateOf<PdfFile?>(null) }
     var renameText      by remember { mutableStateOf("") }
 
-    LaunchedEffect(Unit) { FileCache.load(context) }
+    LaunchedEffect(FileCache.version) { FileCache.load(context) }
 
     val recentFiles = remember(allFiles) {
         val cutoff = System.currentTimeMillis() - 7 * 24 * 60 * 60 * 1000L

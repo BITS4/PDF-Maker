@@ -1,6 +1,6 @@
-package com.tajapps.pdfmaker
+package com.example.pdfmaker
 
-import com.tajapps.pdfmaker.R
+import com.example.pdfmaker.R
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent

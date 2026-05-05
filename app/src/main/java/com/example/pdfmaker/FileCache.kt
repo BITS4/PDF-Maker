@@ -1,7 +1,8 @@
-package com.tajapps.pdfmaker
+package com.example.pdfmaker
 
 import android.content.Context
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
@@ -9,15 +10,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
-/**
- * App-wide file list cache.
- * Lives as a singleton (object), so it survives screen navigation switches.
- * Compose screens observe [files] and [isLoading] via mutableStateOf.
- */
 object FileCache {
 
     var files     by mutableStateOf<List<PdfFile>>(emptyList())
     var isLoading by mutableStateOf(false)
+    var version   by mutableIntStateOf(0)   // incremented on invalidate — screens use as LaunchedEffect key
     private var loaded = false
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -52,6 +49,6 @@ object FileCache {
         files = files.map { if (it.filePath == oldPath) it.copy(filePath = newPath, name = newName) else it }
     }
 
-    /** Force next load() call to actually re-scan. */
-    fun invalidate() { loaded = false }
+    /** Force next load() call to actually re-scan and notify observers. */
+    fun invalidate() { loaded = false; version++ }
 }

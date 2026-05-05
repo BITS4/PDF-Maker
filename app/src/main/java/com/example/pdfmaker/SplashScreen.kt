@@ -1,4 +1,4 @@
-package com.tajapps.pdfmaker
+package com.example.pdfmaker
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween

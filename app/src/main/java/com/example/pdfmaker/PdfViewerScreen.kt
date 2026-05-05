@@ -1,4 +1,4 @@
-package com.tajapps.pdfmaker
+package com.example.pdfmaker
 
 import android.content.Context
 import android.content.Intent
@@ -416,7 +416,7 @@ fun PdfViewerScreen(
                             }
                         }
                     }
-                    Divider(color = Color(0xFF2A2A3A), thickness = 0.5.dp)
+                    HorizontalDivider(color = Color(0xFF2A2A3A), thickness = 0.5.dp)
                 }
                 // Page counter row
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
