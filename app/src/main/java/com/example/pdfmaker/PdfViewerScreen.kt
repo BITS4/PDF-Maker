@@ -75,6 +75,9 @@ private enum class FileKind {
     PDF, DOCX, XLSX, CSV, TXT, IMAGE, PPTX, UNSUPPORTED
 }
 
+// Office formats that our in-app renderer can't faithfully reproduce — open externally
+private val officeKinds = setOf(FileKind.DOCX, FileKind.XLSX, FileKind.PPTX)
+
 private fun detectKind(file: PdfFile): FileKind {
     // filePath always has extension; name may be stripped by FileRepository
     val ext = file.filePath.substringAfterLast('.', "").lowercase()
@@ -226,6 +229,11 @@ fun PdfViewerScreen(
         return
     }
 
+    // ── Auto-open office formats in external app for faithful rendering ──────────
+    LaunchedEffect(file.filePath) {
+        if (kind in officeKinds) openWithExternalApp(context, file)
+    }
+
     // ── Progressive page stream ───────────────────────────────────────────────
     LaunchedEffect(file.filePath) {
         isLoading   = true
@@ -234,7 +242,7 @@ fun PdfViewerScreen(
         loadedCount = 0
         totalPages  = 0
 
-        if (kind == FileKind.UNSUPPORTED) {
+        if (kind == FileKind.UNSUPPORTED || kind in officeKinds) {
             isLoading = false
             return@LaunchedEffect
         }
@@ -255,6 +263,12 @@ fun PdfViewerScreen(
     Box(Modifier.fillMaxSize().background(Color(0xFF1A1A1A))) {
 
         when {
+            // ── Office formats — opened externally for correct rendering ──────
+            kind in officeKinds -> {
+                ExternalOpenView(file, kind,
+                    modifier = Modifier.align(Alignment.Center))
+            }
+
             // ── Unsupported ───────────────────────────────────────────────────
             kind == FileKind.UNSUPPORTED -> {
                 UnsupportedView(file,
@@ -537,6 +551,43 @@ private fun UnsupportedView(file: PdfFile, modifier: Modifier) {
         Button(
             onClick = { openWithExternalApp(context, file) },
             colors  = ButtonDefaults.buttonColors(containerColor = AccentBlue),
+            shape   = RoundedCornerShape(12.dp)
+        ) {
+            Icon(Icons.AutoMirrored.Filled.OpenInNew, null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Open with…", fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun ExternalOpenView(file: PdfFile, kind: FileKind, modifier: Modifier) {
+    val context = LocalContext.current
+    val (appHint, tint) = when (kind) {
+        FileKind.DOCX -> "Word or Google Docs"   to Color(0xFF1565C0)
+        FileKind.XLSX -> "Excel or Google Sheets" to Color(0xFF2E7D32)
+        FileKind.PPTX -> "PowerPoint or Google Slides" to Color(0xFFE65100)
+        else           -> "a compatible app"      to Color(0xFF555566)
+    }
+    Column(modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            Modifier.size(90.dp).clip(CircleShape).background(Color(0xFF252535)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.AutoMirrored.Filled.OpenInNew, null,
+                tint = tint, modifier = Modifier.size(46.dp))
+        }
+        Spacer(Modifier.height(16.dp))
+        Text("Opening in $appHint…", color = Color.White,
+            fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center)
+        Spacer(Modifier.height(8.dp))
+        Text("This file type is opened in a dedicated app\nfor accurate formatting and layout.",
+            color = TextSecond, fontSize = 13.sp, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(24.dp))
+        Button(
+            onClick = { openWithExternalApp(context, file) },
+            colors  = ButtonDefaults.buttonColors(containerColor = tint),
             shape   = RoundedCornerShape(12.dp)
         ) {
             Icon(Icons.AutoMirrored.Filled.OpenInNew, null, modifier = Modifier.size(18.dp))
