@@ -1,0 +1,6 @@
+* @BITS4
+
+/.github/ @BITS4
+/app/ @BITS4
+/config/ @BITS4
+/gradle/ @BITS4

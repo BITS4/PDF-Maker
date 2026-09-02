@@ -1,0 +1,38 @@
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: Asia/Dushanbe
+    open-pull-requests-limit: 10
+    groups:
+      android-build-tooling:
+        patterns:
+          - "com.android.*"
+          - "org.jetbrains.kotlin*"
+      androidx:
+        patterns:
+          - "androidx.*"
+      quality-tooling:
+        dependency-type: development
+        patterns:
+          - "io.gitlab.arturbosch.detekt*"
+          - "org.jetbrains.kotlinx.kover*"
+          - "org.jlleitschuh.gradle.ktlint*"
+          - "org.owasp.dependencycheck*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:30"
+      timezone: Asia/Dushanbe
+    open-pull-requests-limit: 10
+    groups:
+      github-actions:
+        patterns:
+          - "*"
