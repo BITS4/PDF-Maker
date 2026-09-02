@@ -53,19 +53,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-// ── Data ───────────────────────────────────────────────────────────────────────
-
-data class MergeItem(
-    val id        : String = java.util.UUID.randomUUID().toString(),
-    val uri       : Uri,
-    val name      : String,
-    val sizeKb    : Long,
-    val pageCount : Int,
-    val thumb     : Bitmap?   // first-page thumbnail
-)
-
-private enum class MergeState { EMPTY, READY, MERGING, DONE, ERROR }
-
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -122,13 +109,13 @@ fun MergePdfScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit) {
         }
     }
 
-    fun startMerge() {
+    fun startMerge(requestedName: String = outputName) {
         if (items.size < 2) return
         state    = MergeState.MERGING
         progress = 0
         scope.launch(Dispatchers.IO) {
             try {
-                val file = mergePdfs(context, items.map { it.uri }, outputName) { p, txt ->
+                val file = mergePdfs(context, items.map { it.uri }, requestedName) { p, txt ->
                     scope.launch(Dispatchers.Main) { progress = p; progressText = txt }
                 }
                 withContext(Dispatchers.Main) {
@@ -162,97 +149,26 @@ fun MergePdfScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit) {
         }
     }
 
-    // Rename dialog
     if (showRenameDialog) {
-        var draft by remember { mutableStateOf(outputName) }
-        AlertDialog(
-            onDismissRequest = { showRenameDialog = false },
-            containerColor   = Color(0xFF1E1E2E),
-            title  = { Text("Output file name", color = textPri, fontWeight = FontWeight.SemiBold) },
-            text   = {
-                OutlinedTextField(
-                    value         = draft,
-                    onValueChange = { draft = it },
-                    singleLine    = true,
-                    placeholder   = { Text("merged_document", color = textSec) },
-                    colors        = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor   = accent,
-                        unfocusedBorderColor = Color(0xFF444455),
-                        focusedTextColor     = textPri,
-                        unfocusedTextColor   = textPri,
-                        cursorColor          = accent
-                    ),
-                    suffix = { Text(".pdf", color = textSec) },
-                    modifier = Modifier.fillMaxWidth()
-                )
+        MergeRenameDialog(
+            initialName = outputName,
+            onConfirm = { name ->
+                outputName = name
+                showRenameDialog = false
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    if (draft.isNotBlank()) outputName = draft.trim()
-                    showRenameDialog = false
-                }) { Text("OK", color = accent, fontWeight = FontWeight.Bold) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showRenameDialog = false }) {
-                    Text("Cancel", color = textSec)
-                }
-            }
+            onDismiss = { showRenameDialog = false },
         )
     }
 
-
-    // Pre-merge rename dialog — shown when user taps "Merge"
     if (showPreMergeDialog) {
-        var draft by remember { mutableStateOf(outputName) }
-        AlertDialog(
-            onDismissRequest = { showPreMergeDialog = false },
-            containerColor   = Color(0xFF1E1E2E),
-            title  = {
-                Text("Name your merged PDF", color = textPri,
-                    fontWeight = FontWeight.SemiBold)
+        MergePreflightDialog(
+            initialName = outputName,
+            onConfirm = { name ->
+                outputName = name
+                showPreMergeDialog = false
+                startMerge(name)
             },
-            text   = {
-                Column {
-                    Text("You can rename the output file before merging.",
-                        color = textSec, fontSize = 13.sp)
-                    Spacer(Modifier.height(14.dp))
-                    OutlinedTextField(
-                        value         = draft,
-                        onValueChange = { draft = it },
-                        singleLine    = true,
-                        placeholder   = { Text("merged_document", color = textSec) },
-                        colors        = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor   = accent,
-                            unfocusedBorderColor = Color(0xFF444455),
-                            focusedTextColor     = textPri,
-                            unfocusedTextColor   = textPri,
-                            cursorColor          = accent
-                        ),
-                        suffix   = { Text(".pdf", color = textSec) },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (draft.isNotBlank()) outputName = draft.trim()
-                        showPreMergeDialog = false
-                        startMerge()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = orange),
-                    shape  = RoundedCornerShape(10.dp)
-                ) {
-                    Icon(Icons.Default.MergeType, null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Merge", fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showPreMergeDialog = false }) {
-                    Text("Cancel", color = textSec)
-                }
-            }
+            onDismiss = { showPreMergeDialog = false },
         )
     }
 
@@ -280,42 +196,10 @@ fun MergePdfScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit) {
 
             when (state) {
 
-                // ── 1. Empty ──────────────────────────────────────────────────
-                MergeState.EMPTY -> {
-                    Column(
-                        Modifier.fillMaxSize().padding(28.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Box(
-                            Modifier.size(100.dp).clip(CircleShape)
-                                .background(Color(0xFF1E1E30))
-                                .border(2.dp, orange.copy(alpha = 0.4f), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.MergeType, null,
-                                tint = orange, modifier = Modifier.size(44.dp))
-                        }
-                        Spacer(Modifier.height(22.dp))
-                        Text("Merge PDFs", color = textPri,
-                            fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(8.dp))
-                        Text("Select 2 or more PDF files to combine into one.\nLong-press to reorder pages.",
-                            color = textSec, fontSize = 14.sp, textAlign = TextAlign.Center,
-                            lineHeight = 20.sp)
-                        Spacer(Modifier.height(36.dp))
-                        Button(
-                            onClick  = { filePicker.launch(arrayOf("application/pdf")) },
-                            modifier = Modifier.fillMaxWidth(0.75f).height(54.dp),
-                            shape    = RoundedCornerShape(14.dp),
-                            colors   = ButtonDefaults.buttonColors(containerColor = orange)
-                        ) {
-                            Icon(Icons.Default.FileOpen, null, modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("Select PDFs", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        }
-                    }
-                }
+                // 1. Empty
+                MergeState.EMPTY -> MergeEmptyPanel(
+                    onSelectFiles = { filePicker.launch(arrayOf("application/pdf")) },
+                )
 
                 // ── 2. Ready — draggable list ─────────────────────────────────
                 MergeState.READY -> {
@@ -592,219 +476,4 @@ fun MergePdfScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit) {
             }
         }
     }
-}
-
-// ── Merge item card with up/down arrows + delete ───────────────────────────────
-
-@Composable
-private fun MergeItemCard(
-    item       : MergeItem,
-    index      : Int,
-    total      : Int,
-    isDragging : Boolean,
-    cardBg     : Color,
-    textPri    : Color,
-    textSec    : Color,
-    accent     : Color,
-    onDelete   : () -> Unit,
-    onMoveUp   : () -> Unit,
-    onMoveDown : () -> Unit
-) {
-    val elevation by animateDpAsState(if (isDragging) 12.dp else 0.dp, label = "elev")
-    val scale     by animateFloatAsState(if (isDragging) 1.03f else 1f, label = "scale")
-
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .scale(scale)
-            .shadow(elevation, RoundedCornerShape(14.dp))
-            .clip(RoundedCornerShape(14.dp))
-            .background(if (isDragging) Color(0xFF1E2035) else cardBg)
-            .padding(10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Order number + thumbnail
-        Box(contentAlignment = Alignment.TopStart) {
-            Box(
-                Modifier.size(width = 52.dp, height = 68.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFF1E1E2E)),
-                contentAlignment = Alignment.Center
-            ) {
-                if (item.thumb != null) {
-                    Image(item.thumb.asImageBitmap(), null,
-                        modifier     = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Fit)
-                } else {
-                    Icon(Icons.Default.PictureAsPdf, null,
-                        tint = Color(0xFFE53935), modifier = Modifier.size(26.dp))
-                }
-            }
-            // Index badge
-            Box(
-                Modifier.offset(x = (-4).dp, y = (-4).dp)
-                    .size(20.dp).clip(CircleShape).background(accent),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("${index + 1}", color = Color.White,
-                    fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            }
-        }
-
-        Spacer(Modifier.width(12.dp))
-
-        // File info
-        Column(Modifier.weight(1f)) {
-            Text("${item.name}.pdf", color = textPri,
-                fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.height(3.dp))
-            Text("${item.pageCount} pages · ${mergeFormatSize(item.sizeKb)}",
-                color = textSec, fontSize = 11.sp)
-        }
-
-        // Up / Down / Delete
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(0.dp)
-        ) {
-            IconButton(
-                onClick  = onMoveUp,
-                modifier = Modifier.size(32.dp),
-                enabled  = index > 0
-            ) {
-                Icon(Icons.Default.KeyboardArrowUp, null,
-                    tint = if (index > 0) accent else textSec.copy(alpha = 0.3f),
-                    modifier = Modifier.size(20.dp))
-            }
-            IconButton(
-                onClick  = onMoveDown,
-                modifier = Modifier.size(32.dp),
-                enabled  = index < total - 1
-            ) {
-                Icon(Icons.Default.KeyboardArrowDown, null,
-                    tint = if (index < total - 1) accent else textSec.copy(alpha = 0.3f),
-                    modifier = Modifier.size(20.dp))
-            }
-        }
-        IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
-            Icon(Icons.Default.DeleteOutline, null,
-                tint = Color(0xFFEF5350), modifier = Modifier.size(20.dp))
-        }
-    }
-}
-
-// ── Small helpers ─────────────────────────────────────────────────────────────
-
-@Composable
-private fun InfoChip(text: String, bg: Color, textColor: Color) {
-    Box(
-        Modifier.clip(RoundedCornerShape(20.dp)).background(bg)
-            .padding(horizontal = 10.dp, vertical = 4.dp)
-    ) {
-        Text(text, color = textColor, fontSize = 12.sp)
-    }
-}
-
-@Composable
-private fun StatColumn(label: String, value: String, labelColor: Color, valueColor: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, color = labelColor, fontSize = 11.sp)
-        Spacer(Modifier.height(4.dp))
-        Text(value, color = valueColor, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-    }
-}
-
-@Composable
-private fun MergeSpinner(progress: Int, color: Color) {
-    val inf = rememberInfiniteTransition(label = "spin")
-    val angle by inf.animateFloat(
-        initialValue  = 0f, targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(1200, easing = LinearEasing)),
-        label         = "angle"
-    )
-    Canvas(Modifier.size(110.dp)) {
-        drawArc(Color(0xFF2A2A40), 0f, 360f, false,
-            style = Stroke(10.dp.toPx(), cap = StrokeCap.Round))
-        drawArc(color, angle - 90f, (progress * 3.6f).coerceAtLeast(10f), false,
-            style = Stroke(10.dp.toPx(), cap = StrokeCap.Round))
-    }
-}
-
-// ── Core merge logic ──────────────────────────────────────────────────────────
-
-private fun mergePdfs(
-    context  : Context,
-    uris     : List<Uri>,
-    baseName : String,
-    onProg   : (Int, String) -> Unit
-): File? {
-    return try {
-        val pdfDoc  = PdfDocument()
-        var pageNum = 1
-        val total   = uris.size
-
-        uris.forEachIndexed { fileIdx, uri ->
-            onProg(
-                (fileIdx * 90 / total),
-                "Processing file ${fileIdx + 1} of $total…"
-            )
-            val fd  = context.contentResolver.openFileDescriptor(uri, "r") ?: return@forEachIndexed
-            val rdr = PdfRenderer(fd)
-            val wPx = context.resources.displayMetrics.widthPixels
-
-            for (i in 0 until rdr.pageCount) {
-                val page  = rdr.openPage(i)
-                val w     = page.width.coerceAtLeast(1)
-                val h     = page.height.coerceAtLeast(1)
-                val bmp   = android.graphics.Bitmap.createBitmap(w, h,
-                                android.graphics.Bitmap.Config.ARGB_8888)
-                android.graphics.Canvas(bmp).drawColor(android.graphics.Color.WHITE)
-                page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                page.close()
-
-                val info  = PdfDocument.PageInfo.Builder(w, h, pageNum++).create()
-                val pg    = pdfDoc.startPage(info)
-                pg.canvas.drawBitmap(bmp, 0f, 0f, null)
-                pdfDoc.finishPage(pg)
-                bmp.recycle()
-            }
-            rdr.close()
-            fd.close()
-        }
-
-        onProg(95, "Saving…")
-        val dir     = getPdfMakerDir(context)
-        val outFile = File(dir, "$baseName.pdf")
-        outFile.outputStream().use { pdfDoc.writeTo(it) }
-        pdfDoc.close()
-        onProg(100, "Done!")
-        outFile
-    } catch (_: Exception) { null }
-}
-
-// ── Share merged file ─────────────────────────────────────────────────────────
-
-private fun shareMergedFile(context: Context, file: File) {
-    try {
-        val uri = androidx.core.content.FileProvider.getUriForFile(
-            context, "${context.packageName}.provider", file
-        )
-        context.startActivity(
-            android.content.Intent.createChooser(
-                android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                    type = "application/pdf"
-                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
-                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }, "Share merged PDF"
-            )
-        )
-    } catch (_: Exception) {}
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-private fun mergeFormatSize(kb: Long): String = when {
-    kb >= 1024 -> "%.1f MB".format(kb / 1024f)
-    else       -> "$kb KB"
 }
