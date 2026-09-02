@@ -36,18 +36,20 @@ fun PinScreen(onUnlocked: () -> Unit) {
 
     var entered  by remember { mutableStateOf("") }
     var shaking  by remember { mutableStateOf(false) }
-    var attempts by remember { mutableIntStateOf(0) }
-    var locked   by remember { mutableStateOf(false) }   // too many wrong attempts
-    var lockSecs by remember { mutableIntStateOf(0) }
-
-    val savedPin = SettingsManager.getPin(context)
+    var attempts by remember { mutableIntStateOf(SettingsManager.failedPinAttempts(context)) }
+    var lockSecs by remember { mutableIntStateOf(SettingsManager.remainingPinLockoutSeconds(context)) }
+    var locked   by remember { mutableStateOf(lockSecs > 0) }
+    val pinLength = remember { SettingsManager.getPinLength(context) }
 
     // Countdown when locked out
     LaunchedEffect(locked) {
         if (locked) {
-            lockSecs = 30
-            while (lockSecs > 0) { delay(1000); lockSecs-- }
-            locked = false; attempts = 0
+            while (lockSecs > 0) {
+                delay(1000)
+                lockSecs = SettingsManager.remainingPinLockoutSeconds(context)
+            }
+            locked = false
+            attempts = SettingsManager.failedPinAttempts(context)
         }
     }
 
@@ -94,7 +96,7 @@ fun PinScreen(onUnlocked: () -> Unit) {
 
             // PIN dots
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                repeat(4) { i ->
+                repeat(pinLength) { i ->
                     val filled = i < entered.length
                     val col by animateColorAsState(
                         if (filled) AccentBlue else Color(0xFF252535), label = "dot")
@@ -120,18 +122,20 @@ fun PinScreen(onUnlocked: () -> Unit) {
                             }
                             else -> PinKey(content = {
                                 Text(key, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Medium)
-                            }, enabled = !locked && entered.length < 4) {
+                            }, enabled = !locked && entered.length < pinLength) {
                                 entered += key
-                                if (entered.length == 4) {
-                                    if (entered == savedPin) {
+                                if (entered.length == pinLength) {
+                                    if (SettingsManager.verifyPin(context, entered)) {
+                                        SettingsManager.clearPinFailures(context)
                                         onUnlocked()
                                     } else {
                                         shaking = true
                                         scope.launch {
                                             delay(420); shaking = false
                                         }
-                                        attempts++
-                                        if (attempts >= 5) locked = true
+                                        lockSecs = SettingsManager.recordFailedPinAttempt(context)
+                                        attempts = SettingsManager.failedPinAttempts(context)
+                                        locked = lockSecs > 0
                                         entered = ""
                                     }
                                 }

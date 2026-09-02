@@ -75,6 +75,8 @@ fun SettingsScreen(onBack: () -> Unit) {
                 TextButton(onClick = {
                     if (pinInput.length < 4) { pinError = "PIN must be at least 4 digits"; return@TextButton }
                     SettingsManager.savePin(context, pinInput)
+                    SettingsManager.setSecurityEnabled(context, true)
+                    securityEnabled = true
                     showPinDialog = false; pinInput = ""; pinError = ""
                 }) { Text("Save", color = AccentBlue, fontWeight = FontWeight.Bold) }
             },
@@ -124,8 +126,12 @@ fun SettingsScreen(onBack: () -> Unit) {
                 sub     = "Require a PIN to open the app",
                 checked = securityEnabled,
                 onToggle = { checked ->
-                    securityEnabled = checked
-                    SettingsManager.setSecurityEnabled(context, checked)
+                    if (checked && !SettingsManager.hasPin(context)) {
+                        showPinDialog = true
+                    } else {
+                        SettingsManager.setSecurityEnabled(context, checked)
+                        securityEnabled = checked
+                    }
                 }
             )
 
@@ -133,7 +139,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 SettingsActionRow(
                     icon  = Icons.Default.Pin,
                     label = "Change PIN",
-                    sub   = if (SettingsManager.getPin(context).isNotEmpty()) "PIN is set" else "No PIN set"
+                    sub   = if (SettingsManager.hasPin(context)) "PIN is set" else "No PIN set"
                 ) { showPinDialog = true }
             }
 

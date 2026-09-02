@@ -91,17 +91,95 @@ object SettingsManager {
 
     private const val PREFS = "pdfmaker_prefs"
 
-    fun getPin(context: Context): String =
-        context.getSharedPreferences(PREFS, 0).getString("pin", "") ?: ""
+    private const val PIN_CREDENTIAL = "pin_credential"
+    private const val LEGACY_PIN = "pin"
+    private const val PIN_FAILURES = "pin_failures"
+    private const val PIN_LOCKED_UNTIL = "pin_locked_until"
 
-    fun savePin(context: Context, pin: String) =
-        context.getSharedPreferences(PREFS, 0).edit().putString("pin", pin).apply()
+    fun hasPin(context: Context): Boolean {
+        val preferences = context.getSharedPreferences(PREFS, 0)
+        val credential = preferences.getString(PIN_CREDENTIAL, "").orEmpty()
+        val legacy = preferences.getString(LEGACY_PIN, "").orEmpty()
+        return PinCredential.isCredential(credential) || PinCredential.isValidPin(legacy)
+    }
+
+    fun getPinLength(context: Context): Int {
+        val preferences = context.getSharedPreferences(PREFS, 0)
+        val credential = preferences.getString(PIN_CREDENTIAL, "").orEmpty()
+        return PinCredential.pinLength(credential)
+            ?: preferences.getString(LEGACY_PIN, "").orEmpty().length.takeIf { it in 4..6 }
+            ?: 4
+    }
+
+    fun savePin(context: Context, pin: String) {
+        require(PinCredential.isValidPin(pin)) { "PIN must contain 4 to 6 digits" }
+        context.getSharedPreferences(PREFS, 0).edit()
+            .putString(PIN_CREDENTIAL, PinCredential.create(pin))
+            .remove(LEGACY_PIN)
+            .apply()
+        clearPinFailures(context)
+    }
+
+    fun verifyPin(context: Context, candidate: String): Boolean {
+        val preferences = context.getSharedPreferences(PREFS, 0)
+        val credential = preferences.getString(PIN_CREDENTIAL, "").orEmpty()
+        if (PinCredential.isCredential(credential)) return PinCredential.verify(candidate, credential)
+
+        // One-time migration from releases that stored the PIN in plaintext.
+        val legacy = preferences.getString(LEGACY_PIN, "").orEmpty()
+        val matches = PinCredential.isValidPin(legacy) &&
+            java.security.MessageDigest.isEqual(candidate.toByteArray(), legacy.toByteArray())
+        if (matches) savePin(context, candidate)
+        return matches
+    }
+
+    fun failedPinAttempts(context: Context): Int = currentAttemptState(context).failedAttempts
+
+    fun remainingPinLockoutSeconds(context: Context, nowEpochMillis: Long = System.currentTimeMillis()): Int {
+        val current = normalizedAttemptState(context, nowEpochMillis)
+        val millis = PinLockoutPolicy.remainingMillis(current, nowEpochMillis)
+        return ((millis + 999L) / 1_000L).toInt()
+    }
+
+    fun recordFailedPinAttempt(context: Context, nowEpochMillis: Long = System.currentTimeMillis()): Int {
+        val next = PinLockoutPolicy.recordFailure(normalizedAttemptState(context, nowEpochMillis), nowEpochMillis)
+        saveAttemptState(context, next)
+        return ((PinLockoutPolicy.remainingMillis(next, nowEpochMillis) + 999L) / 1_000L).toInt()
+    }
+
+    fun clearPinFailures(context: Context) {
+        saveAttemptState(context, PinAttemptState())
+    }
 
     fun getSecurityEnabled(context: Context): Boolean =
         context.getSharedPreferences(PREFS, 0).getBoolean("security_enabled", false)
 
-    fun setSecurityEnabled(context: Context, enabled: Boolean) =
-        context.getSharedPreferences(PREFS, 0).edit().putBoolean("security_enabled", enabled).apply()
+    fun setSecurityEnabled(context: Context, enabled: Boolean) {
+        val safeValue = enabled && hasPin(context)
+        context.getSharedPreferences(PREFS, 0).edit().putBoolean("security_enabled", safeValue).apply()
+    }
+
+    private fun currentAttemptState(context: Context): PinAttemptState {
+        val preferences = context.getSharedPreferences(PREFS, 0)
+        return PinAttemptState(
+            failedAttempts = preferences.getInt(PIN_FAILURES, 0).coerceIn(0, PinLockoutPolicy.MAX_ATTEMPTS - 1),
+            lockedUntilEpochMillis = preferences.getLong(PIN_LOCKED_UNTIL, 0).coerceAtLeast(0),
+        )
+    }
+
+    private fun normalizedAttemptState(context: Context, nowEpochMillis: Long): PinAttemptState {
+        val current = currentAttemptState(context)
+        val normalized = PinLockoutPolicy.afterExpiry(current, nowEpochMillis)
+        if (normalized != current) saveAttemptState(context, normalized)
+        return normalized
+    }
+
+    private fun saveAttemptState(context: Context, state: PinAttemptState) {
+        context.getSharedPreferences(PREFS, 0).edit()
+            .putInt(PIN_FAILURES, state.failedAttempts)
+            .putLong(PIN_LOCKED_UNTIL, state.lockedUntilEpochMillis)
+            .apply()
+    }
 }
 
 // ── Navigation transition helpers ─────────────────────────────────────────────

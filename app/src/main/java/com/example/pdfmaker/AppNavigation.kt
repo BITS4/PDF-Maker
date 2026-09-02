@@ -56,7 +56,7 @@ fun AppNavigation(activity: MainActivity) {
 
     // ── PIN gate ─────────────────────────────────────────────────────────────
     val needsPin = SettingsManager.getSecurityEnabled(activity) &&
-                   SettingsManager.getPin(activity).isNotEmpty() &&
+                   SettingsManager.hasPin(activity) &&
                    !pinUnlocked
     if (needsPin) {
         PinScreen(onUnlocked = { pinUnlocked = true })
