@@ -11,7 +11,7 @@
 
 Use the repository's private GitHub security-advisory form:
 
-https://github.com/BITS4/PDF-Maker/security/advisories/new
+[Open a private security advisory](https://github.com/BITS4/PDF-Maker/security/advisories/new).
 
 Do not open a public issue and do not attach a private document. Include the affected version, Android version, a
 minimal reproduction using synthetic data, impact, and any suggested mitigation. The maintainer should acknowledge a
