@@ -81,6 +81,9 @@ internal enum class MergeState { EMPTY, READY, MERGING, DONE, ERROR }
 // ── Merge item card with up/down arrows + delete ───────────────────────────────
 
 @Composable
+// The merge list owns ordering and colors; explicit inputs keep this reusable card
+// stateless and make every reorder/delete event observable by that owner.
+@Suppress("LongParameterList")
 internal fun MergeItemCard(
     item       : MergeItem,
     index      : Int,

@@ -4,8 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 
-private const val PreferencesName = "pdfmaker_prefs"
-private const val OnboardingDoneKey = "onboarding_done"
+private const val PREFERENCES_NAME = "pdfmaker_prefs"
+private const val ONBOARDING_DONE_KEY = "onboarding_done"
 
 @Composable
 fun AppNavigation(activity: MainActivity) {
@@ -13,8 +13,8 @@ fun AppNavigation(activity: MainActivity) {
         remember(activity) {
             val onboardingDone =
                 activity
-                    .getSharedPreferences(PreferencesName, 0)
-                    .getBoolean(OnboardingDoneKey, false)
+                    .getSharedPreferences(PREFERENCES_NAME, 0)
+                    .getBoolean(ONBOARDING_DONE_KEY, false)
             AppNavigationState(showOnboardingInitially = !onboardingDone)
         }
 
@@ -36,9 +36,9 @@ fun AppNavigation(activity: MainActivity) {
         OnboardingScreen(
             onDone = {
                 activity
-                    .getSharedPreferences(PreferencesName, 0)
+                    .getSharedPreferences(PREFERENCES_NAME, 0)
                     .edit()
-                    .putBoolean(OnboardingDoneKey, true)
+                    .putBoolean(ONBOARDING_DONE_KEY, true)
                     .apply()
                 navigation.showOnboarding = false
             },

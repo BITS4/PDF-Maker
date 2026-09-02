@@ -46,27 +46,9 @@ fun SignaturePadScreen(
     val hasContent = strokes.isNotEmpty()
 
     Column(Modifier.fillMaxSize().background(Color(0xFF0D0D16)).statusBarsPadding()) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onCancel) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
-            }
-            Text(
-                "Add signature",
-                color = Color.White,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(1f).padding(start = 4.dp),
-            )
-            TextButton(
-                onClick = {
-                    strokes = emptyList()
-                    redoStack = emptyList()
-                },
-                enabled = hasContent,
-            ) { Text("Reset", color = if (hasContent) Color.White else Color(0xFF555566)) }
+        SignatureHeader(onCancel = onCancel, hasContent = hasContent) {
+            strokes = emptyList()
+            redoStack = emptyList()
         }
 
         Box(
@@ -198,6 +180,32 @@ fun SignaturePadScreen(
                     onConfirm(renderSignatureBitmap(strokes, canvasW, canvasH))
                 }) { Icon(Icons.Default.Check, null, tint = AccentBlue) }
             }
+        }
+    }
+}
+
+@Composable
+private fun SignatureHeader(
+    onCancel: () -> Unit,
+    hasContent: Boolean,
+    onReset: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onCancel) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
+        }
+        Text(
+            "Add signature",
+            color = Color.White,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.weight(1f).padding(start = 4.dp),
+        )
+        TextButton(onClick = onReset, enabled = hasContent) {
+            Text("Reset", color = if (hasContent) Color.White else Color(0xFF555566))
         }
     }
 }

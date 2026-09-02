@@ -24,6 +24,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
+// The editor owns this state; this stateless rendering boundary exposes each event
+// explicitly so toolbars cannot mutate document state behind the caller's back.
+@Suppress("LongParameterList")
 internal fun PdfEditorBottomBar(
     editMode: PdfEditMode,
     showConvert: Boolean,
@@ -49,22 +52,31 @@ internal fun PdfEditorBottomBar(
     val background = Color(0xFF1A1A2A)
     val secondary = Color(0xFF9999BB)
     when {
-        editMode == PdfEditMode.DOODLE ->
+        editMode == PdfEditMode.DOODLE -> {
             DoodleToolbar(
-                background,
-                doodleSize,
-                doodleColor,
-                canUndo,
-                canRedo,
-                onDoodleSize,
-                onDoodleColor,
-                onCancelDoodle,
-                onUndo,
-                onRedo,
-                onCommitDoodle,
+                background = background,
+                state = DoodleToolbarState(
+                    size = doodleSize,
+                    color = doodleColor,
+                    canUndo = canUndo,
+                    canRedo = canRedo,
+                ),
+                actions = DoodleToolbarActions(
+                    onSize = onDoodleSize,
+                    onColor = onDoodleColor,
+                    onCancel = onCancelDoodle,
+                    onUndo = onUndo,
+                    onRedo = onRedo,
+                    onCommit = onCommitDoodle,
+                ),
             )
-        editMode == PdfEditMode.TEXT -> TextToolbar(background, onCancelText, onAddText, onCommitText)
-        editMode == PdfEditMode.EDIT_PICKER ->
+        }
+
+        editMode == PdfEditMode.TEXT -> {
+            TextToolbar(background, onCancelText, onAddText, onCommitText)
+        }
+
+        editMode == PdfEditMode.EDIT_PICKER -> {
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -79,7 +91,9 @@ internal fun PdfEditorBottomBar(
                 EditorBarItem(Icons.Default.TextFields, "Text", secondary) { onMode(PdfEditMode.TEXT) }
                 EditorBarItem(Icons.Default.Draw, "Signature", secondary) { onMode(PdfEditMode.SIGNATURE) }
             }
-        showConvert ->
+        }
+
+        showConvert -> {
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -93,7 +107,9 @@ internal fun PdfEditorBottomBar(
                 ConvertBarItem(Icons.Default.Description, "To Word", Color(0xFF1565C0), null, onConvertWord)
                 ConvertBarItem(Icons.Default.Slideshow, "To PPT", Color(0xFFB71C1C), Color.Red, onConvertPpt)
             }
-        else ->
+        }
+
+        else -> {
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -106,22 +122,31 @@ internal fun PdfEditorBottomBar(
                 EditorBarItem(Icons.Default.SwapHoriz, "Convert", secondary) { onShowConvert(true) }
                 EditorBarItem(Icons.Default.Share, "Share", secondary, onShare)
             }
+        }
     }
 }
+
+private data class DoodleToolbarState(
+    val size: Float,
+    val color: Color,
+    val canUndo: Boolean,
+    val canRedo: Boolean,
+)
+
+private data class DoodleToolbarActions(
+    val onSize: (Float) -> Unit,
+    val onColor: (Color) -> Unit,
+    val onCancel: () -> Unit,
+    val onUndo: () -> Unit,
+    val onRedo: () -> Unit,
+    val onCommit: () -> Unit,
+)
 
 @Composable
 private fun DoodleToolbar(
     background: Color,
-    size: Float,
-    color: Color,
-    canUndo: Boolean,
-    canRedo: Boolean,
-    onSize: (Float) -> Unit,
-    onColor: (Color) -> Unit,
-    onCancel: () -> Unit,
-    onUndo: () -> Unit,
-    onRedo: () -> Unit,
-    onCommit: () -> Unit,
+    state: DoodleToolbarState,
+    actions: DoodleToolbarActions,
 ) {
     Column(
         Modifier
@@ -133,14 +158,14 @@ private fun DoodleToolbar(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Size", color = Color.White, fontSize = 13.sp, modifier = Modifier.width(42.dp))
             Slider(
-                value = size,
-                onValueChange = onSize,
+                value = state.size,
+                onValueChange = actions.onSize,
                 valueRange = 2f..40f,
                 modifier = Modifier.weight(1f),
                 colors = SliderDefaults.colors(thumbColor = AccentBlue, activeTrackColor = AccentBlue),
             )
             Text(
-                "${size.toInt()}",
+                "${state.size.toInt()}",
                 color = Color.White,
                 fontSize = 13.sp,
                 modifier = Modifier.width(28.dp),
@@ -150,7 +175,7 @@ private fun DoodleToolbar(
         Spacer(Modifier.height(6.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             itemsIndexed(penPalette) { _, option ->
-                val selected = option == color
+                val selected = option == state.color
                 Box(
                     Modifier
                         .size(36.dp)
@@ -160,7 +185,7 @@ private fun DoodleToolbar(
                         .clip(CircleShape)
                         .background(option)
                         .border(1.dp, Color(0xFF333344), CircleShape)
-                        .clickable { onColor(option) },
+                        .clickable { actions.onColor(option) },
                 )
             }
         }
@@ -170,16 +195,16 @@ private fun DoodleToolbar(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onCancel) { Icon(Icons.Default.Close, null, tint = Color.White) }
+            IconButton(onClick = actions.onCancel) { Icon(Icons.Default.Close, null, tint = Color.White) }
             Row {
-                IconButton(onClick = onUndo, enabled = canUndo) {
-                    Icon(Icons.AutoMirrored.Filled.Undo, null, tint = enabledTint(canUndo))
+                IconButton(onClick = actions.onUndo, enabled = state.canUndo) {
+                    Icon(Icons.AutoMirrored.Filled.Undo, null, tint = enabledTint(state.canUndo))
                 }
-                IconButton(onClick = onRedo, enabled = canRedo) {
-                    Icon(Icons.AutoMirrored.Filled.Redo, null, tint = enabledTint(canRedo))
+                IconButton(onClick = actions.onRedo, enabled = state.canRedo) {
+                    Icon(Icons.AutoMirrored.Filled.Redo, null, tint = enabledTint(state.canRedo))
                 }
             }
-            IconButton(onClick = onCommit) { Icon(Icons.Default.Check, null, tint = AccentBlue) }
+            IconButton(onClick = actions.onCommit) { Icon(Icons.Default.Check, null, tint = AccentBlue) }
         }
     }
 }

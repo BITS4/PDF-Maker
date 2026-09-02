@@ -38,6 +38,9 @@ import java.io.File
 internal const val MAGIC = LEGACY_DOCUMENT_MAGIC
 private enum class LockState { LIST, ENTER_PASSWORD, LOCKING, DONE, ERROR }
 
+// This route intentionally owns the complete lock workflow state machine; keeping
+// its transitions together prevents password and selected-file state from diverging.
+@Suppress("LongMethod", "CyclomaticComplexMethod")
 @Composable
 fun LockPdfScreen(onBack: () -> Unit) {
     val context = LocalContext.current

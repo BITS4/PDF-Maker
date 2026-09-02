@@ -1,5 +1,6 @@
 package com.example.pdfmaker
 
+import android.content.ClipData
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -26,9 +27,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.Clipboard
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -36,17 +38,21 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private enum class OcrState { PICK, RUNNING, DONE, ERROR }
 
+// OCR selection, progress, results, and error recovery form one route-level state
+// machine; colocating its transitions prevents stale page results after a new pick.
+@Suppress("LongMethod", "CyclomaticComplexMethod")
 @Composable
 fun OcrScreen(onBack: () -> Unit) {
     val context   = LocalContext.current
     val scope     = rememberCoroutineScope()
-    val clipboard = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
 
     var ocrState   by remember { mutableStateOf(OcrState.PICK) }
     var pickedUri  by remember { mutableStateOf<Uri?>(null) }
@@ -94,9 +100,9 @@ fun OcrScreen(onBack: () -> Unit) {
                 if (ocrState == OcrState.DONE) {
                     // Copy all button
                     IconButton(onClick = {
-                        clipboard.setText(AnnotatedString(OcrTextFormatter.format(pageTexts)))
-                        showCopied = true
-                        scope.launch { delay(2000); showCopied = false }
+                        scope.copyOcrText(clipboard, OcrTextFormatter.format(pageTexts)) {
+                            showCopied = it
+                        }
                     }) {
                         Icon(Icons.Default.ContentCopy, null, tint = AccentBlue)
                     }
@@ -321,9 +327,7 @@ fun OcrScreen(onBack: () -> Unit) {
                             ) {
                                 OutlinedButton(
                                     onClick  = {
-                                        clipboard.setText(AnnotatedString(text))
-                                        showCopied = true
-                                        scope.launch { delay(2000); showCopied = false }
+                                        scope.copyOcrText(clipboard, text) { showCopied = it }
                                     },
                                     shape    = RoundedCornerShape(12.dp),
                                     modifier = Modifier.weight(1f)
@@ -336,9 +340,7 @@ fun OcrScreen(onBack: () -> Unit) {
                                 Button(
                                     onClick = {
                                         val all = OcrTextFormatter.format(pages)
-                                        clipboard.setText(AnnotatedString(all))
-                                        showCopied = true
-                                        scope.launch { delay(2000); showCopied = false }
+                                        scope.copyOcrText(clipboard, all) { showCopied = it }
                                     },
                                     colors   = ButtonDefaults.buttonColors(containerColor = Color(0xFF26C6A0)),
                                     shape    = RoundedCornerShape(12.dp),
@@ -397,5 +399,18 @@ fun OcrScreen(onBack: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+private fun CoroutineScope.copyOcrText(
+    clipboard: Clipboard,
+    text: String,
+    onCopiedStateChange: (Boolean) -> Unit,
+) {
+    launch {
+        clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("OCR text", text)))
+        onCopiedStateChange(true)
+        delay(2_000)
+        onCopiedStateChange(false)
     }
 }

@@ -68,7 +68,6 @@ fun MoreToolsScreen(
     val bgDark  = Color(0xFF0D0D16)
     val barBg   = Color(0xFF1A1A2A)
     val textPri = Color.White
-    val textSec = Color(0xFF9999BB)
 
     Column(
         Modifier
@@ -102,9 +101,9 @@ fun MoreToolsScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            ToolSection("Popular",  popularTools,  textPri, textSec, onToolClick)
-            ToolSection("Edit",     editTools,     textPri, textSec, onToolClick)
-            ToolSection("Convert",  convertTools,  textPri, textSec, onToolClick)
+            ToolSection("Popular", popularTools, textPri, onToolClick)
+            ToolSection("Edit", editTools, textPri, onToolClick)
+            ToolSection("Convert", convertTools, textPri, onToolClick)
             Spacer(Modifier.height(8.dp))
         }
     }
@@ -117,7 +116,6 @@ private fun ToolSection(
     title      : String,
     tools      : List<ToolDef>,
     textPri    : Color,
-    textSec    : Color,
     onToolClick: (String) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -131,7 +129,7 @@ private fun ToolSection(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 row.forEach { tool ->
-                    ToolCard(tool, textSec, modifier = Modifier.weight(1f), onClick = { onToolClick(tool.key) })
+                    ToolCard(tool, modifier = Modifier.weight(1f), onClick = { onToolClick(tool.key) })
                 }
                 // Fill empty cells in last row
                 repeat(3 - row.size) {
@@ -147,7 +145,6 @@ private fun ToolSection(
 @Composable
 private fun ToolCard(
     tool    : ToolDef,
-    textSec : Color,
     modifier: Modifier = Modifier,
     onClick : () -> Unit
 ) {

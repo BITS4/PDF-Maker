@@ -13,7 +13,6 @@ internal fun AppCoreRoute(
     when (screen) {
         Screen.HOME ->
             HomeScreen(
-                activity = activity,
                 onToolClick = { toolId ->
                     val launch = AppNavigationPolicy.homeTool(toolId)
                     if (launch == null) {
@@ -24,14 +23,6 @@ internal fun AppCoreRoute(
                 },
                 onFileClick = navigation::openFile,
                 onShareFile = { file -> sharePdf(activity, file) },
-                onFabClick = {
-                    navigation.launchTool(
-                        ToolLaunch(
-                            destination = Screen.IMAGE_SELECTION,
-                            clearImageState = true,
-                        ),
-                    )
-                },
                 onNavigateToFiles = { navigation.navigate(Screen.FILES) },
                 onNavigateToSettings = { navigation.navigate(Screen.SETTINGS) },
             )

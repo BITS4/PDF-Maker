@@ -47,13 +47,14 @@ import androidx.compose.ui.unit.sp
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
+// Home is the route-level state owner for its mutually exclusive dialogs, search,
+// filtering, and speed-dial state; splitting those owners would create conflicting UI state.
+@Suppress("LongMethod", "CyclomaticComplexMethod")
 @Composable
 fun HomeScreen(
-    activity            : MainActivity,
     onToolClick         : (String) -> Unit = {},
     onFileClick         : (PdfFile) -> Unit = {},
     onShareFile         : (PdfFile) -> Unit = {},
-    onFabClick          : () -> Unit = {},
     onNavigateToFiles   : () -> Unit = {},
     onNavigateToSettings: () -> Unit = {}
 ) {

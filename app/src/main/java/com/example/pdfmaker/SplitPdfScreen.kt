@@ -249,7 +249,13 @@ fun SplitPdfScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit = {}) {
                                             }) {
                                         Image(bmp.asImageBitmap(), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                                         Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                                                .background(if (hi) AccentBlue.copy(alpha = 0.85f) else androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f))
+                                                .background(
+                                                    if (hi) {
+                                                        AccentBlue.copy(alpha = 0.85f)
+                                                    } else {
+                                                        androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f)
+                                                    },
+                                                )
                                                 .padding(vertical = 2.dp), contentAlignment = Alignment.Center) {
                                             Text("$pn", color = androidx.compose.ui.graphics.Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                         }

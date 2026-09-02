@@ -40,6 +40,9 @@ import kotlinx.coroutines.withContext
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalFoundationApi::class)
+// Rendering jobs and bitmap ownership are coordinated with the pager's remembered
+// state here so stale renders can never outlive or overwrite the selected image.
+@Suppress("LongMethod", "CyclomaticComplexMethod")
 @Composable
 fun ImageEditScreen(
     editStates  : List<ImageEditState>,

@@ -36,6 +36,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+// Review options and conversion progress share one route-level state owner so a
+// recomposition cannot submit a stale file name, password, or bitmap collection.
+@Suppress("LongMethod")
 @Composable
 fun ImageReviewScreen(
     editStates   : List<ImageEditState>,
@@ -52,8 +55,6 @@ fun ImageReviewScreen(
     var usePassword   by remember { mutableStateOf(false) }
     var password      by remember { mutableStateOf("") }
     var showPassword  by remember { mutableStateOf(false) }
-    var pageSize      by remember { mutableStateOf("A4") }
-
     if (showOptions) {
         AlertDialog(
             onDismissRequest = { showOptions = false },

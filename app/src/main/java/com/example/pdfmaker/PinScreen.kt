@@ -106,42 +106,78 @@ fun PinScreen(onUnlocked: () -> Unit) {
 
             Spacer(Modifier.height(40.dp))
 
-            // Number pad
-            val keys = listOf("1","2","3","4","5","6","7","8","9","","0","⌫")
-            keys.chunked(3).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(20.dp),
-                    modifier = Modifier.padding(vertical = 8.dp)) {
-                    row.forEach { key ->
-                        when (key) {
-                            ""  -> Spacer(Modifier.size(72.dp))
-                            "⌫" -> PinKey(content = {
-                                Icon(Icons.AutoMirrored.Filled.Backspace, null,
-                                    tint = Color(0xFF8888AA), modifier = Modifier.size(24.dp))
-                            }, enabled = !locked) {
-                                if (entered.isNotEmpty()) entered = entered.dropLast(1)
+            PinKeyboard(
+                enabled = !locked,
+                canEnterDigit = entered.length < pinLength,
+                onBackspace = {
+                    if (entered.isNotEmpty()) entered = entered.dropLast(1)
+                },
+                onDigit = { key ->
+                    entered += key
+                    if (entered.length == pinLength) {
+                        if (SettingsManager.verifyPin(context, entered)) {
+                            SettingsManager.clearPinFailures(context)
+                            onUnlocked()
+                        } else {
+                            shaking = true
+                            scope.launch {
+                                delay(420)
+                                shaking = false
                             }
-                            else -> PinKey(content = {
-                                Text(key, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Medium)
-                            }, enabled = !locked && entered.length < pinLength) {
-                                entered += key
-                                if (entered.length == pinLength) {
-                                    if (SettingsManager.verifyPin(context, entered)) {
-                                        SettingsManager.clearPinFailures(context)
-                                        onUnlocked()
-                                    } else {
-                                        shaking = true
-                                        scope.launch {
-                                            delay(420); shaking = false
-                                        }
-                                        lockSecs = SettingsManager.recordFailedPinAttempt(context)
-                                        attempts = SettingsManager.failedPinAttempts(context)
-                                        locked = lockSecs > 0
-                                        entered = ""
-                                    }
-                                }
-                            }
+                            lockSecs = SettingsManager.recordFailedPinAttempt(context)
+                            attempts = SettingsManager.failedPinAttempts(context)
+                            locked = lockSecs > 0
+                            entered = ""
                         }
                     }
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun PinKeyboard(
+    enabled: Boolean,
+    canEnterDigit: Boolean,
+    onBackspace: () -> Unit,
+    onDigit: (String) -> Unit,
+) {
+    val keys = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "⌫")
+    keys.chunked(3).forEach { row ->
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
+            modifier = Modifier.padding(vertical = 8.dp),
+        ) {
+            row.forEach { key ->
+                when (key) {
+                    "" -> Spacer(Modifier.size(72.dp))
+                    "⌫" ->
+                        PinKey(
+                            content = {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.Backspace,
+                                    null,
+                                    tint = Color(0xFF8888AA),
+                                    modifier = Modifier.size(24.dp),
+                                )
+                            },
+                            enabled = enabled,
+                            onClick = onBackspace,
+                        )
+                    else ->
+                        PinKey(
+                            content = {
+                                Text(
+                                    key,
+                                    color = Color.White,
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                            },
+                            enabled = enabled && canEnterDigit,
+                            onClick = { onDigit(key) },
+                        )
                 }
             }
         }

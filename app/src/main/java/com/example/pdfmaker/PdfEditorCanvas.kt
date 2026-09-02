@@ -29,6 +29,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
+// This function is the state-hoisted rendering boundary for the editor. Keeping the
+// callbacks explicit makes ownership visible to callers and prevents hidden mutable state.
+@Suppress("LongParameterList")
 internal fun PdfEditorCanvas(
     bitmap: Bitmap?,
     annotations: PageAnnotations?,
@@ -53,24 +56,10 @@ internal fun PdfEditorCanvas(
     onSignatureUpdate: (String, Float, Float, Float) -> Unit,
 ) {
     Box(
-        Modifier.fillMaxSize().background(Color(0xFFCCCCCC)).then(
-            when (editMode) {
-                PdfEditMode.DOODLE ->
-                    Modifier.pointerInput(Unit) {
-                        detectDragGestures(
-                            onDragStart = onDoodleStart,
-                            onDrag = { change, _ ->
-                                change.consume()
-                                onDoodlePoint(change.position)
-                            },
-                            onDragEnd = onDoodleEnd,
-                            onDragCancel = onDoodleEnd,
-                        )
-                    }
-                PdfEditMode.TEXT -> Modifier.pointerInput(Unit) { detectTapGestures(onTap = onTextTap) }
-                else -> Modifier
-            },
-        ),
+        Modifier
+            .fillMaxSize()
+            .background(Color(0xFFCCCCCC))
+            .editorGestures(editMode, onDoodleStart, onDoodlePoint, onDoodleEnd, onTextTap),
     ) {
         if (bitmap == null) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -139,6 +128,30 @@ internal fun PdfEditorCanvas(
         }
     }
 }
+
+private fun Modifier.editorGestures(
+    editMode: PdfEditMode,
+    onDoodleStart: (Offset) -> Unit,
+    onDoodlePoint: (Offset) -> Unit,
+    onDoodleEnd: () -> Unit,
+    onTextTap: (Offset) -> Unit,
+): Modifier =
+    when (editMode) {
+        PdfEditMode.DOODLE ->
+            pointerInput(Unit) {
+                detectDragGestures(
+                    onDragStart = onDoodleStart,
+                    onDrag = { change, _ ->
+                        change.consume()
+                        onDoodlePoint(change.position)
+                    },
+                    onDragEnd = onDoodleEnd,
+                    onDragCancel = onDoodleEnd,
+                )
+            }
+        PdfEditMode.TEXT -> pointerInput(Unit) { detectTapGestures(onTap = onTextTap) }
+        else -> this
+    }
 
 internal fun DrawScope.drawEditorStroke(stroke: DrawStroke) {
     if (stroke.points.size < 2) return

@@ -34,6 +34,9 @@ import kotlinx.coroutines.withContext
 
 private enum class UlState { LIST, ENTER_PASSWORD, UNLOCKING, DONE, ERROR }
 
+// This route intentionally owns the complete unlock workflow state machine; keeping
+// its transitions together prevents password and selected-file state from diverging.
+@Suppress("LongMethod", "CyclomaticComplexMethod")
 @Composable
 fun UnlockPdfScreen(onBack: () -> Unit) {
     val context = LocalContext.current
