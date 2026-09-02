@@ -1,6 +1,7 @@
 package com.example.pdfmaker
 
 import android.Manifest
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import androidx.core.content.FileProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -35,6 +36,17 @@ class SecurityConfigurationInstrumentedTest {
         )
 
         assertTrue("Broad storage permissions must not be packaged", permissions.intersect(prohibited).isEmpty())
+    }
+
+    @Test
+    fun manifestDeclaresNotificationsWithoutAllowingApplicationBackup() {
+        @Suppress("DEPRECATION")
+        val packageInfo = context.packageManager
+            .getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
+        val permissions = packageInfo.requestedPermissions.orEmpty().toSet()
+
+        assertTrue(Manifest.permission.POST_NOTIFICATIONS in permissions)
+        assertEquals(0, packageInfo.applicationInfo!!.flags and ApplicationInfo.FLAG_ALLOW_BACKUP)
     }
 
     @Test
