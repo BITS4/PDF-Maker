@@ -18,6 +18,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.automirrored.filled.TextSnippet
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -387,7 +388,7 @@ fun FilterTypeChip(filter: FileTypeFilter, selected: Boolean, onClick: () -> Uni
             FileTypeFilter.DOCS   -> Triple(Icons.Default.Description,   Color(0xFF4F8EF7), Color(0xFF1A2340))
             FileTypeFilter.SHEETS -> Triple(Icons.Default.TableChart,    Color(0xFF26C6A0), Color(0xFF0F2420))
             FileTypeFilter.SLIDES -> Triple(Icons.Default.Slideshow,     Color(0xFFFFA726), Color(0xFF2A1E0A))
-            FileTypeFilter.TEXT   -> Triple(Icons.Default.TextSnippet,   Color(0xFF9C6DFF), Color(0xFF1E1530))
+            FileTypeFilter.TEXT   -> Triple(Icons.AutoMirrored.Filled.TextSnippet, Color(0xFF9C6DFF), Color(0xFF1E1530))
             FileTypeFilter.IMAGES -> Triple(Icons.Default.Image,         Color(0xFF26C6A0), Color(0xFF0F2420))
         }
     }

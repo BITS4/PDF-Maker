@@ -8,6 +8,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.CallSplit
+import androidx.compose.material.icons.automirrored.filled.MergeType
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -39,8 +41,8 @@ private val popularTools = listOf(
 )
 
 private val editTools = listOf(
-    ToolDef("merge_pdf",    "Merge PDF",     Icons.Default.MergeType,            Color(0xFFFFA726), Color(0xFF2A1E0A)),
-    ToolDef("split_pdf",    "Split PDF",     Icons.Default.CallSplit,            Color(0xFFEF5350), Color(0xFF2A1010)),
+    ToolDef("merge_pdf",    "Merge PDF",     Icons.AutoMirrored.Filled.MergeType, Color(0xFFFFA726), Color(0xFF2A1E0A)),
+    ToolDef("split_pdf",    "Split PDF",     Icons.AutoMirrored.Filled.CallSplit, Color(0xFFEF5350), Color(0xFF2A1010)),
     ToolDef("page_manager", "Manage Pages",  Icons.Default.Pages,                Color(0xFF4F8EF7), Color(0xFF1A2340)),
     ToolDef("compress",     "Compress",      Icons.Default.Compress,             Color(0xFFEF5350), Color(0xFF2A1010)),
     ToolDef("doodle",       "Doodle",        Icons.Default.Edit,                 Color(0xFF9C6DFF), Color(0xFF1E1530)),

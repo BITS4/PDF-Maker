@@ -27,13 +27,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MergeType
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.MergeType
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
@@ -102,7 +102,7 @@ private val fabActions = listOf(
     FabAction("image_to_pdf", "Image to PDF",  Icons.Default.Image,           Color(0xFFEF5350), Color(0xFF2A1010)),
     FabAction("smart_scan",   "Smart Scan",    Icons.Default.DocumentScanner, Color(0xFF4F8EF7), Color(0xFF1A2340)),
     FabAction("import_pdf",   "Import PDF",    Icons.Default.FolderOpen,      Color(0xFFFFA726), Color(0xFF2A1E0A)),
-    FabAction("merge_pdf",    "Merge PDF",     Icons.Default.MergeType,       Color(0xFFFFA726), Color(0xFF2A1E0A)),
+    FabAction("merge_pdf", "Merge PDF", Icons.AutoMirrored.Filled.MergeType, Color(0xFFFFA726), Color(0xFF2A1E0A)),
     FabAction("docx_to_pdf",  "Docx to PDF",   Icons.Default.Description,     Color(0xFF4F8EF7), Color(0xFF1A2340)),
 )
 

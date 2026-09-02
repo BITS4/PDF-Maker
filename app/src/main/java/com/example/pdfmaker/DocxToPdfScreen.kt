@@ -12,6 +12,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.FormatAlignLeft
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -230,7 +232,7 @@ fun DocxToPdfScreen(
                         ) {
                             Text("What gets converted", color = textPri,
                                 fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                            FeatureRow(Icons.Default.FormatAlignLeft,  "Paragraphs & text",         accent)
+                            FeatureRow(Icons.AutoMirrored.Filled.FormatAlignLeft,  "Paragraphs & text",         accent)
                             FeatureRow(Icons.Default.FormatBold,       "Bold & italic formatting",  accent)
                             FeatureRow(Icons.Default.Title,            "Headings (H1, H2, H3)",     accent)
                             FeatureRow(Icons.Default.Image,            "Embedded images",           accent)
@@ -328,7 +330,7 @@ fun DocxToPdfScreen(
                                 shape    = RoundedCornerShape(14.dp),
                                 colors   = ButtonDefaults.buttonColors(containerColor = AccentBlue)
                             ) {
-                                Icon(Icons.Default.OpenInNew, null, modifier = Modifier.size(18.dp))
+                                Icon(Icons.AutoMirrored.Filled.OpenInNew, null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(6.dp))
                                 Text("Open", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                             }

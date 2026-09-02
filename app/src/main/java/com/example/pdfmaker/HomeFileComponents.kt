@@ -17,9 +17,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.material.icons.automirrored.filled.TextSnippet
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PictureAsPdf
@@ -27,7 +28,6 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Slideshow
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.TableRows
-import androidx.compose.material.icons.filled.TextSnippet
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -190,11 +190,11 @@ fun fileTypeIcon(ext: String): ImageVector = when (ext) {
     "xls", "xlsx"     -> Icons.Default.TableChart
     "ppt", "pptx"     -> Icons.Default.Slideshow
     "csv", "tsv"      -> Icons.Default.TableRows
-    "txt", "md", "log"-> Icons.Default.TextSnippet
+    "txt", "md", "log"-> Icons.AutoMirrored.Filled.TextSnippet
     "jpg", "jpeg",
     "png", "webp",
     "bmp", "gif"      -> Icons.Default.Image
-    else              -> Icons.Default.InsertDriveFile
+    else              -> Icons.AutoMirrored.Filled.InsertDriveFile
 }
 
 fun fileTypeTint(ext: String): Color = when (ext) {

@@ -1,8 +1,8 @@
 package com.example.pdfmaker
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.CallMerge
 import androidx.compose.material.icons.filled.Apps
-import androidx.compose.material.icons.filled.CallMerge
 import androidx.compose.material.icons.filled.Compress
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DocumentScanner
@@ -36,7 +36,7 @@ fun toolIcon(key: String): ImageVector = when (key) {
     "import_pdf"   -> Icons.Default.Folder
     "compress"     -> Icons.Default.Compress
     "pdf_to_jpg"   -> Icons.Default.Photo
-    "merge_pdf"    -> Icons.Default.CallMerge
+    "merge_pdf"    -> Icons.AutoMirrored.Filled.CallMerge
     "docx_to_pdf"  -> Icons.Default.Description
     "more"         -> Icons.Default.Apps
     else           -> Icons.Default.PictureAsPdf
@@ -71,4 +71,3 @@ val toolKeys = listOf(
     "image_to_pdf", "smart_scan", "import_pdf", "compress",
     "pdf_to_jpg",   "merge_pdf",  "docx_to_pdf", "more"
 )
-

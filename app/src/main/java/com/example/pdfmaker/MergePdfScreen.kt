@@ -20,6 +20,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.MergeType
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -305,7 +307,7 @@ fun MergePdfScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit) {
                             shape    = RoundedCornerShape(14.dp),
                             colors   = ButtonDefaults.buttonColors(containerColor = orange)
                         ) {
-                            Icon(Icons.Default.MergeType, null, modifier = Modifier.size(20.dp))
+                            Icon(Icons.AutoMirrored.Filled.MergeType, null, modifier = Modifier.size(20.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(
                                 if (items.size < 2) "Add at least 2 PDFs" else "Merge ${items.size} PDFs",
@@ -405,7 +407,7 @@ fun MergePdfScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit) {
                                 shape    = RoundedCornerShape(14.dp),
                                 colors   = ButtonDefaults.buttonColors(containerColor = AccentBlue)
                             ) {
-                                Icon(Icons.Default.OpenInNew, null, modifier = Modifier.size(20.dp))
+                                Icon(Icons.AutoMirrored.Filled.OpenInNew, null, modifier = Modifier.size(20.dp))
                                 Spacer(Modifier.width(6.dp))
                                 Text("Open", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                             }

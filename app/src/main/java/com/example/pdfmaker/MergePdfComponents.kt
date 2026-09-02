@@ -29,11 +29,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MergeType
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.MergeType
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -319,7 +319,7 @@ internal fun MergePreflightDialog(
                 colors = ButtonDefaults.buttonColors(containerColor = orange),
                 shape = RoundedCornerShape(10.dp),
             ) {
-                Icon(Icons.Default.MergeType, null, modifier = Modifier.size(16.dp))
+                Icon(Icons.AutoMirrored.Filled.MergeType, null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
                 Text("Merge", fontWeight = FontWeight.Bold)
             }
@@ -349,7 +349,7 @@ internal fun MergeEmptyPanel(onSelectFiles: () -> Unit) {
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                imageVector = Icons.Default.MergeType,
+                imageVector = Icons.AutoMirrored.Filled.MergeType,
                 contentDescription = null,
                 tint = orange,
                 modifier = Modifier.size(44.dp),
@@ -383,4 +383,3 @@ internal fun MergeEmptyPanel(onSelectFiles: () -> Unit) {
         }
     }
 }
-
