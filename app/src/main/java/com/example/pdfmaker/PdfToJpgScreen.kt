@@ -5,16 +5,10 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -25,29 +19,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-// ── Quality options ───────────────────────────────────────────────────────────
-
-
-// ── Internal state machine ────────────────────────────────────────────────────
-
-private enum class JpgConvertState { PICK, PREVIEW, CONVERTING, DONE, ERROR }
-
-// ── Screen ────────────────────────────────────────────────────────────────────
+private enum class JpgConvertState { PICK, LOADING, PREVIEW, CONVERTING, DONE, ERROR }
 
 @Composable
+// This state-machine UI delegates validation/rendering; boundary failures are surfaced after cancellation is rethrown.
+@Suppress("CyclomaticComplexMethod", "LongMethod", "TooGenericExceptionCaught")
 fun PdfToJpgScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val scope   = rememberCoroutineScope()
@@ -60,7 +49,6 @@ fun PdfToJpgScreen(onBack: () -> Unit) {
     val accent  = AccentBlue
 
     var state        by remember { mutableStateOf(JpgConvertState.PICK) }
-    var pickedUri    by remember { mutableStateOf<Uri?>(null) }
     var pickedName   by remember { mutableStateOf("") }
     var pickedSizeKb by remember { mutableStateOf(0L) }
     var pageCount    by remember { mutableIntStateOf(0) }
@@ -71,44 +59,96 @@ fun PdfToJpgScreen(onBack: () -> Unit) {
     var previews     by remember { mutableStateOf<List<Bitmap>>(emptyList()) }
     var errorMsg     by remember { mutableStateOf("") }
     var savedToGallery by remember { mutableStateOf(false) }
+    var savingToGallery by remember { mutableStateOf(false) }
+    var galleryMessage by remember { mutableStateOf<String?>(null) }
+    var sharing by remember { mutableStateOf(false) }
+    var shareMessage by remember { mutableStateOf<String?>(null) }
+    var stagedSource by remember { mutableStateOf<StagedPdfSource?>(null) }
+    var activeJob by remember { mutableStateOf<Job?>(null) }
 
     // Page selection (null = all pages)
     var allPages     by remember { mutableStateOf(true) }
     var pageFrom     by remember { mutableIntStateOf(1) }
     var pageTo       by remember { mutableIntStateOf(1) }
 
-    val filePicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) {
-            pickedUri  = uri
-            pickedName = uri.lastPathSegment
-                ?.substringAfterLast("/")
-                ?.substringAfterLast("%2F")
-                ?.removeSuffix(".pdf")
-                ?.take(40) ?: "document"
-            pickedSizeKb = context.contentResolver
-                .openFileDescriptor(uri, "r")?.use { it.statSize / 1024 } ?: 0L
+    val latestPreviews by rememberUpdatedState(previews)
+    val latestSource by rememberUpdatedState(stagedSource)
+    val latestJob by rememberUpdatedState(activeJob)
 
-            // Get page count + load preview thumbnails
-            scope.launch(Dispatchers.IO) {
-                val cnt  = pdfPageCount(context, uri)
-                val prvs = (0 until minOf(cnt, 6)).mapNotNull { i ->
-                    renderPage(context, uri, i, 400)
+    DisposableEffect(Unit) {
+        onDispose {
+            latestJob?.cancel()
+            latestSource?.close()
+            BitmapOwnership.retire(latestPreviews)
+        }
+    }
+
+    fun releaseSelection() {
+        activeJob?.cancel()
+        activeJob = null
+        stagedSource?.close()
+        stagedSource = null
+        BitmapOwnership.retire(previews)
+        previews = emptyList()
+    }
+
+    fun loadSelection(uri: Uri) {
+        releaseSelection()
+        state = JpgConvertState.LOADING
+        errorMsg = ""
+        savedToGallery = false
+        galleryMessage = null
+        shareMessage = null
+        pickedName = uri.lastPathSegment
+            ?.substringAfterLast("/")
+            ?.substringAfterLast("%2F")
+            ?.removeSuffix(".pdf")
+            ?.take(40) ?: "document"
+
+        activeJob = scope.launch {
+            var pendingSource: StagedPdfSource? = null
+            var pendingPreviews: List<Bitmap> = emptyList()
+            try {
+                val loaded = withContext(Dispatchers.IO) {
+                    val source = SafePdfInput.fromUri(context, uri)
+                    pendingSource = source
+                    loadPdfToJpgPreview(source).also { pendingPreviews = it.bitmaps }
                 }
-                withContext(Dispatchers.Main) {
-                    pageCount = cnt
-                    pageFrom  = 1
-                    pageTo    = cnt
-                    previews  = prvs
-                    state     = JpgConvertState.PREVIEW
-                }
+                ensureActive()
+                val source = checkNotNull(pendingSource)
+                stagedSource = source
+                pendingSource = null
+                pickedSizeKb = source.file.length() / 1024
+                pageCount = loaded.pageCount
+                pageFrom = 1
+                pageTo = loaded.pageCount
+                previews = loaded.bitmaps
+                pendingPreviews = emptyList()
+                state = JpgConvertState.PREVIEW
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                errorMsg = error.message ?: "Could not open this PDF safely."
+                state = JpgConvertState.ERROR
+            } finally {
+                pendingSource?.close()
+                BitmapOwnership.retire(pendingPreviews)
             }
         }
     }
 
+    val filePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) loadSelection(uri)
+    }
+
     fun startConvert() {
-        val uri = pickedUri ?: return
+        val source = stagedSource ?: run {
+            errorMsg = "Choose a PDF before converting."
+            state = JpgConvertState.ERROR
+            return
+        }
         val selection = if (allPages) {
             PageSelection.All
         } else {
@@ -125,29 +165,39 @@ fun PdfToJpgScreen(onBack: () -> Unit) {
         val from = selectedRange.first - 1
         val to = selectedRange.last - 1
 
-        scope.launch(Dispatchers.IO) {
+        activeJob?.cancel()
+        activeJob = scope.launch {
+            var pendingFiles: List<File> = emptyList()
             try {
-                val files = convertPdfToJpg(
-                    context   = context,
-                    uri       = uri,
-                    baseName  = pickedName,
-                    quality   = quality,
-                    fromPage  = from,
-                    toPage    = to
-                ) { p, txt ->
-                    scope.launch(Dispatchers.Main) { progress = p; progressText = txt }
+                val files = withContext(Dispatchers.IO) {
+                    convertPdfToJpg(
+                        context   = context,
+                        source    = source,
+                        baseName  = pickedName,
+                        quality   = quality,
+                        fromPage  = from,
+                        toPage    = to
+                    ) { p, txt ->
+                        scope.launch(Dispatchers.Main) { progress = p; progressText = txt }
+                    }.also { pendingFiles = it }
                 }
-                withContext(Dispatchers.Main) {
-                    resultFiles = files
-                    state = if (files.isNotEmpty()) JpgConvertState.DONE else JpgConvertState.ERROR.also {
-                        errorMsg = "No pages could be converted."
-                    }
+                ensureActive()
+                resultFiles = files
+                pendingFiles = emptyList()
+                stagedSource = null
+                source.close()
+                BitmapOwnership.retire(previews)
+                previews = emptyList()
+                state = if (files.isNotEmpty()) JpgConvertState.DONE else JpgConvertState.ERROR.also {
+                    errorMsg = "No pages could be converted."
                 }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    errorMsg = e.message ?: "Unknown error"
-                    state    = JpgConvertState.ERROR
-                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                errorMsg = error.message ?: "Could not convert this PDF."
+                state = JpgConvertState.ERROR
+            } finally {
+                pendingFiles.forEach(File::delete)
             }
         }
     }
@@ -162,8 +212,7 @@ fun PdfToJpgScreen(onBack: () -> Unit) {
                 showChange = state == JpgConvertState.PREVIEW,
                 onBack = onBack,
                 onChange = {
-                    pickedUri = null
-                    previews = emptyList()
+                    releaseSelection()
                     state = JpgConvertState.PICK
                 },
             )
@@ -180,79 +229,30 @@ fun PdfToJpgScreen(onBack: () -> Unit) {
                     )
                 }
 
+                JpgConvertState.LOADING -> {
+                    JpgConvertingPanel(
+                        progress = 0,
+                        progressText = "Opening PDF safely…",
+                        primaryText = textPri,
+                        secondaryText = textSec,
+                    )
+                }
+
                 // ── 2. Preview + settings ─────────────────────────────────────
                 JpgConvertState.PREVIEW -> {
                     Column(
                         Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
-                        // File info card
-                        Row(
-                            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
-                                .background(cardBg).padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                Modifier.size(46.dp).clip(RoundedCornerShape(10.dp))
-                                    .background(Color(0xFF1E1E30)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Icons.Default.PictureAsPdf, null,
-                                    tint = Color(0xFFE53935), modifier = Modifier.size(26.dp))
-                            }
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text("$pickedName.pdf", color = textPri,
-                                    fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text("$pageCount pages · ${jpgFormatSize(pickedSizeKb)}",
-                                    color = textSec, fontSize = 12.sp)
-                            }
-                        }
-
-                        // Page previews (up to 6)
-                        if (previews.isNotEmpty()) {
-                            Text("Preview", color = textSec,
-                                fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                itemsIndexed(previews) { idx, bmp ->
-                                    Box(
-                                        Modifier.size(width = 72.dp, height = 96.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(Color(0xFF1E1E2E))
-                                    ) {
-                                        Image(bmp.asImageBitmap(), null,
-                                            modifier     = Modifier.fillMaxSize(),
-                                            contentScale = ContentScale.Fit)
-                                        // Page number badge
-                                        Box(
-                                            Modifier.align(Alignment.BottomEnd)
-                                                .padding(4.dp)
-                                                .clip(RoundedCornerShape(4.dp))
-                                                .background(Color(0xAA000000))
-                                                .padding(horizontal = 4.dp, vertical = 2.dp)
-                                        ) {
-                                            Text("${idx + 1}", color = Color.White,
-                                                fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                        }
-                                    }
-                                }
-                                if (pageCount > 6) {
-                                    item {
-                                        Box(
-                                            Modifier.size(width = 72.dp, height = 96.dp)
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(Color(0xFF1E1E2E)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text("+${pageCount - 6} more",
-                                                color = textSec, fontSize = 11.sp,
-                                                textAlign = TextAlign.Center)
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        PdfToJpgPreviewHeader(
+                            name = pickedName,
+                            sizeKb = pickedSizeKb,
+                            pageCount = pageCount,
+                            previews = previews,
+                            primaryText = textPri,
+                            secondaryText = textSec,
+                            cardBackground = cardBg,
+                        )
 
                         // Page range selection
                         Text("Pages", color = textPri,
@@ -355,127 +355,63 @@ fun PdfToJpgScreen(onBack: () -> Unit) {
 
                 // ── 4. Done ───────────────────────────────────────────────────
                 JpgConvertState.DONE -> {
-                    Column(
-                        Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Spacer(Modifier.height(12.dp))
-                        Box(
-                            Modifier.size(72.dp).clip(CircleShape)
-                                .background(Color(0xFF1A2A1A)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.CheckCircle, null,
-                                tint = Color(0xFF4CAF50), modifier = Modifier.size(38.dp))
-                        }
-                        Spacer(Modifier.height(10.dp))
-                        Text("${resultFiles.size} JPG ${if (resultFiles.size == 1) "image" else "images"} ready",
-                            color = textPri, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(4.dp))
-                        val totalKb = resultFiles.sumOf { it.length() / 1024 }
-                        Text("Total size: ${jpgFormatSize(totalKb)}", color = textSec, fontSize = 13.sp)
-                        Spacer(Modifier.height(16.dp))
-
-                        // Thumbnail grid
-                        LazyVerticalGrid(
-                            columns      = GridCells.Fixed(3),
-                            modifier     = Modifier.weight(1f),
-                            contentPadding = PaddingValues(4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement   = Arrangement.spacedBy(6.dp)
-                        ) {
-                            itemsIndexed(resultFiles) { idx, file ->
-                                val bmp = remember(file.absolutePath) {
-                                    android.graphics.BitmapFactory.decodeFile(file.absolutePath)
+                    JpgResultPanel(
+                        files = resultFiles,
+                        primaryText = textPri,
+                        secondaryText = textSec,
+                        status = PdfToJpgResultStatus(
+                            savedToGallery,
+                            savingToGallery,
+                            galleryMessage,
+                            sharing,
+                            shareMessage,
+                        ),
+                        onSaveToGallery = {
+                            scope.launch {
+                                savingToGallery = true
+                                galleryMessage = null
+                                val report = withContext(Dispatchers.IO) {
+                                    saveJpgsToGallery(context, resultFiles)
                                 }
-                                Box(
-                                    Modifier
-                                        .aspectRatio(0.75f)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(Color(0xFF1E1E2E))
-                                ) {
-                                    if (bmp != null) {
-                                        Image(bmp.asImageBitmap(), null,
-                                            modifier     = Modifier.fillMaxSize(),
-                                            contentScale = ContentScale.Crop)
+                                savedToGallery = report.isComplete
+                                galleryMessage = report.userMessage.takeUnless { report.isComplete }
+                                savingToGallery = false
+                            }
+                        },
+                        onShareAll = {
+                            if (!sharing) {
+                                sharing = true
+                                shareMessage = null
+                                scope.launch {
+                                    val prepared = withContext(Dispatchers.IO) {
+                                        prepareJpgShareIntent(context, resultFiles, pickedName)
                                     }
-                                    Box(
-                                        Modifier.align(Alignment.BottomStart)
-                                            .fillMaxWidth()
-                                            .background(Color(0xAA000000))
-                                            .padding(horizontal = 6.dp, vertical = 3.dp)
-                                    ) {
-                                        Text("Page ${idx + 1}", color = Color.White,
-                                            fontSize = 10.sp, fontWeight = FontWeight.Medium)
-                                    }
+                                    prepared.fold(
+                                        onSuccess = { intent ->
+                                            runCatching { context.startActivity(intent) }
+                                                .onFailure { error ->
+                                                    shareMessage = error.message ?: "No app could share these images."
+                                                }
+                                        },
+                                        onFailure = { error ->
+                                            shareMessage = error.message ?: "Could not prepare these images for sharing."
+                                        },
+                                    )
+                                    sharing = false
                                 }
                             }
-                        }
-
-                        Spacer(Modifier.height(12.dp))
-
-                        // Save to Gallery button (full width)
-                        Button(
-                            onClick = {
-                                saveJpgsToGallery(context, resultFiles)
-                                savedToGallery = true
-                            },
-                            modifier = Modifier.fillMaxWidth().height(52.dp),
-                            shape    = RoundedCornerShape(12.dp),
-                            colors   = ButtonDefaults.buttonColors(
-                                containerColor = if (savedToGallery) Color(0xFF388E3C) else Color(0xFF4CAF50)
-                            )
-                        ) {
-                            Icon(
-                                if (savedToGallery) Icons.Default.CheckCircle else Icons.Default.SaveAlt,
-                                null, modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                if (savedToGallery) "Saved to Gallery!" else "Save to Gallery",
-                                fontWeight = FontWeight.Bold, fontSize = 15.sp
-                            )
-                        }
-                        Spacer(Modifier.height(8.dp))
-
-                        // Share All + New row
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            // Share all as ZIP
-                            Button(
-                                onClick = { shareAllAsZip(context, resultFiles, pickedName) },
-                                modifier = Modifier.weight(1f).height(50.dp),
-                                shape    = RoundedCornerShape(12.dp),
-                                colors   = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF7043))
-                            ) {
-                                Icon(Icons.Default.Share, null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text("Share All", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                            }
-                            // Convert another
-                            OutlinedButton(
-                                onClick = {
-                                    pickedUri = null; previews = emptyList()
-                                    resultFiles = emptyList()
-                                    savedToGallery = false
-                                    state = JpgConvertState.PICK
-                                },
-                                modifier = Modifier.weight(1f).height(50.dp),
-                                shape    = RoundedCornerShape(12.dp),
-                                border   = androidx.compose.foundation.BorderStroke(
-                                    1.dp, textSec.copy(alpha = 0.4f)
-                                )
-                            ) {
-                                Icon(Icons.Default.Add, null, tint = textSec,
-                                    modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text("New", color = textSec,
-                                    fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                            }
-                        }
-                    }
+                        },
+                        onNewConversion = {
+                            releaseSelection()
+                            resultFiles = emptyList()
+                            savedToGallery = false
+                            savingToGallery = false
+                            galleryMessage = null
+                            sharing = false
+                            shareMessage = null
+                            state = JpgConvertState.PICK
+                        },
+                    )
                 }
 
                 // ── 5. Error ──────────────────────────────────────────────────
@@ -484,7 +420,9 @@ fun PdfToJpgScreen(onBack: () -> Unit) {
                         message = errorMsg,
                         primaryText = textPri,
                         secondaryText = textSec,
-                        onRetry = { state = JpgConvertState.PREVIEW },
+                        onRetry = {
+                            state = if (stagedSource == null) JpgConvertState.PICK else JpgConvertState.PREVIEW
+                        },
                     )
                 }
             }
