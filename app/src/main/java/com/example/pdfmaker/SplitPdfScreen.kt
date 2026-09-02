@@ -216,13 +216,18 @@ fun SplitPdfScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit = {}) {
                             }
                         }
                         Spacer(Modifier.height(12.dp))
-                        val canSplit = if (splitMode == SplitMode.RANGE) rangeFrom <= rangeTo else selPages.isNotEmpty()
+                        val selection = if (splitMode == SplitMode.RANGE) {
+                            PageSelection.Range(rangeFrom, rangeTo)
+                        } else {
+                            PageSelection.Custom(selPages)
+                        }
+                        val selectedPages = PageSelectionPolicy.resolve(totalPages, selection)
+                        val canSplit = selectedPages.isNotEmpty()
                         Button(onClick = {
                             val uri = pickedUri ?: return@Button
                             scope.launch {
                                 state = SplitState.SPLITTING
-                                val pages = if (splitMode == SplitMode.RANGE) (rangeFrom..rangeTo).toList()
-                                            else selPages.sorted()
+                                val pages = selectedPages
                                 val res = withContext(Dispatchers.IO) { doSplitPdf(context, uri, pages, pickedName) }
                                 if (res != null) {
                                     outPath = res.first; outName = res.second
@@ -290,7 +295,6 @@ fun SplitPdfScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit = {}) {
         }
     }
 }
-
 @Composable private fun SpModeChip(label: String, sel: Boolean, onClick: () -> Unit) {
     val bg  by animateColorAsState(if (sel) AccentBlue else currentCard, label = "bg")
     val txt by animateColorAsState(if (sel) androidx.compose.ui.graphics.Color.White else currentTextSecond, label = "tx")
@@ -324,32 +328,3 @@ fun SplitPdfScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit = {}) {
         }
     }
 }
-
-private fun doSplitPdf(context: android.content.Context, uri: Uri, pages: List<Int>, baseName: String): Pair<String, String>? = try {
-    val fd  = context.contentResolver.openFileDescriptor(uri, "r") ?: return null
-    val rdr = PdfRenderer(fd)
-    val doc = PdfDocument()
-    val w   = 1080
-    pages.forEachIndexed { docIdx, pNum ->
-        val idx = pNum - 1
-        if (idx < 0 || idx >= rdr.pageCount) return@forEachIndexed
-        val page = rdr.openPage(idx)
-        val h    = (w.toFloat()/page.width*page.height).toInt().coerceAtLeast(1)
-        val bmp  = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        Canvas(bmp).drawColor(AndroidColor.WHITE)
-        page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-        page.close()
-        val pi = PdfDocument.PageInfo.Builder(w, h, docIdx + 1).create()
-        val pg = doc.startPage(pi)
-        pg.canvas.drawBitmap(bmp, 0f, 0f, null)
-        doc.finishPage(pg); bmp.recycle()
-    }
-    rdr.close(); fd.close()
-    val dir     = getPdfMakerDir(context)
-    val label   = if (pages.size == 1) "p${pages[0]}" else "p${pages.first()}-${pages.last()}"
-    val outName = "${baseName}_split_${label}.pdf"
-    val outFile = File(dir, outName)
-    outFile.outputStream().use { doc.writeTo(it) }
-    doc.close()
-    Pair(outFile.absolutePath, outName)
-} catch (_: Exception) { null }

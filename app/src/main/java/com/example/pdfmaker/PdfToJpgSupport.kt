@@ -13,6 +13,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
@@ -58,7 +62,6 @@ enum class JpgQuality(
         color       = Color(0xFF4CAF50)
     )
 }
-
 // ── Small helper composables ──────────────────────────────────────────────────
 
 @Composable
@@ -137,50 +140,59 @@ internal fun JpgSpinner(progress: Int, color: Color) {
 // ── Core conversion logic ──────────────────────────────────────────────────────
 
 internal fun convertPdfToJpg(
-    context  : Context,
-    uri      : Uri,
-    baseName : String,
-    quality  : JpgQuality,
-    fromPage : Int,
-    toPage   : Int,
-    onProg   : (Int, String) -> Unit
-): List<File> {
-    val fd  = context.contentResolver.openFileDescriptor(uri, "r") ?: return emptyList()
-    val rdr = PdfRenderer(fd)
-    val outFiles = mutableListOf<File>()
-    val dir = getPdfMakerDir(context)
+    context: Context,
+    uri: Uri,
+    baseName: String,
+    quality: JpgQuality,
+    fromPage: Int,
+    toPage: Int,
+    onProg: (Int, String) -> Unit,
+): List<File> = withSafePdfRenderer(context, uri) { renderer ->
+    require(fromPage in 0 until renderer.pageCount) { "First page is outside the PDF" }
+    require(toPage in fromPage until renderer.pageCount) { "Last page is outside the PDF" }
+    val outputFiles = mutableListOf<File>()
+    val outputDirectory = getPdfMakerDir(context)
     val total = toPage - fromPage + 1
 
     try {
-        for (i in fromPage..toPage) {
-            val pageNum = i + 1
+        for (pageIndex in fromPage..toPage) {
+            val pageNumber = pageIndex + 1
             onProg(
-                ((i - fromPage) * 95 / total.coerceAtLeast(1)),
-                "Converting page $pageNum of ${rdr.pageCount}…"
+                ((pageIndex - fromPage) * 95 / total),
+                "Converting page $pageNumber of ${renderer.pageCount}…",
             )
-            val page  = rdr.openPage(i)
-            val scale = quality.maxDimPx.toFloat() / maxOf(page.width, page.height).coerceAtLeast(1)
-            val w     = (page.width  * scale).toInt().coerceAtLeast(1)
-            val h     = (page.height * scale).toInt().coerceAtLeast(1)
-
-            val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-            android.graphics.Canvas(bmp).drawColor(android.graphics.Color.WHITE)
-            page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-            page.close()
-
-            val fileName = "${baseName}_page${pageNum}.jpg"
-            val file     = File(dir, fileName)
-            file.outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, quality.jpegQuality, it) }
-            bmp.recycle()
-            outFiles += file
+            renderer.openPage(pageIndex).use { page ->
+                val target = RenderSizing.fitWithin(page.width, page.height, quality.maxDimPx)
+                    ?: error("PDF page has invalid dimensions")
+                val bitmap = Bitmap.createBitmap(
+                    target.width,
+                    target.height,
+                    Bitmap.Config.ARGB_8888,
+                )
+                try {
+                    android.graphics.Canvas(bitmap).drawColor(android.graphics.Color.WHITE)
+                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    outputFiles += OutputStore.writeUnique(
+                        directory = outputDirectory,
+                        requestedBaseName = "${baseName}_page$pageNumber",
+                        extension = "jpg",
+                    ) { output ->
+                        check(bitmap.compress(Bitmap.CompressFormat.JPEG, quality.jpegQuality, output)) {
+                            "Could not encode page as JPEG"
+                        }
+                    }
+                } finally {
+                    bitmap.recycle()
+                }
+            }
         }
-    } finally {
-        rdr.close()
-        fd.close()
+    } catch (error: Throwable) {
+        outputFiles.forEach(File::delete)
+        throw error
     }
 
     onProg(100, "Done!")
-    return outFiles
+    outputFiles
 }
 
 // ── Share all JPGs as a ZIP ────────────────────────────────────────────────────
@@ -204,13 +216,20 @@ internal fun shareAllAsZip(context: Context, files: List<File>, baseName: String
             )
         } else {
             // Multiple images — zip them
-            val zipFile = File(context.cacheDir, "${baseName}_pages.zip")
-            ZipOutputStream(zipFile.outputStream()).use { zos ->
-                files.forEach { f ->
-                    zos.putNextEntry(ZipEntry(f.name))
-                    f.inputStream().use { it.copyTo(zos) }
-                    zos.closeEntry()
+            val shareDirectory = File(context.cacheDir, "pdfmaker")
+            val zipFile = OutputStore.writeUnique(
+                directory = shareDirectory,
+                requestedBaseName = "${baseName}_pages",
+                extension = "zip",
+            ) { output ->
+                val zip = ZipOutputStream(output)
+                files.forEach { file ->
+                    zip.putNextEntry(ZipEntry(file.name))
+                    file.inputStream().use { it.copyTo(zip) }
+                    zip.closeEntry()
                 }
+                zip.finish()
+                zip.flush()
             }
             val zipUri = FileProvider.getUriForFile(
                 context, "${context.packageName}.provider", zipFile

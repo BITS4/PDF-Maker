@@ -53,7 +53,6 @@ enum class CompressLevel(
         color       = Color(0xFFF44336)
     )
 }
-
 // ── Animated compressing ring ──────────────────────────────────────────────────
 
 @Composable
@@ -90,66 +89,81 @@ internal fun CompressingAnimation(progress: Int, accent: Color) {
 // ── Core compression logic ────────────────────────────────────────────────────
 
 internal fun compressPdf(
-    context  : Context,
-    uri      : Uri,
-    level    : CompressLevel,
-    baseName : String,
-    onProg   : (Int) -> Unit
-): File? {
-    return try {
-        val fd  = context.contentResolver.openFileDescriptor(uri, "r") ?: return null
-        val rdr = PdfRenderer(fd)
-        val count = rdr.pageCount
-        if (count == 0) { rdr.close(); fd.close(); return null }
+    context: Context,
+    uri: Uri,
+    level: CompressLevel,
+    baseName: String,
+    onProg: (Int) -> Unit,
+): File? = runCatching {
+    withSafePdfRenderer(context, uri) { renderer ->
+        val pageCount = renderer.pageCount
+        require(pageCount > 0) { "The PDF has no pages" }
+        val outputDocument = PdfDocument()
+        try {
+            repeat(pageCount) { pageIndex ->
+                onProg((pageIndex * 90) / pageCount)
+                renderer.openPage(pageIndex).use { page ->
+                    val target = RenderSizing.fitWithin(page.width, page.height, level.maxDimPx)
+                        ?: error("PDF page has invalid dimensions")
+                    val sourceBitmap = Bitmap.createBitmap(
+                        target.width,
+                        target.height,
+                        Bitmap.Config.ARGB_8888,
+                    )
+                    try {
+                        android.graphics.Canvas(sourceBitmap).drawColor(android.graphics.Color.WHITE)
+                        page.render(
+                            sourceBitmap,
+                            null,
+                            null,
+                            PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY,
+                        )
+                        val jpegBytes = ByteArrayOutputStream().use { encoded ->
+                            check(
+                                sourceBitmap.compress(
+                                    Bitmap.CompressFormat.JPEG,
+                                    level.jpegQuality,
+                                    encoded,
+                                ),
+                            ) { "Could not encode compressed PDF page" }
+                            encoded.toByteArray()
+                        }
+                        val jpegBitmap = requireNotNull(
+                            android.graphics.BitmapFactory.decodeByteArray(
+                                jpegBytes,
+                                0,
+                                jpegBytes.size,
+                            ),
+                        ) { "Could not decode compressed PDF page" }
+                        try {
+                            val pageInfo = PdfDocument.PageInfo.Builder(
+                                target.width,
+                                target.height,
+                                pageIndex + 1,
+                            ).create()
+                            val outputPage = outputDocument.startPage(pageInfo)
+                            outputPage.canvas.drawBitmap(jpegBitmap, 0f, 0f, null)
+                            outputDocument.finishPage(outputPage)
+                        } finally {
+                            jpegBitmap.recycle()
+                        }
+                    } finally {
+                        sourceBitmap.recycle()
+                    }
+                }
+            }
 
-        val pdfDoc = PdfDocument()
-
-        for (i in 0 until count) {
-            onProg((i * 90) / count)
-
-            val page = rdr.openPage(i)
-            // Scale page to maxDimPx on the longest side
-            val scale = level.maxDimPx.toFloat() / maxOf(page.width, page.height).coerceAtLeast(1)
-            val w = (page.width  * scale).toInt().coerceAtLeast(1)
-            val h = (page.height * scale).toInt().coerceAtLeast(1)
-
-            // Render page to bitmap
-            val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-            android.graphics.Canvas(bmp).drawColor(android.graphics.Color.WHITE)
-            page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-            page.close()
-
-            // Re-encode as JPEG to reduce size
-            val bos = ByteArrayOutputStream()
-            bmp.compress(Bitmap.CompressFormat.JPEG, level.jpegQuality, bos)
-            val jpegBytes = bos.toByteArray()
-            bmp.recycle()
-
-            // Decode JPEG back to bitmap for PdfDocument
-            val jpegBmp = android.graphics.BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.size)
-
-            val info   = PdfDocument.PageInfo.Builder(w, h, i + 1).create()
-            val pdfPg  = pdfDoc.startPage(info)
-            pdfPg.canvas.drawBitmap(jpegBmp, 0f, 0f, null)
-            pdfDoc.finishPage(pdfPg)
-            jpegBmp.recycle()
+            onProg(95)
+            OutputStore.writeUnique(
+                directory = getPdfMakerDir(context),
+                requestedBaseName = "compressed_${baseName}_${level.label.lowercase()}",
+                extension = "pdf",
+            ) { outputDocument.writeTo(it) }
+        } finally {
+            outputDocument.close()
         }
-
-        rdr.close()
-        fd.close()
-
-        onProg(95)
-
-        val outName = "compressed_${baseName}_${level.label.lowercase()}.pdf"
-        val dir     = getPdfMakerDir(context)
-        val outFile = File(dir, outName)
-        outFile.outputStream().use { pdfDoc.writeTo(it) }
-        pdfDoc.close()
-
-        onProg(100)
-        outFile
-    } catch (_: Exception) { null }
-}
+    }.also { onProg(100) }
+}.getOrNull()
 
 // ── Share compressed file ─────────────────────────────────────────────────────
 

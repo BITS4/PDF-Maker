@@ -1,14 +1,10 @@
 package com.example.pdfmaker
 
-import android.content.Context
-import android.os.Environment
 import android.graphics.Bitmap
-import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -29,9 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -39,16 +33,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import java.util.zip.ZipEntry
-import java.util.zip.ZipOutputStream
 
 // ── Quality options ───────────────────────────────────────────────────────────
 
@@ -121,10 +109,21 @@ fun PdfToJpgScreen(onBack: () -> Unit) {
 
     fun startConvert() {
         val uri = pickedUri ?: return
+        val selection = if (allPages) {
+            PageSelection.All
+        } else {
+            PageSelection.Range(pageFrom, pageTo)
+        }
+        val selectedRange = PageSelectionPolicy.contiguousRange(pageCount, selection)
+        if (selectedRange == null) {
+            errorMsg = "Select a valid page range."
+            state = JpgConvertState.ERROR
+            return
+        }
         state    = JpgConvertState.CONVERTING
         progress = 0
-        val from = if (allPages) 0 else (pageFrom - 1).coerceAtLeast(0)
-        val to   = if (allPages) pageCount - 1 else (pageTo - 1).coerceAtMost(pageCount - 1)
+        val from = selectedRange.first - 1
+        val to = selectedRange.last - 1
 
         scope.launch(Dispatchers.IO) {
             try {
