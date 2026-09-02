@@ -1,6 +1,7 @@
 import io.gitlab.arturbosch.detekt.Detekt
 import kotlinx.kover.gradle.plugin.dsl.CoverageUnit
 import org.jlleitschuh.gradle.ktlint.reporter.ReporterType
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.application)
@@ -23,6 +24,30 @@ android {
         versionCode = 1
         versionName = "1.0.0"
 
+        val sentryDsn = providers.gradleProperty("SENTRY_DSN")
+            .orElse(providers.environmentVariable("SENTRY_DSN"))
+            .orElse("")
+            .get()
+        val sentryEnabled = providers.gradleProperty("SENTRY_ENABLED")
+            .orElse(providers.environmentVariable("SENTRY_ENABLED"))
+            .orElse("false")
+            .get()
+            .trim()
+            .lowercase()
+            .let { value ->
+                require(value == "true" || value == "false") {
+                    "SENTRY_ENABLED must be either true or false"
+                }
+                value
+            }
+        val escapedSentryDsn = sentryDsn
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\r", "\\r")
+            .replace("\n", "\\n")
+        buildConfigField("String", "SENTRY_DSN", "\"$escapedSentryDsn\"")
+        buildConfigField("boolean", "SENTRY_ENABLED", sentryEnabled)
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -43,11 +68,8 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     buildFeatures {
+        buildConfig = true
         compose = true
     }
 
@@ -85,6 +107,12 @@ android {
             isIncludeAndroidResources = true
             isReturnDefaultValues = false
         }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
     }
 }
 
@@ -179,7 +207,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.coil.compose)
     implementation(libs.google.mlkit.text.recognition)
+    implementation(libs.io.sentry.android)
     implementation(libs.kotlinx.coroutines.play.services)
+    implementation(libs.timber)
 
     testImplementation(libs.junit)
 
