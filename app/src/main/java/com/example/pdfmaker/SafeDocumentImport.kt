@@ -119,7 +119,7 @@ object SafeDocumentImporter {
 
 /** Signature and container checks performed after the provider stream is fully bounded. */
 object ImportedDocumentInspector {
-    private const val MAX_IMAGE_PIXELS = 40_000_000L
+    private const val MAX_IMAGE_PIXELS = 16_000_000L
     private const val MAX_DOCX_ENTRIES = 2_000
     private const val MAX_DOCX_ENTRY_BYTES = 50L * 1024L * 1024L
     private const val MAX_DOCX_EXPANDED_BYTES = 200L * 1024L * 1024L
