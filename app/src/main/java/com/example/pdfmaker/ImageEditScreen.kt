@@ -103,6 +103,7 @@ fun ImageEditScreen(
                 if (abandoned != null && source != null) {
                     BitmapOwnership.retire(abandoned.generatedBitmaps(source))
                 }
+                source?.let { BitmapOwnership.retire(editState.releaseRenderSource(it)) }
                 if (renderVersions[editState] == version) editState.isRendering = false
             }
         }
@@ -154,6 +155,7 @@ fun ImageEditScreen(
                     if (abandoned != null && source != null) {
                         BitmapOwnership.retire(abandoned.generatedBitmaps(source))
                     }
+                    source?.let { BitmapOwnership.retire(editState.releaseRenderSource(it)) }
                     if (renderVersions[editState] == generation) editState.isRendering = false
                 }
             }
@@ -166,21 +168,26 @@ fun ImageEditScreen(
     LaunchedEffect(pagerState.currentPage, currentBitmap) {
         BitmapOwnership.retire(filterThumbs.values.toList())
         filterThumbs.clear()
-        val base = currentBitmap?.takeUnless { it.isRecycled } ?: return@LaunchedEffect
-        ImageFilter.entries.forEach { filter ->
-            var thumbnail: Bitmap? = null
-            try {
-                thumbnail = withContext(Dispatchers.Default) {
-                    ImageProcessing.filterThumbnail(base, filter, 80)
+        val previewState = currentState ?: return@LaunchedEffect
+        val source = previewState.acquireRenderSource() ?: return@LaunchedEffect
+        try {
+            ImageFilter.entries.forEach { filter ->
+                var thumbnail: Bitmap? = null
+                try {
+                    thumbnail = withContext(Dispatchers.Default) {
+                        ImageProcessing.filterThumbnail(source, filter, 80)
+                    }
+                    currentCoroutineContext().ensureActive()
+                    filterThumbs.put(filter, requireNotNull(thumbnail))?.let {
+                        BitmapOwnership.retire(listOf(it))
+                    }
+                    thumbnail = null
+                } finally {
+                    thumbnail?.let { BitmapOwnership.retire(listOf(it)) }
                 }
-                currentCoroutineContext().ensureActive()
-                filterThumbs.put(filter, requireNotNull(thumbnail))?.let {
-                    BitmapOwnership.retire(listOf(it))
-                }
-                thumbnail = null
-            } finally {
-                thumbnail?.let { BitmapOwnership.retire(listOf(it)) }
             }
+        } finally {
+            BitmapOwnership.retire(previewState.releaseRenderSource(source))
         }
     }
     DisposableEffect(Unit) {

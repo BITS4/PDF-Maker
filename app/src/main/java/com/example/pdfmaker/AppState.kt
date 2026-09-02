@@ -67,6 +67,12 @@ object ImageToPdfState {
         return selection.rejectedCount
     }
 
+    internal fun replaceWithTemporaryImport(uri: Uri, source: TemporaryImportLease) {
+        clear()
+        editStates += ImageEditState(uri, source)
+        currentEditIndex = 0
+    }
+
     fun clear() {
         editStates.forEach { BitmapOwnership.retire(it.releaseBitmaps()) }
         editStates.clear()

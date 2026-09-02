@@ -5,13 +5,10 @@ import android.os.Environment
 import java.io.File
 
 /**
- * All files created by PDF Maker are saved here:
- *   /sdcard/Documents/PDFMaker/
+ * Persistent files created by PDF Maker are saved in its app-specific Documents directory.
  *
- * This is a PUBLIC directory so:
- * - MediaStore indexes it automatically
- * - Files survive app uninstall / package name changes
- * - Users can find their files in any file manager
+ * Android removes this directory when the app is uninstalled. Users export individual files through
+ * the system share sheet, which grants read-only access without exposing unrelated app data.
  */
 fun getPdfMakerDir(context: Context): File {
     val root = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)

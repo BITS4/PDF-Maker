@@ -19,6 +19,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.concurrent.atomic.AtomicReference
 
 internal suspend fun runOcr(
     context: Context,
@@ -28,17 +29,26 @@ internal suspend fun runOcr(
     onError: (String) -> Unit,
 ) {
     val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+    val pendingArtifact = AtomicReference<ImportedDocumentArtifact?>()
     val results = mutableListOf<Pair<Int, String>>()
     var recognizedCharacters = 0
     try {
         val imported = withContext(Dispatchers.IO) {
-            SafeDocumentImporter.import(
-                context,
-                IncomingDocumentRequest(uri, context.contentResolver.getType(uri)),
-            )
+            val operationContext = currentCoroutineContext()
+            SafeDocumentImporter
+                .import(
+                    context = context,
+                    request = IncomingDocumentRequest(uri, context.contentResolver.getType(uri)),
+                    retention = IncomingImportRetention.OPERATION_TEMPORARY,
+                    beforeChunk = { operationContext.ensureActive() },
+                ).also { importResult ->
+                    if (importResult is IncomingImportResult.Imported) {
+                        pendingArtifact.set(importResult.artifact)
+                    }
+                }
         }
         val document = when (imported) {
-            is IncomingImportResult.Imported -> imported
+            is IncomingImportResult.Imported -> imported.artifact
             is IncomingImportResult.Rejected -> error(imported.message)
         }
         currentCoroutineContext().ensureActive()
@@ -87,7 +97,9 @@ internal suspend fun runOcr(
                 withContext(Dispatchers.Main) { onProgress(1, 1) }
             }
         } finally {
-            document.file.delete()
+            withContext(NonCancellable + Dispatchers.IO) {
+                document.close()
+            }
         }
         currentCoroutineContext().ensureActive()
         withContext(Dispatchers.Main) { onDone(results.toList()) }
@@ -97,6 +109,9 @@ internal suspend fun runOcr(
         val message = UserVisibleFailureReporter.message(UserFailureStage.OCR, error)
         withContext(Dispatchers.Main) { onError(message) }
     } finally {
+        withContext(NonCancellable + Dispatchers.IO) {
+            pendingArtifact.getAndSet(null)?.close()
+        }
         recognizer.close()
     }
 }

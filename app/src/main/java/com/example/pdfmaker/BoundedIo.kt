@@ -10,12 +10,18 @@ object BoundedIo {
     private const val MAX_EMPTY_READS = 32
 
     @Throws(IOException::class)
-    fun copy(input: InputStream, output: OutputStream, maximumBytes: Long): Long {
+    fun copy(
+        input: InputStream,
+        output: OutputStream,
+        maximumBytes: Long,
+        beforeRead: () -> Unit = {},
+    ): Long {
         require(maximumBytes > 0) { "Maximum byte count must be positive" }
         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
         var total = 0L
         var emptyReads = 0
         while (true) {
+            beforeRead()
             val read = input.read(buffer)
             if (read < 0) return total
             if (read == 0) {

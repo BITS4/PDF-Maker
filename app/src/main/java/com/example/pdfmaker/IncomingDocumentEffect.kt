@@ -6,9 +6,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
+import java.util.concurrent.atomic.AtomicReference
 
 @Composable
 internal fun IncomingDocumentEffect(
@@ -18,22 +22,40 @@ internal fun IncomingDocumentEffect(
     val request = activity.incomingDocumentRequest
     LaunchedEffect(request) {
         val activeRequest = request ?: return@LaunchedEffect
-        val result =
-            withContext(Dispatchers.IO) {
-                SafeDocumentImporter.import(activity, activeRequest)
+        val pendingArtifact = AtomicReference<ImportedDocumentArtifact?>()
+        try {
+            val result =
+                withContext(Dispatchers.IO) {
+                    val operationContext = currentCoroutineContext()
+                    SafeDocumentImporter
+                        .import(
+                            context = activity,
+                            request = activeRequest,
+                            retention = IncomingImportRetention.USER_DOCUMENT,
+                            beforeChunk = { operationContext.ensureActive() },
+                        ).also { importResult ->
+                            if (importResult is IncomingImportResult.Imported) {
+                                pendingArtifact.set(importResult.artifact)
+                            }
+                        }
+                }
+            activity.consumeIncomingDocument(activeRequest)
+            when (result) {
+                is IncomingImportResult.Imported ->
+                    handleImportedDocument(
+                        activity = activity,
+                        navigation = navigation,
+                        artifact = result.artifact,
+                    )
+                is IncomingImportResult.Rejected ->
+                    Toast
+                        .makeText(activity, result.message, Toast.LENGTH_LONG)
+                        .show()
             }
-        activity.consumeIncomingDocument(activeRequest)
-        when (result) {
-            is IncomingImportResult.Imported ->
-                handleImportedDocument(
-                    activity = activity,
-                    navigation = navigation,
-                    imported = result,
-                )
-            is IncomingImportResult.Rejected ->
-                Toast
-                    .makeText(activity, result.message, Toast.LENGTH_LONG)
-                    .show()
+        } finally {
+            withContext(NonCancellable + Dispatchers.IO) {
+                pendingArtifact.getAndSet(null)?.close()
+            }
         }
     }
 }
@@ -41,11 +63,11 @@ internal fun IncomingDocumentEffect(
 private fun handleImportedDocument(
     activity: MainActivity,
     navigation: AppNavigationState,
-    imported: IncomingImportResult.Imported,
+    artifact: ImportedDocumentArtifact,
 ) {
-    when (imported.kind) {
+    when (artifact.kind) {
         IncomingDocumentKind.PDF -> {
-            val file = imported.file
+            val file = artifact.retain()
             val pdfFile =
                 PdfFile(
                     name = file.nameWithoutExtension,
@@ -58,10 +80,13 @@ private fun handleImportedDocument(
             navigation.openFile(pdfFile)
         }
         IncomingDocumentKind.DOCX -> {
-            val uri = activity.ownedContentUri(imported.file) ?: return
-            navigation.importedDocxUri = uri
-            navigation.importedDocxName = imported.file.nameWithoutExtension
-            navigation.navigate(Screen.DOCX_TO_PDF)
+            val uri = activity.ownedContentUri(artifact.file)
+            if (uri != null) {
+                val file = artifact.retain()
+                navigation.importedDocxUri = uri
+                navigation.importedDocxName = file.nameWithoutExtension
+                navigation.navigate(Screen.DOCX_TO_PDF)
+            }
         }
         IncomingDocumentKind.JPEG,
         IncomingDocumentKind.PNG,
@@ -69,13 +94,19 @@ private fun handleImportedDocument(
         IncomingDocumentKind.WEBP,
         IncomingDocumentKind.BMP,
         -> {
-            val uri = activity.ownedContentUri(imported.file) ?: return
-            ImageToPdfState.clear()
-            ImageToPdfState.addUris(listOf(uri))
-            ImageToPdfState.currentEditIndex = 0
-            navigation.addingMoreImages = false
-            navigation.fromSmartScan = false
-            navigation.navigate(Screen.IMAGE_EDIT)
+            val uri = activity.ownedContentUri(artifact.file)
+            if (uri != null) {
+                val temporarySource = artifact.transferTemporary()
+                try {
+                    ImageToPdfState.replaceWithTemporaryImport(uri, temporarySource)
+                } catch (expectedFailure: RuntimeException) {
+                    temporarySource.close()
+                    throw expectedFailure
+                }
+                navigation.addingMoreImages = false
+                navigation.fromSmartScan = false
+                navigation.navigate(Screen.IMAGE_EDIT)
+            }
         }
     }
 }

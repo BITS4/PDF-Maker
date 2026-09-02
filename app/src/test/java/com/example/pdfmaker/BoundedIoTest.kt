@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
+import java.util.concurrent.CancellationException
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -41,6 +42,25 @@ class BoundedIoTest {
         val error = runCatching { BoundedIo.copy(stalled, ByteArrayOutputStream(), 100) }.exceptionOrNull()
 
         assertTrue(error is IOException)
+    }
+
+    @Test
+    fun copyChecksCancellationBeforeEachProviderRead() {
+        val source = ByteArrayInputStream(ByteArray(DEFAULT_BUFFER_SIZE * 3))
+        val output = ByteArrayOutputStream()
+        var checks = 0
+
+        val error =
+            runCatching {
+                BoundedIo.copy(source, output, Long.MAX_VALUE) {
+                    checks += 1
+                    if (checks == 2) throw CancellationException("cancelled")
+                }
+            }.exceptionOrNull()
+
+        assertTrue(error is CancellationException)
+        assertEquals(2, checks)
+        assertEquals(DEFAULT_BUFFER_SIZE, output.size())
     }
 
     @Test

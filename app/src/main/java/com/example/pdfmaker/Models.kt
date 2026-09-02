@@ -9,6 +9,7 @@ import android.view.Choreographer
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import java.util.IdentityHashMap
 
 // ── Navigation ────────────────────────────────────────────────────────────────
 enum class Screen {
@@ -109,7 +110,10 @@ data class ImageRenderResult(
         uniqueBitmaps(display, final).filter { it !== source }
 }
 
-class ImageEditState(val uri: Uri) {
+class ImageEditState internal constructor(
+    val uri: Uri,
+    private var temporarySource: TemporaryImportLease? = null,
+) {
     var originalBitmap by mutableStateOf<Bitmap?>(null)
     var displayBitmap  by mutableStateOf<Bitmap?>(null)
     var finalBitmap    by mutableStateOf<Bitmap?>(null)
@@ -125,8 +129,19 @@ class ImageEditState(val uri: Uri) {
     var cropRect    by mutableStateOf(RectF(0f, 0f, 1f, 1f))
     var cropApplied by mutableStateOf(false)
 
-    fun renderRequest(): ImageRenderRequest? {
+    private val renderUseCounts = IdentityHashMap<Bitmap, Int>()
+    private val pendingRetirement = IdentityHashMap<Bitmap, Boolean>()
+
+    @Synchronized
+    fun acquireRenderSource(): Bitmap? {
         val source = originalBitmap?.takeUnless { it.isRecycled } ?: return null
+        renderUseCounts[source] = (renderUseCounts[source] ?: 0) + 1
+        return source
+    }
+
+    @Synchronized
+    fun renderRequest(): ImageRenderRequest? {
+        val source = acquireRenderSource() ?: return null
         return ImageRenderRequest(
             source = source,
             filter = filter,
@@ -139,42 +154,51 @@ class ImageEditState(val uri: Uri) {
         )
     }
 
+    @Synchronized
     fun installSource(bitmap: Bitmap): List<Bitmap> {
         require(!bitmap.isRecycled) { "Cannot install a recycled image" }
-        val retired = ownedBitmaps().filterNotSameAs(bitmap)
+        val retired = deferRetirement(ownedBitmaps().filterNotSameAs(bitmap))
         originalBitmap = bitmap
         displayBitmap = bitmap
         finalBitmap = bitmap
         loadError = null
+        releaseTemporarySource()
         return retired
     }
 
+    @Synchronized
     fun installRender(result: ImageRenderResult): List<Bitmap> {
         require(!result.display.isRecycled && !result.final.isRecycled) {
             "Cannot install a recycled render result"
         }
         val source = originalBitmap
-        val retired = ownedBitmaps().filterNotSameAs(source, result.display, result.final)
+        val retired = deferRetirement(
+            ownedBitmaps().filterNotSameAs(source, result.display, result.final),
+        )
         displayBitmap = result.display
         finalBitmap = result.final
         loadError = null
         return retired
     }
 
+    @Synchronized
     fun installCropPreview(bitmap: Bitmap): List<Bitmap> {
         require(!bitmap.isRecycled) { "Cannot install a recycled crop preview" }
-        val retired = uniqueBitmaps(displayBitmap).filterNotSameAs(
-            originalBitmap,
-            finalBitmap,
-            bitmap,
+        val retired = deferRetirement(
+            uniqueBitmaps(displayBitmap).filterNotSameAs(
+                originalBitmap,
+                finalBitmap,
+                bitmap,
+            ),
         )
         displayBitmap = bitmap
         return retired
     }
 
     /** Commits already-rendered crop pixels as the new baseline, avoiding double filters/rotation. */
+    @Synchronized
     fun commitCroppedSource(bitmap: Bitmap): List<Bitmap> {
-        val retired = ownedBitmaps().filterNotSameAs(bitmap)
+        val retired = deferRetirement(ownedBitmaps().filterNotSameAs(bitmap))
         originalBitmap = bitmap
         displayBitmap = bitmap
         finalBitmap = bitmap
@@ -189,18 +213,47 @@ class ImageEditState(val uri: Uri) {
         return retired
     }
 
+    @Synchronized
     fun releaseBitmaps(): List<Bitmap> {
-        val sourceInUse = originalBitmap.takeIf { isRendering }
-        val retired = ownedBitmaps().filterNotSameAs(sourceInUse)
+        val retired = deferRetirement(ownedBitmaps())
         originalBitmap = null
         displayBitmap = null
         finalBitmap = null
         isRendering = false
+        releaseTemporarySource()
         return retired
+    }
+
+    @Synchronized
+    fun releaseRenderSource(source: Bitmap): List<Bitmap> {
+        val useCount = renderUseCounts[source] ?: return emptyList()
+        if (useCount > 1) {
+            renderUseCounts[source] = useCount - 1
+            return emptyList()
+        }
+        renderUseCounts.remove(source)
+        val shouldRetire = pendingRetirement.remove(source) != null
+        val isStillOwned = ownedBitmaps().any { it === source }
+        return if (shouldRetire && !isStillOwned) listOf(source) else emptyList()
+    }
+
+    private fun releaseTemporarySource() {
+        temporarySource?.close()
+        temporarySource = null
     }
 
     private fun ownedBitmaps(): List<Bitmap> =
         uniqueBitmaps(originalBitmap, displayBitmap, finalBitmap)
+
+    private fun deferRetirement(candidates: Iterable<Bitmap>): List<Bitmap> =
+        candidates.filter { bitmap ->
+            if ((renderUseCounts[bitmap] ?: 0) > 0) {
+                pendingRetirement[bitmap] = true
+                false
+            } else {
+                true
+            }
+        }
 }
 
 /** Delays recycling until Compose has had time to replace an image in the display list. */

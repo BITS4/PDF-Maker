@@ -2,11 +2,13 @@ package com.example.pdfmaker
 
 import java.io.File
 import java.io.FileOutputStream
+import java.util.concurrent.CancellationException
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -68,6 +70,27 @@ class ImportedDocumentInspectorTest {
 
         assertNull(ImportedDocumentInspector.inspect(traversal))
         assertNull(ImportedDocumentInspector.inspect(bomb))
+    }
+
+    @Test
+    fun docxInspectionPropagatesCancellationInsteadOfDowngradingItToRejection() {
+        val valid =
+            createZip(
+                "cancelled.docx",
+                mapOf(
+                    "[Content_Types].xml" to "types",
+                    "word/document.xml" to "document",
+                ),
+            )
+        var checks = 0
+
+        assertThrows(CancellationException::class.java) {
+            ImportedDocumentInspector.inspect(valid) {
+                checks += 1
+                if (checks == 3) throw CancellationException("cancelled")
+            }
+        }
+        assertEquals(3, checks)
     }
 
     @Test
