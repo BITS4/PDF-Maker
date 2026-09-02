@@ -2,7 +2,6 @@ package com.example.pdfmaker
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -42,7 +41,7 @@ object PdfThumbnailCache {
 
     private fun generateThumbnail(filePath: String, sizePx: Int): Bitmap? {
         val file = File(filePath)
-        if (!file.exists()) return null
+        if (!ThumbnailInput.isAllowedSource(file) || sizePx !in 1..2_048) return null
         return when (file.extension.lowercase()) {
             "pdf"              -> pdfThumb(file, sizePx)
             "jpg", "jpeg",
@@ -60,28 +59,29 @@ object PdfThumbnailCache {
     // ── PDF ──────────────────────────────────────────────────────────────────
 
     private fun pdfThumb(file: File, sizePx: Int): Bitmap? {
-        val pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-        val rdr = PdfRenderer(pfd)
-        if (rdr.pageCount == 0) { rdr.close(); pfd.close(); return null }
-        val page   = rdr.openPage(0)
-        val aspect = page.width.toFloat() / page.height.toFloat()
-        val w = if (aspect > 1f) sizePx else (sizePx * aspect).toInt().coerceAtLeast(1)
-        val h = if (aspect > 1f) (sizePx / aspect).toInt().coerceAtLeast(1) else sizePx
-        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        Canvas(bmp).drawColor(Color.WHITE)
-        page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-        page.close(); rdr.close(); pfd.close()
-        return bmp
+        return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
+            PdfRenderer(descriptor).use rendererUse@{ renderer ->
+                if (renderer.pageCount == 0) return@rendererUse null
+                renderer.openPage(0).use pageUse@{ page ->
+                    val target = RenderSizing.fitWithin(
+                        page.width,
+                        page.height,
+                        sizePx,
+                        allowUpscale = true,
+                    ) ?: return@pageUse null
+                    Bitmap.createBitmap(target.width, target.height, Bitmap.Config.ARGB_8888).also { bitmap ->
+                        Canvas(bitmap).drawColor(Color.WHITE)
+                        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    }
+                }
+            }
+        }
     }
 
     // ── Image ─────────────────────────────────────────────────────────────────
 
     private fun imageThumb(file: File, sizePx: Int): Bitmap? {
-        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeFile(file.absolutePath, opts)
-        val sample = (opts.outWidth / sizePx).coerceAtLeast(1)
-        val opts2  = BitmapFactory.Options().apply { inSampleSize = sample }
-        val src    = BitmapFactory.decodeFile(file.absolutePath, opts2) ?: return null
+        val src = file.inputStream().use { ThumbnailInput.decodeImage(it, sizePx) } ?: return null
         val aspect = src.width.toFloat() / src.height.toFloat()
         val w = if (aspect > 1f) sizePx else (sizePx * aspect).toInt().coerceAtLeast(1)
         val h = if (aspect > 1f) (sizePx / aspect).toInt().coerceAtLeast(1) else sizePx
@@ -96,21 +96,18 @@ object PdfThumbnailCache {
         // Extract first paragraph texts and first embedded image
         val texts  = mutableListOf<String>()
         var firstImg: Bitmap? = null
-        val rels   = mutableMapOf<String, String>()
 
         ZipInputStream(file.inputStream()).use { zis ->
             var entry = zis.nextEntry
+            var entryIndex = 0
             while (entry != null) {
+                ThumbnailInput.validateArchiveEntry(++entryIndex, entry.name)
                 when {
-                    entry.name == "word/_rels/document.xml.rels" -> {
-                        parseThumbRels(zis.bufferedReader().readText(), rels)
-                    }
                     entry.name == "word/document.xml" && texts.size < 8 -> {
-                        extractDocxTexts(zis.bufferedReader().readText(), texts)
+                        extractDocxTexts(ThumbnailInput.readXml(zis), texts)
                     }
                     entry.name.startsWith("word/media/") && firstImg == null -> {
-                        val bytes = zis.readBytes()
-                        firstImg = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                        firstImg = ThumbnailInput.decodeImage(zis, sizePx)
                     }
                 }
                 zis.closeEntry()
@@ -153,14 +150,15 @@ object PdfThumbnailCache {
 
         ZipInputStream(file.inputStream()).use { zis ->
             var entry = zis.nextEntry
+            var entryIndex = 0
             while (entry != null) {
+                ThumbnailInput.validateArchiveEntry(++entryIndex, entry.name)
                 when {
                     entry.name == "ppt/slides/slide1.xml" -> {
-                        extractPptxTexts(zis.bufferedReader().readText(), texts)
+                        extractPptxTexts(ThumbnailInput.readXml(zis), texts)
                     }
                     entry.name.startsWith("ppt/media/") && firstImg == null -> {
-                        val bytes = zis.readBytes()
-                        firstImg  = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                        firstImg = ThumbnailInput.decodeImage(zis, sizePx)
                     }
                 }
                 zis.closeEntry()
@@ -229,10 +227,12 @@ object PdfThumbnailCache {
         val strings = mutableListOf<String>()
         ZipInputStream(file.inputStream()).use { zis ->
             var entry = zis.nextEntry
+            var entryIndex = 0
             while (entry != null) {
+                ThumbnailInput.validateArchiveEntry(++entryIndex, entry.name)
                 when (entry.name) {
-                    "xl/sharedStrings.xml"      -> parseThumbSharedStrings(zis.bufferedReader().readText(), strings)
-                    "xl/worksheets/sheet1.xml"  -> parseThumbXlsxRows(zis.bufferedReader().readText(), strings, rows)
+                    "xl/sharedStrings.xml" -> parseThumbSharedStrings(ThumbnailInput.readXml(zis), strings)
+                    "xl/worksheets/sheet1.xml" -> parseThumbXlsxRows(ThumbnailInput.readXml(zis), strings, rows)
                 }
                 zis.closeEntry(); entry = zis.nextEntry
             }
@@ -284,7 +284,11 @@ object PdfThumbnailCache {
 
     private fun csvThumb(file: File, sizePx: Int): Bitmap? {
         val sep  = if (file.extension.lowercase() == "tsv") '\t' else ','
-        val rows = file.readLines().take(8).map { it.split(sep) }
+        val rows = ThumbnailInput.readTextPrefix(file)
+            .lineSequence()
+            .take(8)
+            .map { it.split(sep) }
+            .toList()
         return renderTableThumb(sizePx, rows, "CSV",
             android.graphics.Color.parseColor("#6A1B9A"),
             android.graphics.Color.parseColor("#4A148C"))
@@ -293,7 +297,11 @@ object PdfThumbnailCache {
     // ── TXT ───────────────────────────────────────────────────────────────────
 
     private fun txtThumb(file: File, sizePx: Int): Bitmap? {
-        val lines = file.readLines().filter { it.isNotBlank() }.take(12)
+        val lines = ThumbnailInput.readTextPrefix(file)
+            .lineSequence()
+            .filter { it.isNotBlank() }
+            .take(12)
+            .toList()
         return renderDocumentThumb(
             sizePx     = sizePx,
             badgeLabel = "TXT",
@@ -423,23 +431,6 @@ object PdfThumbnailCache {
             textSize * 0.3f, textSize * 0.3f, bg
         )
         canvas.drawText(label, x + pad, y + textSize, tp)
-    }
-
-    // ── Rels parser (for DOCX image mapping) ──────────────────────────────────
-
-    private fun parseThumbRels(xml: String, out: MutableMap<String, String>) {
-        try {
-            val p = XmlPullParserFactory.newInstance().newPullParser().also { it.setInput(xml.reader()) }
-            var ev = p.eventType
-            while (ev != XmlPullParser.END_DOCUMENT) {
-                if (ev == XmlPullParser.START_TAG && p.name == "Relationship") {
-                    val id     = p.getAttributeValue(null, "Id") ?: ""
-                    val target = p.getAttributeValue(null, "Target") ?: ""
-                    if (id.isNotEmpty()) out[id] = target.substringAfterLast("/")
-                }
-                ev = p.next()
-            }
-        } catch (_: Exception) {}
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
