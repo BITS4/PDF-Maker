@@ -27,6 +27,19 @@ class PdfMakerApplication : Application() {
             options.isEnableUserInteractionTracing = false
             options.isEnableUserInteractionBreadcrumbs = false
             options.isAttachStacktrace = true
+            options.isAttachScreenshot = false
+            options.isAttachViewHierarchy = false
+            options.isCollectAdditionalContext = false
+            options.isCollectExternalStorageContext = false
+            options.isEnableRootCheck = false
+            options.isEnableAutoSessionTracking = false
+            options.isSendModules = false
+            options.enableAllAutoBreadcrumbs(false)
+            options.isReportHistoricalAnrs = false
+            options.isAttachAnrThreadDump = false
+            options.anrProfilingSampleRate = 0.0
+            options.sessionReplay.sessionSampleRate = 0.0
+            options.sessionReplay.onErrorSampleRate = 0.0
             options.beforeSend = { event, _ -> event.withoutPotentialDocumentData() }
         }
     }

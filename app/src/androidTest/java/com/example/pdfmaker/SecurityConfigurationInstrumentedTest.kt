@@ -50,6 +50,18 @@ class SecurityConfigurationInstrumentedTest {
     }
 
     @Test
+    fun sentryCannotInitializeBeforeThePrivacyPolicy() {
+        @Suppress("DEPRECATION")
+        val applicationInfo = context.packageManager.getApplicationInfo(
+            context.packageName,
+            PackageManager.GET_META_DATA,
+        )
+
+        assertEquals(PdfMakerApplication::class.java.name, applicationInfo.className)
+        assertFalse(applicationInfo.metaData.getBoolean("io.sentry.auto-init", true))
+    }
+
+    @Test
     fun fileProviderExposesGeneratedDocuments() {
         val output = OutputStore.writeUnique(getPdfMakerDir(context), "provider-contract", "pdf") {
             it.write("%PDF-1.7".toByteArray())
