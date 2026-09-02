@@ -6,17 +6,25 @@ on:
       - "v*"
   workflow_dispatch:
 
-permissions:
-  contents: write
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   deploy:
     name: Verify and publish tagged build
     runs-on: ubuntu-24.04
     timeout-minutes: 40
+    permissions:
+      contents: write
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - name: Set up JDK 17
         uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6
         with:
@@ -28,9 +36,12 @@ jobs:
         if: ${{ github.event_name == 'push' }}
         shell: bash
         run: |
+          [[ "$GITHUB_REF_NAME" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]
           app_version=$(sed -nE 's/^[[:space:]]*versionName = "([^"]+)"/\1/p' app/build.gradle.kts)
           test -n "$app_version"
           test "v$app_version" = "$GITHUB_REF_NAME"
+          grep -F "## [$app_version]" CHANGELOG.md
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
       - name: Run release verification
         run: >-
           ./gradlew
@@ -39,7 +50,7 @@ jobs:
           :app:detekt
           :app:lintRelease
           :app:testDebugUnitTest
-          :app:koverVerifyDebug
+          :app:koverVerifyCritical
           :app:assembleDebug
           :app:bundleRelease
           --no-daemon
