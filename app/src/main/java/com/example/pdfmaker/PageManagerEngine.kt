@@ -29,11 +29,15 @@ internal suspend fun loadPageStates(context: Context, uri: Uri): List<PageState>
                     )
                     try {
                         Canvas(bitmap).drawColor(Color.WHITE)
+                        val scale = requireNotNull(
+                            RenderSizing.scaleTo(page.width, page.height, target),
+                        ) { "PDF preview has invalid dimensions" }
+                        val transform = Matrix().apply { setScale(scale.scaleX, scale.scaleY) }
                         loadContext.ensureActive()
                         page.render(
                             bitmap,
                             null,
-                            null,
+                            transform,
                             PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY,
                         )
                         loadContext.ensureActive()
@@ -91,10 +95,14 @@ internal fun savePages(
                     var outputBitmap = sourceBitmap
                     try {
                         Canvas(sourceBitmap).drawColor(Color.WHITE)
+                        val scale = requireNotNull(
+                            RenderSizing.scaleTo(sourcePage.width, sourcePage.height, target),
+                        ) { "PDF page has invalid dimensions" }
+                        val transform = Matrix().apply { setScale(scale.scaleX, scale.scaleY) }
                         sourcePage.render(
                             sourceBitmap,
                             null,
-                            null,
+                            transform,
                             PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY,
                         )
                         val rotation = PageEditPolicy.normalizeRotation(pages[sourceIndex].rotation)

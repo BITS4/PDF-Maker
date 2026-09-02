@@ -6,6 +6,8 @@ internal data class PixelSize(val width: Int, val height: Int) {
     val pixelCount: Long = width.toLong() * height.toLong()
 }
 
+internal data class RenderScale(val scaleX: Float, val scaleY: Float)
+
 internal object RenderSizing {
     fun fitWithin(
         sourceWidth: Int,
@@ -20,6 +22,15 @@ internal object RenderSizing {
         return PixelSize(
             width = (sourceWidth.toDouble() * scale).roundToInt().coerceIn(1, maxDimension),
             height = (sourceHeight.toDouble() * scale).roundToInt().coerceIn(1, maxDimension),
+        )
+    }
+
+    fun scaleTo(sourceWidth: Int, sourceHeight: Int, target: PixelSize): RenderScale? {
+        if (sourceWidth <= 0 || sourceHeight <= 0) return null
+        if (target.width <= 0 || target.height <= 0) return null
+        return RenderScale(
+            scaleX = target.width.toFloat() / sourceWidth.toFloat(),
+            scaleY = target.height.toFloat() / sourceHeight.toFloat(),
         )
     }
 }

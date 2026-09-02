@@ -40,4 +40,24 @@ class RenderSizingTest {
         assertTrue(result.height in 1..2_048)
         assertTrue(result.pixelCount <= 2_048L * 2_048L)
     }
+
+    @Test
+    fun `computes the transform that fits a source into its target bitmap`() {
+        assertEquals(
+            RenderScale(scaleX = 0.25f, scaleY = 0.25f),
+            RenderSizing.scaleTo(800, 1_200, PixelSize(200, 300)),
+        )
+        assertEquals(
+            RenderScale(scaleX = 2f, scaleY = 2f),
+            RenderSizing.scaleTo(400, 200, PixelSize(800, 400)),
+        )
+    }
+
+    @Test
+    fun `rejects render transforms with invalid source or target dimensions`() {
+        assertNull(RenderSizing.scaleTo(0, 100, PixelSize(50, 50)))
+        assertNull(RenderSizing.scaleTo(100, 0, PixelSize(50, 50)))
+        assertNull(RenderSizing.scaleTo(100, 100, PixelSize(0, 50)))
+        assertNull(RenderSizing.scaleTo(100, 100, PixelSize(50, -1)))
+    }
 }
