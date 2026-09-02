@@ -9,9 +9,10 @@ import java.io.FileOutputStream
 import java.io.InputStream
 import java.util.UUID
 
-class StagedPdfSource internal constructor(val file: File) : Closeable {
-    fun openDescriptor(): ParcelFileDescriptor =
-        ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+class StagedPdfSource internal constructor(
+    val file: File,
+) : Closeable {
+    fun openDescriptor(): ParcelFileDescriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
 
     override fun close() {
         file.delete()
@@ -22,17 +23,27 @@ class StagedPdfSource internal constructor(val file: File) : Closeable {
 object SafePdfInput {
     const val MAX_PDF_BYTES = 100L * 1024L * 1024L
 
-    fun fromUri(context: Context, uri: Uri): StagedPdfSource {
+    fun fromUri(
+        context: Context,
+        uri: Uri,
+        beforeChunk: () -> Unit = {},
+    ): StagedPdfSource {
         require(uri.scheme == "content" && !uri.authority.isNullOrBlank()) {
             "Only content-provider PDFs can be opened"
         }
-        val input = context.contentResolver.openInputStream(uri)
-            ?: error("The PDF provider returned no data")
+        val input =
+            context.contentResolver.openInputStream(uri)
+                ?: error("The PDF provider returned no data")
         val directory = File(context.cacheDir, "pdfmaker")
-        return StagedPdfSource(stage(input, directory))
+        return StagedPdfSource(stage(input, directory, beforeChunk = beforeChunk))
     }
 
-    fun stage(input: InputStream, directory: File, maximumBytes: Long = MAX_PDF_BYTES): File {
+    fun stage(
+        input: InputStream,
+        directory: File,
+        maximumBytes: Long = MAX_PDF_BYTES,
+        beforeChunk: () -> Unit = {},
+    ): File {
         require(maximumBytes > 0) { "Maximum PDF size must be positive" }
         check((directory.exists() && directory.isDirectory) || directory.mkdirs()) {
             "Could not create the PDF staging directory"
@@ -41,7 +52,12 @@ object SafePdfInput {
         try {
             input.use { source ->
                 FileOutputStream(temporary).use { output ->
-                    val copied = BoundedIo.copy(source, output, maximumBytes)
+                    val copied =
+                        BoundedIo.copy(
+                            source,
+                            BoundedIo.limit(output, maximumBytes, beforeChunk),
+                            maximumBytes,
+                        )
                     require(copied > 0) { "The PDF is empty" }
                     output.flush()
                     output.fd.sync()
