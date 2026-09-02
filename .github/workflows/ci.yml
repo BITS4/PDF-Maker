@@ -49,21 +49,14 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
       - name: Run blocking quality gates
-        run: >-
-          ./gradlew
-          checkSourceFileSize
-          :app:ktlintCheck
-          :app:detekt
-          :app:lintDebug
-          --no-daemon
-          --stacktrace
-          --warning-mode all
+        run: ./gradlew lint --no-daemon --stacktrace --warning-mode all
       - name: Upload quality reports
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: quality-reports
           path: |
+            build/reports/ktlint/
             app/build/reports/detekt/
             app/build/reports/ktlint/
             app/build/reports/lint-results-debug.*
@@ -89,7 +82,7 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
       - name: Compile Kotlin sources
-        run: ./gradlew :app:compileDebugKotlin --no-daemon --stacktrace --warning-mode all
+        run: ./gradlew typecheck --no-daemon --stacktrace --warning-mode all
 
   unit-tests:
     name: Unit tests and coverage
@@ -110,17 +103,7 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
       - name: Run tests and enforce coverage
-        run: >-
-          ./gradlew
-          :app:testDebugUnitTest
-          :app:koverXmlReportDebug
-          :app:koverHtmlReportDebug
-          :app:koverXmlReportCritical
-          :app:koverHtmlReportCritical
-          :app:koverVerifyCritical
-          --no-daemon
-          --stacktrace
-          --warning-mode all
+        run: ./gradlew test coverage --no-daemon --stacktrace --warning-mode all
       - name: Upload test and coverage reports
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -153,13 +136,7 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
       - name: Build distributable artifacts
-        run: >-
-          ./gradlew
-          :app:assembleDebug
-          :app:bundleRelease
-          --no-daemon
-          --stacktrace
-          --warning-mode all
+        run: ./gradlew build --no-daemon --stacktrace --warning-mode all
       - name: Upload Android artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

@@ -1,5 +1,6 @@
 import org.gradle.api.GradleException
 import org.gradle.api.artifacts.dsl.LockMode
+import org.jlleitschuh.gradle.ktlint.reporter.ReporterType
 
 plugins {
     alias(libs.plugins.android.application) apply false
@@ -7,8 +8,22 @@ plugins {
     alias(libs.plugins.kotlin.android) apply false
     alias(libs.plugins.kotlin.compose) apply false
     alias(libs.plugins.kover) apply false
-    alias(libs.plugins.ktlint) apply false
-    alias(libs.plugins.owasp.dependency.check) apply false
+    alias(libs.plugins.ktlint)
+}
+
+ktlint {
+    version.set(libs.versions.ktlintEngine)
+    ignoreFailures.set(false)
+    outputToConsole.set(true)
+    reporters {
+        reporter(ReporterType.CHECKSTYLE)
+        reporter(ReporterType.PLAIN)
+        reporter(ReporterType.SARIF)
+    }
+    filter {
+        exclude("**/build/**")
+        exclude("**/generated/**")
+    }
 }
 
 subprojects {
@@ -18,9 +33,10 @@ subprojects {
     }
 }
 
-val productionKotlin = fileTree("app/src/main") {
-    include("**/*.kt")
-}
+val productionKotlin =
+    fileTree("app/src/main") {
+        include("**/*.kt")
+    }
 
 tasks.register("checkSourceFileSize") {
     group = "verification"
@@ -28,15 +44,17 @@ tasks.register("checkSourceFileSize") {
     inputs.files(productionKotlin)
 
     doLast {
-        val oversized = productionKotlin.files
-            .map { file -> file.relativeTo(rootDir) to file.readLines(Charsets.UTF_8).size }
-            .filter { (_, lineCount) -> lineCount > 500 }
-            .sortedByDescending { (_, lineCount) -> lineCount }
+        val oversized =
+            productionKotlin.files
+                .map { file -> file.relativeTo(rootDir) to file.readLines(Charsets.UTF_8).size }
+                .filter { (_, lineCount) -> lineCount > 500 }
+                .sortedByDescending { (_, lineCount) -> lineCount }
 
         if (oversized.isNotEmpty()) {
-            val details = oversized.joinToString(separator = System.lineSeparator()) { (file, lineCount) ->
-                "  - ${file.invariantSeparatorsPath}: $lineCount lines"
-            }
+            val details =
+                oversized.joinToString(separator = System.lineSeparator()) { (file, lineCount) ->
+                    "  - ${file.invariantSeparatorsPath}: $lineCount lines"
+                }
             throw GradleException(
                 "Production Kotlin files must stay at or below 500 lines:${System.lineSeparator()}$details",
             )
@@ -44,17 +62,152 @@ tasks.register("checkSourceFileSize") {
     }
 }
 
-tasks.register("verify") {
+tasks.register("checkPrivacySafeLogging") {
     group = "verification"
-    description = "Runs the reproducible local quality, test, coverage, and debug-build gates."
+    description = "Fails when production code bypasses the privacy-safe Timber logging boundary."
+    inputs.files(productionKotlin)
+
+    doLast {
+        val approvedSink = "app/src/main/java/com/example/pdfmaker/PrivacySafeTree.kt"
+        val prohibitedMarkers =
+            listOf(
+                "import android.util.Log",
+                "import android.util.*",
+                "android.util.Log.",
+            )
+        val unqualifiedLogCall = Regex("""\bLog\.""")
+        val violations =
+            productionKotlin.files
+                .filter { file -> file.relativeTo(rootDir).invariantSeparatorsPath != approvedSink }
+                .filter { file ->
+                    val source = file.readText(Charsets.UTF_8)
+                    prohibitedMarkers.any(source::contains) || unqualifiedLogCall.containsMatchIn(source)
+                }.map { file -> file.relativeTo(rootDir).invariantSeparatorsPath }
+                .sorted()
+
+        if (violations.isNotEmpty()) {
+            throw GradleException(
+                "Production code must log through Timber and the privacy-safe sink; direct Android Log usage found in: " +
+                    violations.joinToString(),
+            )
+        }
+    }
+}
+
+tasks.register("lint") {
+    group = "verification"
+    description = "Runs Kotlin formatting, Detekt, Android lint, and the production file-size gate."
     dependsOn(
+        "checkPrivacySafeLogging",
         "checkSourceFileSize",
+        "ktlintCheck",
         ":app:ktlintCheck",
         ":app:detekt",
         ":app:lintDebug",
+    )
+}
+
+tasks.register("typecheck") {
+    group = "verification"
+    description = "Compiles debug Kotlin sources as the project's explicit type-check gate."
+    dependsOn(":app:compileDebugKotlin")
+}
+
+tasks.register("test") {
+    group = "verification"
+    description = "Runs the deterministic JVM unit-test suite."
+    dependsOn(":app:testDebugUnitTest")
+}
+
+tasks.register("coverage") {
+    group = "verification"
+    description = "Reports whole-app coverage and enforces the tested critical-domain thresholds."
+    dependsOn(
         ":app:testDebugUnitTest",
+        ":app:koverHtmlReportCritical",
+        ":app:koverHtmlReportDebug",
+        ":app:koverVerifyCritical",
+        ":app:koverXmlReportCritical",
         ":app:koverXmlReportDebug",
-        ":app:koverVerifyDebug",
+    )
+}
+
+tasks.register("build") {
+    group = "build"
+    description = "Builds the installable debug APK and the minified unsigned release bundle."
+    dependsOn(
         ":app:assembleDebug",
+        ":app:bundleRelease",
+    )
+}
+
+tasks.register("writeRuntimeOsvManifest") {
+    group = "verification"
+    description = "Exports the locked release runtime graph in OSV Scanner's documented interchange format."
+
+    val lockFile = layout.projectDirectory.file("app/gradle.lockfile")
+    val outputFile = layout.buildDirectory.file("reports/dependency-audit/osv-scanner.json")
+    inputs.file(lockFile)
+    outputs.file(outputFile)
+
+    doLast {
+        val safePart = Regex("[A-Za-z0-9_.+\\-]+")
+        val runtimeCoordinates =
+            lockFile.asFile
+                .readLines(Charsets.UTF_8)
+                .asSequence()
+                .filterNot { line -> line.isBlank() || line.startsWith('#') || line.startsWith("empty=") }
+                .mapNotNull { line ->
+                    val (coordinate, configurations) =
+                        line.split('=', limit = 2).takeIf { it.size == 2 }
+                            ?: throw GradleException("Unexpected Gradle lock entry: $line")
+                    if ("releaseRuntimeClasspath" !in configurations.split(',')) return@mapNotNull null
+
+                    val parts = coordinate.split(':')
+                    if (parts.size != 3 || parts.any { part -> !safePart.matches(part) }) {
+                        throw GradleException("Cannot safely export Maven coordinate: $coordinate")
+                    }
+                    Triple(parts[0], parts[1], parts[2])
+                }.distinct()
+                .sortedWith(compareBy({ it.first }, { it.second }, { it.third }))
+                .toList()
+
+        if (runtimeCoordinates.isEmpty()) {
+            throw GradleException("No locked releaseRuntimeClasspath dependencies were found")
+        }
+
+        val packages =
+            runtimeCoordinates.joinToString(",\n") { (group, name, version) ->
+                """        {"package":{"name":"$group:$name","version":"$version","ecosystem":"Maven"}}"""
+            }
+        outputFile.get().asFile.apply {
+            parentFile.mkdirs()
+            writeText(
+                """{
+  "results": [
+    {
+      "source": {"path": "app/gradle.lockfile", "type": "lockfile"},
+      "packages": [
+$packages
+      ]
+    }
+  ]
+}
+""",
+                Charsets.UTF_8,
+            )
+        }
+    }
+}
+
+tasks.register("verify") {
+    group = "verification"
+    description = "Runs the reproducible local quality, test, coverage, and distributable-build gates."
+    dependsOn(
+        "build",
+        "coverage",
+        "lint",
+        "test",
+        "typecheck",
     )
 }

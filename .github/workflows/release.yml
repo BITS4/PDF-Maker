@@ -45,14 +45,12 @@ jobs:
       - name: Run release verification
         run: >-
           ./gradlew
-          checkSourceFileSize
-          :app:ktlintCheck
-          :app:detekt
+          lint
+          typecheck
+          test
+          coverage
+          build
           :app:lintRelease
-          :app:testDebugUnitTest
-          :app:koverVerifyCritical
-          :app:assembleDebug
-          :app:bundleRelease
           --no-daemon
           --stacktrace
       - name: Prepare checksummed release assets

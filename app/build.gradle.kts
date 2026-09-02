@@ -1,7 +1,7 @@
 import io.gitlab.arturbosch.detekt.Detekt
 import kotlinx.kover.gradle.plugin.dsl.CoverageUnit
-import org.jlleitschuh.gradle.ktlint.reporter.ReporterType
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jlleitschuh.gradle.ktlint.reporter.ReporterType
 
 plugins {
     alias(libs.plugins.android.application)
@@ -10,7 +10,6 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kover)
     alias(libs.plugins.ktlint)
-    alias(libs.plugins.owasp.dependency.check)
 }
 
 android {
@@ -24,27 +23,32 @@ android {
         versionCode = 1
         versionName = "1.0.0"
 
-        val sentryDsn = providers.gradleProperty("SENTRY_DSN")
-            .orElse(providers.environmentVariable("SENTRY_DSN"))
-            .orElse("")
-            .get()
-        val sentryEnabled = providers.gradleProperty("SENTRY_ENABLED")
-            .orElse(providers.environmentVariable("SENTRY_ENABLED"))
-            .orElse("false")
-            .get()
-            .trim()
-            .lowercase()
-            .let { value ->
-                require(value == "true" || value == "false") {
-                    "SENTRY_ENABLED must be either true or false"
+        val sentryDsn =
+            providers
+                .gradleProperty("SENTRY_DSN")
+                .orElse(providers.environmentVariable("SENTRY_DSN"))
+                .orElse("")
+                .get()
+        val sentryEnabled =
+            providers
+                .gradleProperty("SENTRY_ENABLED")
+                .orElse(providers.environmentVariable("SENTRY_ENABLED"))
+                .orElse("false")
+                .get()
+                .trim()
+                .lowercase()
+                .let { value ->
+                    require(value == "true" || value == "false") {
+                        "SENTRY_ENABLED must be either true or false"
+                    }
+                    value
                 }
-                value
-            }
-        val escapedSentryDsn = sentryDsn
-            .replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-            .replace("\r", "\\r")
-            .replace("\n", "\\n")
+        val escapedSentryDsn =
+            sentryDsn
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\r", "\\r")
+                .replace("\n", "\\n")
         buildConfigField("String", "SENTRY_DSN", "\"$escapedSentryDsn\"")
         buildConfigField("boolean", "SENTRY_ENABLED", sentryEnabled)
 
@@ -79,12 +83,13 @@ android {
             useLegacyPackaging = false
         }
         resources {
-            excludes += setOf(
-                "/META-INF/{AL2.0,LGPL2.1}",
-                "META-INF/DEPENDENCIES",
-                "META-INF/LICENSE*",
-                "META-INF/NOTICE*",
-            )
+            excludes +=
+                setOf(
+                    "/META-INF/{AL2.0,LGPL2.1}",
+                    "META-INF/DEPENDENCIES",
+                    "META-INF/LICENSE*",
+                    "META-INF/NOTICE*",
+                )
         }
     }
 
@@ -120,14 +125,12 @@ detekt {
     allRules = false
     autoCorrect = false
     buildUponDefaultConfig = true
-    baseline = rootProject.file("config/detekt/baseline.xml")
     config.setFrom(rootProject.files("config/detekt/detekt.yml"))
     parallel = true
 }
 
 ktlint {
     version.set(libs.versions.ktlintEngine)
-    baseline.set(rootProject.file("config/ktlint/baseline.xml"))
     ignoreFailures.set(false)
     outputToConsole.set(true)
     reporters {
@@ -152,6 +155,11 @@ tasks.withType<Detekt>().configureEach {
 }
 
 kover {
+    currentProject {
+        // Keep the critical report on exactly the same production classes and complete JVM test task as debug.
+        copyVariant("critical", "debug")
+    }
+
     reports {
         filters {
             excludes {
@@ -171,21 +179,132 @@ kover {
                 onCheck = false
             }
         }
-        verify {
-            // This is an honest initial floor for a UI-heavy legacy baseline. Raise it only with tested behavior.
-            rule("staged global line coverage") {
-                minBound(1, CoverageUnit.LINE)
+        variant("critical") {
+            filters {
+                includes {
+                    classes(
+                        "com.example.pdfmaker.AppNavigationPolicy",
+                        "com.example.pdfmaker.AppNavigationState",
+                        "com.example.pdfmaker.BoundedIo",
+                        "com.example.pdfmaker.CompressUiState",
+                        "com.example.pdfmaker.CompressionPolicy",
+                        "com.example.pdfmaker.ConversionDocumentHandler",
+                        "com.example.pdfmaker.ConversionRelationshipHandler",
+                        "com.example.pdfmaker.DocxConversionArchive",
+                        "com.example.pdfmaker.DocxConversionArchiveKt",
+                        "com.example.pdfmaker.DocxConversionPolicy",
+                        "com.example.pdfmaker.DocxConversionXmlKt",
+                        "com.example.pdfmaker.DocxToPdfActions",
+                        "com.example.pdfmaker.DocxToPdfPolicy",
+                        "com.example.pdfmaker.DocxToPdfUiState",
+                        "com.example.pdfmaker.DocumentSharePolicy",
+                        "com.example.pdfmaker.EditorGeometryKt",
+                        "com.example.pdfmaker.FileCatalog",
+                        "com.example.pdfmaker.FilesScreenPolicy",
+                        "com.example.pdfmaker.FilesScreenState",
+                        "com.example.pdfmaker.GallerySavePolicy",
+                        "com.example.pdfmaker.ImageInputPolicy",
+                        "com.example.pdfmaker.ImagePdfExport",
+                        "com.example.pdfmaker.ImagePixelAlgorithms",
+                        "com.example.pdfmaker.ImageTransformPolicy",
+                        "com.example.pdfmaker.ImportedDocumentArtifact",
+                        "com.example.pdfmaker.ImportedDocumentInspector",
+                        "com.example.pdfmaker.ImportedImageValidator",
+                        "com.example.pdfmaker.ImportedPdfViewerPolicy",
+                        "com.example.pdfmaker.IncomingImportStoragePolicy",
+                        "com.example.pdfmaker.IncomingIntentLifecycleState",
+                        "com.example.pdfmaker.LockPdfSelectionPolicy",
+                        "com.example.pdfmaker.MergePdfPolicy",
+                        "com.example.pdfmaker.MergePdfUiState",
+                        "com.example.pdfmaker.MergeOperationState",
+                        "com.example.pdfmaker.MergeScreenPolicy",
+                        "com.example.pdfmaker.OcrResourcePolicy",
+                        "com.example.pdfmaker.OcrTextFormatter",
+                        "com.example.pdfmaker.ObservabilityPolicy",
+                        "com.example.pdfmaker.OwnedFilePolicy",
+                        "com.example.pdfmaker.OwnedImportCleanup",
+                        "com.example.pdfmaker.OutputStore",
+                        "com.example.pdfmaker.PageBitmapCachePolicy",
+                        "com.example.pdfmaker.PageEditPolicy",
+                        "com.example.pdfmaker.PageManagerOperationState",
+                        "com.example.pdfmaker.PageManagerPolicy",
+                        "com.example.pdfmaker.PageSelectionPolicy",
+                        "com.example.pdfmaker.PdfEditorRenderPolicy",
+                        "com.example.pdfmaker.PdfEditorOfficeXmlKt",
+                        "com.example.pdfmaker.PdfToJpgPolicy",
+                        "com.example.pdfmaker.PinCredential",
+                        "com.example.pdfmaker.PinLockoutPolicy",
+                        "com.example.pdfmaker.PrintPdfPolicy",
+                        "com.example.pdfmaker.RenderSizing",
+                        "com.example.pdfmaker.SafeDocxInput",
+                        "com.example.pdfmaker.SafeFileName",
+                        "com.example.pdfmaker.SafePdfInput",
+                        "com.example.pdfmaker.SecureDocumentCodec",
+                        "com.example.pdfmaker.SecureDocumentLimits",
+                        "com.example.pdfmaker.SecureDocumentStore",
+                        "com.example.pdfmaker.SecureDocumentTypePolicy",
+                        "com.example.pdfmaker.SecureSaxLimits",
+                        "com.example.pdfmaker.SecureSaxParser",
+                        "com.example.pdfmaker.SmartScanCameraPolicy",
+                        "com.example.pdfmaker.SmartScanPermissionPolicy",
+                        "com.example.pdfmaker.SmartScanPolicy",
+                        "com.example.pdfmaker.SmartScanWorkspace",
+                        "com.example.pdfmaker.SplitPreviewPolicy",
+                        "com.example.pdfmaker.ThumbnailCachePolicy",
+                        "com.example.pdfmaker.ThumbnailGenerationPolicy",
+                        "com.example.pdfmaker.ThumbnailInput",
+                        "com.example.pdfmaker.ThumbnailXmlParser",
+                        "com.example.pdfmaker.TemporaryImportLease",
+                        "com.example.pdfmaker.UserVisibleFailurePolicy",
+                        "com.example.pdfmaker.ViewerArchiveBudget",
+                        "com.example.pdfmaker.ViewerArchiveIOKt",
+                        "com.example.pdfmaker.ViewerCacheFilesKt",
+                        "com.example.pdfmaker.ViewerDelimitedTextKt",
+                        "com.example.pdfmaker.ViewerDocumentXmlKt",
+                        "com.example.pdfmaker.ViewerFilePolicyKt",
+                        "com.example.pdfmaker.ViewerOoxmlPolicyKt",
+                        "com.example.pdfmaker.ViewerPageArtifactPolicy",
+                        "com.example.pdfmaker.ViewerSpreadsheetXmlKt",
+                        "com.example.pdfmaker.WeightedLruCache",
+                    )
+                }
             }
-            rule("staged global branch coverage") {
-                minBound(1, CoverageUnit.BRANCH)
+            html {
+                onCheck = false
+            }
+            xml {
+                onCheck = false
+            }
+            verify {
+                rule("critical-domain line coverage") {
+                    minBound(90, CoverageUnit.LINE)
+                }
+                rule("critical-domain branch coverage") {
+                    minBound(75, CoverageUnit.BRANCH)
+                }
             }
         }
     }
 }
 
-dependencyCheck {
-    failBuildOnCVSS = 7.0F
-    formats = listOf("HTML", "JSON", "SARIF")
+// A focused `--tests` run replaces Kover's execution data. Always rerun the complete suite and the critical
+// aggregation tasks so a later coverage gate cannot accept a partial or stale local artifact.
+tasks.matching { task -> task.name == "testDebugUnitTest" }.configureEach {
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("Coverage gates require execution data from the complete current test suite") { true }
+}
+
+val alwaysFreshCriticalCoverageTasks =
+    setOf(
+        "koverGenerateArtifactCritical",
+        "koverHtmlReportCritical",
+        "koverVerifyCritical",
+        "koverXmlReportCritical",
+    )
+
+tasks.matching { task -> task.name in alwaysFreshCriticalCoverageTasks }.configureEach {
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("Critical coverage must be recalculated from the current complete test run") { true }
 }
 
 dependencies {

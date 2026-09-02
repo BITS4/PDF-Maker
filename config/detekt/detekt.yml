@@ -48,9 +48,11 @@ naming:
       - Composable
   TopLevelPropertyNaming:
     active: true
-    constantPattern: '[A-Z][A-Za-z0-9]*'
+    constantPattern: '[A-Z][A-Z0-9_]*'
 
 style:
+  WildcardImport:
+    active: false
   MagicNumber:
     active: false
   MaxLineLength:
