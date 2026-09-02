@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -74,6 +75,7 @@ fun DocxToPdfScreen(
     var progress     by remember { mutableIntStateOf(0) }
     var progressText by remember { mutableStateOf("") }
     var resultFile   by remember { mutableStateOf<File?>(null) }
+    var resultPageCount by remember { mutableIntStateOf(0) }
     var errorMsg     by remember { mutableStateOf("") }
 
     val filePicker = rememberLauncherForActivityResult(
@@ -98,28 +100,27 @@ fun DocxToPdfScreen(
         progress = 0
         scope.launch(Dispatchers.IO) {
             try {
-                val file = docxToPdf(context, uri, pickedName) { p, txt ->
+                val result = docxToPdf(context, uri, pickedName) { p, txt ->
                     scope.launch(Dispatchers.Main) { progress = p; progressText = txt }
                 }
                 withContext(Dispatchers.Main) {
-                    if (file != null) {
-                        resultFile = file
-                        FileCache.prependFile(
-                            PdfFile(
-                                name         = file.name,
-                                filePath     = file.absolutePath,
-                                size         = docxFormatSize(file.length() / 1024),
-                                date         = SimpleDateFormat("MM/dd HH:mm", Locale.getDefault()).format(Date()),
-                                pageCount    = 1,
-                                lastModified = file.lastModified()
-                            )
+                    val file = result.file
+                    resultFile = file
+                    resultPageCount = result.pageCount
+                    FileCache.prependFile(
+                        PdfFile(
+                            name         = file.name,
+                            filePath     = file.absolutePath,
+                            size         = docxFormatSize(file.length() / 1024),
+                            date         = SimpleDateFormat("MM/dd HH:mm", Locale.getDefault()).format(Date()),
+                            pageCount    = result.pageCount,
+                            lastModified = file.lastModified()
                         )
-                        state = DocxState.DONE
-                    } else {
-                        errorMsg = "Conversion failed. The file may be password-protected or use unsupported formatting."
-                        state    = DocxState.ERROR
-                    }
+                    )
+                    state = DocxState.DONE
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     errorMsg = e.message ?: "Unknown error"
@@ -322,7 +323,7 @@ fun DocxToPdfScreen(
                                         filePath     = file.absolutePath,
                                         size         = docxFormatSize(file.length() / 1024),
                                         date         = SimpleDateFormat("MM/dd HH:mm", Locale.getDefault()).format(Date()),
-                                        pageCount    = 1,
+                                        pageCount    = resultPageCount,
                                         lastModified = file.lastModified()
                                     ))
                                 },
@@ -335,7 +336,14 @@ fun DocxToPdfScreen(
                                 Text("Open", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                             }
                             Button(
-                                onClick = { if (file != null) shareDocxPdf(context, file) },
+                                onClick = {
+                                    if (file != null) {
+                                        shareDocxPdf(context, file).onFailure { error ->
+                                            errorMsg = error.message ?: "This PDF could not be shared."
+                                            state = DocxState.ERROR
+                                        }
+                                    }
+                                },
                                 modifier = Modifier.weight(1f).height(52.dp),
                                 shape    = RoundedCornerShape(14.dp),
                                 colors   = ButtonDefaults.buttonColors(containerColor = accent)
