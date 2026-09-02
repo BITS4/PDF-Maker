@@ -41,7 +41,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -56,8 +55,7 @@ fun FileItemWithThumb(
     onShareClick: () -> Unit,
     onMoreClick : () -> Unit
 ) {
-    val context = LocalContext.current
-    val thumb   = rememberPdfThumbnail(context, file.filePath, 200)
+    val thumb   = rememberPdfThumbnail(file.filePath, 200)
     val ext     = file.filePath.substringAfterLast('.').uppercase()
 
     Surface(modifier = Modifier.fillMaxWidth(), color = currentCard) {

@@ -1,6 +1,5 @@
 package com.example.pdfmaker
 
-import android.content.Context
 import android.graphics.Bitmap
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -26,9 +25,7 @@ object PdfThumbnailCache {
             weightOf = { bitmap -> ThumbnailCachePolicy.pixelWeight(bitmap.width, bitmap.height) },
         )
 
-    @Suppress("UNUSED_PARAMETER")
     suspend fun getThumbnail(
-        context: Context,
         filePath: String,
         sizePx: Int = ThumbnailGenerationPolicy.DEFAULT_SIZE_PX,
     ): Bitmap? =
@@ -103,14 +100,13 @@ object PdfThumbnailCache {
 
 @Composable
 fun rememberPdfThumbnail(
-    context: Context,
     filePath: String,
     sizePx: Int = ThumbnailGenerationPolicy.DEFAULT_SIZE_PX,
 ): Bitmap? {
     var bitmap by remember(filePath, sizePx) { mutableStateOf<Bitmap?>(null) }
     LaunchedEffect(filePath, sizePx) {
         bitmap = null
-        bitmap = PdfThumbnailCache.getThumbnail(context.applicationContext, filePath, sizePx)
+        bitmap = PdfThumbnailCache.getThumbnail(filePath, sizePx)
     }
     return bitmap
 }
