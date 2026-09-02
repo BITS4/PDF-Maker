@@ -72,6 +72,8 @@ private suspend fun loadDeviceImages(context: Context): List<DeviceImage> =
 // ── Screen ─────────────────────────────────────────────────────────────────────
 
 @Composable
+// This UI coordinates picker states; selection rules remain isolated and tested.
+@Suppress("CyclomaticComplexMethod", "LongMethod")
 fun ImageSelectionScreen(
     preSelected: List<Uri> = emptyList(),
     onImport   : (List<Uri>) -> Unit,

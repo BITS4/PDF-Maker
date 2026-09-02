@@ -16,6 +16,7 @@ object ImageProcessing {
             }
         }
 
+        var completed = false
         try {
             replaceIntermediate(applyFilter(request.source, request.filter))
             replaceIntermediate(
@@ -36,10 +37,10 @@ object ImageProcessing {
                 (crop.left > 0.001f || crop.top > 0.001f ||
                     crop.right < 0.999f || crop.bottom < 0.999f)
             val final = if (shouldCrop) cropBitmap(display, crop) else display
+            completed = true
             return ImageRenderResult(display, final)
-        } catch (error: Throwable) {
-            if (current !== request.source && !current.isRecycled) current.recycle()
-            throw error
+        } finally {
+            if (!completed && current !== request.source && !current.isRecycled) current.recycle()
         }
     }
 

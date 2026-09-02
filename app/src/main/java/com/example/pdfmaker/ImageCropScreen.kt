@@ -42,6 +42,8 @@ import kotlin.math.*
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 @Composable
+// Cancellation is rethrown at each operation; decoding and geometry remain isolated in tested helpers.
+@Suppress("CyclomaticComplexMethod", "LongMethod", "ThrowsCount")
 fun ImageCropScreen(
     editState  : ImageEditState,
     pageIndex  : Int,

@@ -14,6 +14,7 @@ import java.util.UUID
 
 /** Decodes a stable, bounded snapshot of an image supplied by a content provider or app cache. */
 object BoundedImageDecoder {
+    @Suppress("TooGenericExceptionCaught") // Provider/codec failures are deliberately returned through Result.
     fun decode(context: Context, uri: Uri): Result<Bitmap> =
         try {
             Result.success(decodeOrThrow(context, uri))
@@ -60,9 +61,8 @@ object BoundedImageDecoder {
                 if (oriented !== owned) owned.recycle()
                 owned = null
                 return oriented
-            } catch (error: Throwable) {
+            } finally {
                 owned?.takeUnless(Bitmap::isRecycled)?.recycle()
-                throw error
             }
         } finally {
             staged.delete()
@@ -75,6 +75,7 @@ object BoundedImageDecoder {
             "Could not create the image staging directory"
         }
         val temporary = File(directory, ".image-${UUID.randomUUID()}.tmp")
+        var completed = false
         try {
             openAllowedStream(context, uri).use { source ->
                 FileOutputStream(temporary).use { output ->
@@ -84,10 +85,10 @@ object BoundedImageDecoder {
                     output.fd.sync()
                 }
             }
+            completed = true
             return temporary
-        } catch (error: Throwable) {
-            temporary.delete()
-            throw error
+        } finally {
+            if (!completed) temporary.delete()
         }
     }
 

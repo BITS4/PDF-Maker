@@ -208,7 +208,10 @@ object BitmapOwnership {
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
 
     fun retire(bitmaps: Iterable<Bitmap>) {
-        val unique = uniqueBitmaps(*bitmaps.toList().toTypedArray())
+        val unique = mutableListOf<Bitmap>()
+        bitmaps.forEach { bitmap ->
+            if (unique.none { it === bitmap }) unique += bitmap
+        }
         if (unique.isEmpty()) return
         mainHandler.post {
             val choreographer = Choreographer.getInstance()
