@@ -181,7 +181,7 @@ fun SmartScanScreen(
         val ic = imageCapture ?: return
         if (isCapturing) return
         isCapturing = true
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
 
         val file     = File(context.cacheDir, "scan_${System.currentTimeMillis()}.jpg")
         val isIdCard = scanMode == ScanMode.ID_CARD && idCardSide != IdCardCaptureSide.NONE

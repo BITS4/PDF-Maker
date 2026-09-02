@@ -18,6 +18,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -58,7 +59,7 @@ fun PdfViewerScreen(
         remember(decryptedPath, file) {
             decryptedPath?.let { file.copy(filePath = it) } ?: file
         }
-    val currentPage = listState.firstVisibleItemIndex + 1
+    val currentPage by remember { derivedStateOf { listState.firstVisibleItemIndex + 1 } }
 
     DisposableEffect(file.filePath) {
         onDispose {
