@@ -33,7 +33,6 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import timber.log.Timber
 import java.io.File
-import java.io.IOException
 
 enum class JpgQuality(
     val label      : String,
@@ -309,42 +308,6 @@ internal fun decodeJpgResultThumbnail(file: File): Result<Bitmap> = runCatching 
 }
 
 // ── Validate JPGs before sharing ───────────────────────────────────────────────
-
-internal fun prepareJpgShareFiles(
-    context: Context,
-    files: List<File>,
-): List<File>? =
-    try {
-        val exportDirectory = getPdfMakerDir(context).canonicalFile
-        val safeFiles =
-            files.map { file ->
-                file.canonicalFile.also { canonical ->
-                    require(
-                        canonical.isFile &&
-                            canonical.parentFile == exportDirectory &&
-                            canonical.extension.equals("jpg", ignoreCase = true),
-                    ) { "Only converted JPG files can be shared" }
-                }
-            }
-        PdfToJpgPolicy.requireShareBatch(safeFiles.map(File::length))
-        safeFiles
-    } catch (_: IllegalArgumentException) {
-        logJpgSharePreparationFailure()
-        null
-    } catch (_: IOException) {
-        logJpgSharePreparationFailure()
-        null
-    } catch (_: IllegalStateException) {
-        logJpgSharePreparationFailure()
-        null
-    } catch (_: SecurityException) {
-        logJpgSharePreparationFailure()
-        null
-    }
-
-private fun logJpgSharePreparationFailure() {
-    Timber.tag("PdfToJpg").w("event=share_prepare_rejected")
-}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

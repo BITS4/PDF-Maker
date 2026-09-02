@@ -34,6 +34,8 @@ internal class MergePdfUiState {
         private set
     var errorMessage by mutableStateOf("")
         private set
+    var shareMessage by mutableStateOf<String?>(null)
+        private set
     var outputName by mutableStateOf(MergeScreenPolicy.defaultOutputName(0))
         private set
     var showRenameDialog by mutableStateOf(false)
@@ -53,10 +55,12 @@ internal class MergePdfUiState {
         items = items + loaded
         phase = MergeState.READY
         errorMessage = ""
+        shareMessage = null
     }
 
     fun reject(message: String) {
         errorMessage = message.ifBlank { DefaultMergeError }
+        shareMessage = null
         phase = MergeState.ERROR
     }
 
@@ -85,6 +89,7 @@ internal class MergePdfUiState {
         progress = 0
         progressText = ""
         errorMessage = ""
+        shareMessage = null
         resultFile = null
         resultPdfFile = null
         return MergeRequest(
@@ -113,11 +118,20 @@ internal class MergePdfUiState {
         outputName = MergeScreenPolicy.defaultOutputName(completedMerges)
         progress = 100
         phase = MergeState.DONE
+        errorMessage = ""
+        shareMessage = null
+    }
+
+    fun reportShareResult(launched: Boolean): Boolean {
+        if (phase != MergeState.DONE || resultFile == null || resultPdfFile == null) return false
+        shareMessage = if (launched) null else ShareFailureMessage
+        return true
     }
 
     fun retry() {
         phase = if (items.isEmpty()) MergeState.EMPTY else MergeState.READY
         errorMessage = ""
+        shareMessage = null
     }
 
     fun reset(): List<MergeItem> {
@@ -128,12 +142,15 @@ internal class MergePdfUiState {
         progress = 0
         progressText = ""
         errorMessage = ""
+        shareMessage = null
         phase = MergeState.EMPTY
         return released
     }
 
     private companion object {
         const val DefaultMergeError = "The selected PDFs could not be merged safely."
+        const val ShareFailureMessage =
+            "The merged PDF is saved, but no compatible sharing app could be opened. Tap Share to try again."
     }
 }
 

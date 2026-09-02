@@ -53,16 +53,15 @@ internal fun rememberMergePdfActions(
             },
             shareResult = {
                 val file = state.resultFile
-                if (
-                    file != null &&
-                    !DocumentShareAdapter.share(
-                        context = context,
-                        file = file,
-                        chooserTitle = "Share merged PDF",
-                        requestedMimeType = "application/pdf",
-                    )
-                ) {
-                    state.reject("The merged PDF is saved, but it could not be shared.")
+                if (file != null) {
+                    val launched =
+                        DocumentShareAdapter.share(
+                            context = context,
+                            file = file,
+                            chooserTitle = "Share merged PDF",
+                            requestedMimeType = "application/pdf",
+                        )
+                    state.reportShareResult(launched)
                 }
             },
             removeItem = { index ->

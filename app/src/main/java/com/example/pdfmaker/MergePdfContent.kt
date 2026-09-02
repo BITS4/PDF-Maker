@@ -83,6 +83,7 @@ internal fun MergePdfContent(
                 MergeState.DONE ->
                     MergePdfDoneContent(
                         file = state.resultFile,
+                        shareMessage = state.shareMessage,
                         summary = state.summary,
                         colors = colors,
                         callbacks = callbacks,

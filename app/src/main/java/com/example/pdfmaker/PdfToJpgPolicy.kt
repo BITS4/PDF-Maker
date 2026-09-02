@@ -27,6 +27,8 @@ internal object PdfToJpgPolicy {
     const val RESULT_THUMBNAIL_EDGE = 320
     const val RESULT_THUMBNAIL_PIXELS = 160_000L
     const val MAX_DISPLAY_NAME_LENGTH = 80
+    const val JPEG_PROBE_PREFIX_BYTES = 4
+    const val JPEG_PROBE_SUFFIX_BYTES = 2
     private val unsafeDirectionalCharacters =
         setOf(
             '\u061C',
@@ -88,6 +90,32 @@ internal object PdfToJpgPolicy {
         return fileSizes.fold(0L, ::recordExportedFile)
     }
 
+    fun hasJpegEnvelope(
+        fileBytes: Long,
+        prefix: ByteArray,
+        suffix: ByteArray,
+    ): Boolean {
+        if (fileBytes !in (JPEG_PROBE_PREFIX_BYTES + JPEG_PROBE_SUFFIX_BYTES).toLong()..MAX_JPEG_BYTES) return false
+        if (prefix.size < JPEG_PROBE_PREFIX_BYTES || suffix.size < JPEG_PROBE_SUFFIX_BYTES) return false
+        val initialMarker = prefix[3].toInt() and UNSIGNED_BYTE_MASK
+        return prefix[0].isUnsigned(JPEG_MARKER_PREFIX) &&
+            prefix[1].isUnsigned(JPEG_START_OF_IMAGE) &&
+            prefix[2].isUnsigned(JPEG_MARKER_PREFIX) &&
+            (initialMarker in JPEG_CONTROL_MARKERS || initialMarker in JPEG_METADATA_MARKERS) &&
+            suffix[suffix.lastIndex - 1].isUnsigned(JPEG_MARKER_PREFIX) &&
+            suffix[suffix.lastIndex].isUnsigned(JPEG_END_OF_IMAGE)
+    }
+
+    fun hasJpegMetadata(
+        mimeType: String?,
+        width: Int,
+        height: Int,
+    ): Boolean =
+        mimeType.equals("image/jpeg", ignoreCase = true) &&
+            width in 1..MAX_RENDER_EDGE &&
+            height in 1..MAX_RENDER_EDGE &&
+            width.toLong() * height.toLong() <= MAX_RENDER_PIXELS
+
     fun displayBaseName(pathSegment: String?): String {
         val plainLeaf = pathSegment.orEmpty().substringAfterLast('/').substringAfterLast('\\')
         val encodedSeparator = plainLeaf.lastIndexOf("%2f", ignoreCase = true)
@@ -139,4 +167,13 @@ internal object PdfToJpgPolicy {
             "The images are saved, but no compatible sharing app could be opened."
         }
     }
+
+    private fun Byte.isUnsigned(expected: Int): Boolean = (toInt() and UNSIGNED_BYTE_MASK) == expected
+
+    private val JPEG_CONTROL_MARKERS = 0xC0..0xCF
+    private val JPEG_METADATA_MARKERS = 0xDB..0xFE
+    private const val JPEG_MARKER_PREFIX = 0xFF
+    private const val JPEG_START_OF_IMAGE = 0xD8
+    private const val JPEG_END_OF_IMAGE = 0xD9
+    private const val UNSIGNED_BYTE_MASK = 0xFF
 }

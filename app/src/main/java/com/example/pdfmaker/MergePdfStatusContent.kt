@@ -85,6 +85,7 @@ internal fun MergePdfProgressContent(
 @Composable
 internal fun MergePdfDoneContent(
     file: File?,
+    shareMessage: String?,
     summary: MergeSummary,
     colors: MergePdfColors,
     callbacks: MergePdfCallbacks,
@@ -133,6 +134,15 @@ internal fun MergePdfDoneContent(
             onOpen = callbacks.onOpen,
             onShare = callbacks.onShare,
         )
+        if (shareMessage != null) {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = shareMessage,
+                color = Color(0xFFEF5350),
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center,
+            )
+        }
         Spacer(Modifier.height(12.dp))
         OutlinedButton(
             onClick = callbacks.onReset,
