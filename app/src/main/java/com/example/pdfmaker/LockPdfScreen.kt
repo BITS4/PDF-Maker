@@ -30,15 +30,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import javax.crypto.Cipher
-import javax.crypto.SecretKeyFactory
-import javax.crypto.spec.IvParameterSpec
-import javax.crypto.spec.PBEKeySpec
-import javax.crypto.spec.SecretKeySpec
 
 // ── Lock PDF — AES-256 encrypt any file in-place ──────────────────────────────
 
-internal const val MAGIC = "PDFLOCK1"  // 8-byte magic header
+internal const val MAGIC = LEGACY_DOCUMENT_MAGIC
 private enum class LockState { LIST, ENTER_PASSWORD, LOCKING, DONE, ERROR }
 
 @Composable
@@ -339,92 +334,24 @@ fun FilePickRow(file: PdfFile, onClick: () -> Unit) {
 // ── Crypto: lock file in-place ─────────────────────────────────────────────────
 // Returns null on success, error message string on failure
 
-internal fun lockFileInPlace(filePath: String, password: String): String? {
-    return try {
-        val file  = File(filePath)
-        if (!file.exists()) return "File not found: $filePath"
-        if (!file.canWrite()) return "File is not writable (check storage permission)"
-        val bytes = file.readBytes()
-        if (bytes.isEmpty()) return "File is empty"
-
-        // Check not already locked
-        if (bytes.size >= 8 && bytes.take(8).toByteArray().toString(Charsets.UTF_8) == MAGIC) {
-            return "File is already locked"
-        }
-
-        val salt    = java.security.SecureRandom().generateSeed(16)
-        val iv      = java.security.SecureRandom().generateSeed(16)
-        val key     = deriveKey(password, salt)
-        val cipher  = Cipher.getInstance("AES/CBC/PKCS5Padding")
-        cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), IvParameterSpec(iv))
-        val encrypted = cipher.doFinal(bytes)
-
-        val out = java.io.ByteArrayOutputStream()
-        out.write(MAGIC.toByteArray(Charsets.UTF_8))
-        out.write(salt)
-        out.write(iv)
-        out.write(encrypted)
-
-        file.writeBytes(out.toByteArray())
-        android.util.Log.d("LockFile", "Locked in place: $filePath")
-        null // success
-    } catch (e: Exception) {
-        android.util.Log.e("LockFile", "Lock failed: ${e.javaClass.simpleName}: ${e.message}")
-        "${e.javaClass.simpleName}: ${e.message}"
-    }
-}
+internal fun lockFileInPlace(filePath: String, password: String): String? =
+    SecureDocumentStore.lockInPlace(File(filePath), password)
 
 // ── Crypto: unlock file in-place ──────────────────────────────────────────────
 // Returns null on success, error message on failure
 
-internal fun unlockFileInPlace(filePath: String, password: String): String? {
-    return try {
-        val file  = File(filePath)
-        if (!file.exists()) return "File not found"
-        if (!file.canWrite()) return "File is not writable (check storage permission)"
-        val bytes = file.readBytes()
-
-        val decrypted = decryptBytes(bytes, password)
-            ?: return "Wrong password"
-
-        file.writeBytes(decrypted)
-        android.util.Log.d("LockFile", "Unlocked in place: $filePath")
-        null // success
-    } catch (e: Exception) {
-        android.util.Log.e("LockFile", "Unlock failed: ${e.javaClass.simpleName}: ${e.message}")
-        "${e.javaClass.simpleName}: ${e.message}"
-    }
-}
+internal fun unlockFileInPlace(filePath: String, password: String): String? =
+    SecureDocumentStore.unlockInPlace(File(filePath), password)
 
 // ── Crypto helpers ─────────────────────────────────────────────────────────────
 
-internal fun isLockedFile(filePath: String): Boolean = try {
-    val f = File(filePath)
-    if (!f.exists() || f.length() < 8) false
-    else f.inputStream().use { s ->
-        val header = ByteArray(8)
-        s.read(header)
-        header.toString(Charsets.UTF_8) == MAGIC
-    }
-} catch (_: Exception) { false }
+internal fun isLockedFile(filePath: String): Boolean = SecureDocumentStore.isLocked(File(filePath))
 
 // Keep old name for compatibility with PdfViewerScreen
 internal fun isLockedPdf(filePath: String): Boolean = isLockedFile(filePath)
 
-internal fun decryptBytes(encryptedBytes: ByteArray, password: String): ByteArray? {
-    return try {
-        if (encryptedBytes.size < 40) return null
-        val magic = encryptedBytes.take(8).toByteArray().toString(Charsets.UTF_8)
-        if (magic != MAGIC) return null
-        val salt   = encryptedBytes.slice(8..23).toByteArray()
-        val iv     = encryptedBytes.slice(24..39).toByteArray()
-        val data   = encryptedBytes.drop(40).toByteArray()
-        val key    = deriveKey(password, salt)
-        val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
-        cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), IvParameterSpec(iv))
-        cipher.doFinal(data)
-    } catch (_: Exception) { null }
-}
+internal fun decryptBytes(encryptedBytes: ByteArray, password: String): ByteArray? =
+    SecureDocumentCodec.decrypt(encryptedBytes, password)
 
 // Keep old name for compatibility with PdfViewerScreen and UnlockPdfScreen
 internal fun decryptPdf(encryptedBytes: ByteArray, password: String): ByteArray? =
@@ -436,30 +363,4 @@ internal fun encryptPdfBytes(
     bytes    : ByteArray,
     password : String,
     baseName : String
-): Pair<String, String>? {
-    return try {
-        val salt    = java.security.SecureRandom().generateSeed(16)
-        val iv      = java.security.SecureRandom().generateSeed(16)
-        val key     = deriveKey(password, salt)
-        val cipher  = Cipher.getInstance("AES/CBC/PKCS5Padding")
-        cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), IvParameterSpec(iv))
-        val encrypted = cipher.doFinal(bytes)
-        val out = java.io.ByteArrayOutputStream()
-        out.write(MAGIC.toByteArray(Charsets.UTF_8))
-        out.write(salt)
-        out.write(iv)
-        out.write(encrypted)
-        val outName = "${baseName}_locked.pdf"
-        val dir = context.getExternalFilesDir(null) ?: context.filesDir
-        dir.mkdirs()
-        val outFile = File(dir, outName)
-        outFile.writeBytes(out.toByteArray())
-        Pair(outFile.absolutePath, outName)
-    } catch (e: Exception) { null }
-}
-
-private fun deriveKey(password: String, salt: ByteArray): ByteArray {
-    val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-    val spec    = PBEKeySpec(password.toCharArray(), salt, 65536, 256)
-    return factory.generateSecret(spec).encoded
-}
+): Pair<String, String>? = SecureDocumentStore.encryptedCopy(context, bytes, password, baseName)
