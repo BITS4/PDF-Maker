@@ -50,7 +50,9 @@ class ViewerFilePolicyTest {
     @Test
     fun `calculates a safe high density render target`() {
         assertEquals(1_080, viewerTargetWidth(320, 1f))
-        assertEquals(2_160, viewerTargetWidth(360, 3f))
+        assertEquals(2_048, viewerTargetWidth(360, 3f))
         assertEquals(1_080, viewerTargetWidth(0, Float.NaN))
+        assertEquals(320, viewerRenderWidth(Int.MIN_VALUE))
+        assertEquals(2_048, viewerRenderWidth(Int.MAX_VALUE))
     }
 }

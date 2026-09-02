@@ -1,7 +1,6 @@
 package com.example.pdfmaker
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -34,20 +33,23 @@ internal suspend fun FlowCollector<Bitmap>.emitPptxPages(
     val slideXml = sortedMapOf<Int, String>()
     val relationshipXml = mutableMapOf<Int, String>()
     val media = mutableMapOf<String, ByteArray>()
+    val budget = ViewerArchiveBudget()
 
     ZipInputStream(file.inputStream().buffered()).use { zip ->
         var entry = zip.nextEntry
         while (entry != null) {
             val name = entry.name
+            budget.beginEntry(name)
             val slideNumber = viewerSlideNumber(name)
             val relationshipNumber = viewerSlideRelationshipNumber(name)
             when {
-                slideNumber != null -> slideXml[slideNumber] = zip.readViewerXml()
-                relationshipNumber != null -> relationshipXml[relationshipNumber] = zip.readViewerXml()
-                name.startsWith("ppt/media/") -> {
+                slideNumber != null -> slideXml[slideNumber] = budget.readXml(zip)
+                relationshipNumber != null -> relationshipXml[relationshipNumber] = budget.readXml(zip)
+                name.startsWith("ppt/media/") && media.size < MAX_VIEWER_MEDIA_ITEMS -> {
                     media[name.substringAfterLast('/')] =
-                        readBoundedViewerEntry(zip, MAX_VIEWER_MEDIA_BYTES)
+                        budget.readEntry(zip, MAX_VIEWER_MEDIA_BYTES)
                 }
+                else -> budget.skipEntry(zip)
             }
             zip.closeEntry()
             entry = zip.nextEntry
@@ -55,7 +57,7 @@ internal suspend fun FlowCollector<Bitmap>.emitPptxPages(
     }
 
     val height = (width * 0.5625f).toInt().coerceAtLeast(1)
-    slideXml.forEach { (number, xml) ->
+    slideXml.entries.take(MAX_VIEWER_RENDERED_PAGES).forEach { (number, xml) ->
         val relationships = relationshipXml[number]?.let(::parseViewerRelationships).orEmpty()
         emit(renderViewerSlide(xml, relationships, media, width, height))
     }
@@ -76,10 +78,13 @@ private fun renderViewerSlide(
     images.forEach { image ->
         val mediaName = relationships[image.relationshipId] ?: return@forEach
         val bytes = media[mediaName] ?: return@forEach
-        val source = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return@forEach
         val destination =
             image.bounds.takeIf { it.width() > 2 && it.height() > 2 }
                 ?: RectF(0f, 0f, width.toFloat(), height.toFloat())
+        val source = ThumbnailInput.decodeImage(
+            bytes,
+            maxOf(destination.width(), destination.height()).toInt().coerceIn(1, 2_048),
+        ) ?: return@forEach
         canvas.drawBitmap(source, null, destination, null)
         source.recycle()
     }
@@ -138,7 +143,7 @@ private fun parseViewerSlideElements(
         }
 
         var event = parser.eventType
-        while (event != XmlPullParser.END_DOCUMENT) {
+        while (event != XmlPullParser.END_DOCUMENT && texts.size + images.size < MAX_VIEWER_SLIDE_ELEMENTS) {
             val name = parser.name.orEmpty()
             when (event) {
                 XmlPullParser.START_TAG ->
@@ -147,18 +152,20 @@ private fun parseViewerSlideElements(
                         "spPr" -> inProperties = true
                         "off" ->
                             if (inProperties) {
-                                offsetX = parser.attributeByLocalName("x").toFloatOrNull() ?: 0f
-                                offsetY = parser.attributeByLocalName("y").toFloatOrNull() ?: 0f
+                                offsetX = viewerCoordinate(parser.attributeByLocalName("x"))
+                                offsetY = viewerCoordinate(parser.attributeByLocalName("y"))
                             }
                         "ext" ->
                             if (inProperties) {
-                                extentWidth = parser.attributeByLocalName("cx").toFloatOrNull() ?: 0f
-                                extentHeight = parser.attributeByLocalName("cy").toFloatOrNull() ?: 0f
+                                extentWidth = viewerCoordinate(parser.attributeByLocalName("cx"))
+                                extentHeight = viewerCoordinate(parser.attributeByLocalName("cy"))
                             }
                         "blip" -> relationshipId = parser.relationshipId().orEmpty()
                         "t" -> inText = true
                     }
-                XmlPullParser.TEXT -> if (inText) text.append(parser.text)
+                XmlPullParser.TEXT -> if (inText && text.length < MAX_VIEWER_CELL_CHARACTERS) {
+                    text.append(parser.text.take(MAX_VIEWER_CELL_CHARACTERS - text.length))
+                }
                 XmlPullParser.END_TAG ->
                     when (name) {
                         "spPr" -> inProperties = false

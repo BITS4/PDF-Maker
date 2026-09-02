@@ -50,8 +50,10 @@ internal fun viewerTargetWidth(
 ): Int {
     val safeWidth = screenWidthDp.coerceAtLeast(1)
     val safeDensity = density.takeIf { it.isFinite() && it > 0f } ?: 1f
-    return (safeWidth * safeDensity * 2f).toInt().coerceAtLeast(1_080)
+    return viewerRenderWidth((safeWidth * safeDensity * 2f).toInt().coerceAtLeast(1_080))
 }
+
+internal fun viewerRenderWidth(requestedWidth: Int): Int = requestedWidth.coerceIn(320, 2_048)
 
 private fun viewerExtension(value: String): String =
     value

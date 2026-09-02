@@ -1,7 +1,6 @@
 package com.example.pdfmaker
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -22,16 +21,19 @@ internal suspend fun FlowCollector<Bitmap>.emitDocxPages(
     var documentXml: String? = null
     var relationshipsXml: String? = null
     val media = mutableMapOf<String, ByteArray>()
+    val budget = ViewerArchiveBudget()
     ZipInputStream(file.inputStream().buffered()).use { zip ->
         var entry = zip.nextEntry
         while (entry != null) {
+            budget.beginEntry(entry.name)
             when {
-                entry.name == "word/document.xml" -> documentXml = zip.readViewerXml()
-                entry.name == "word/_rels/document.xml.rels" -> relationshipsXml = zip.readViewerXml()
-                entry.name.startsWith("word/media/") -> {
+                entry.name == "word/document.xml" -> documentXml = budget.readXml(zip)
+                entry.name == "word/_rels/document.xml.rels" -> relationshipsXml = budget.readXml(zip)
+                entry.name.startsWith("word/media/") && media.size < MAX_VIEWER_MEDIA_ITEMS -> {
                     media[entry.name.substringAfterLast('/')] =
-                        readBoundedViewerEntry(zip, MAX_VIEWER_MEDIA_BYTES)
+                        budget.readEntry(zip, MAX_VIEWER_MEDIA_BYTES)
                 }
+                else -> budget.skipEntry(zip)
             }
             zip.closeEntry()
             entry = zip.nextEntry
@@ -46,17 +48,25 @@ internal suspend fun FlowCollector<Bitmap>.emitDocxPages(
     var bitmap = newViewerPage(width, pageHeight)
     var canvas = Canvas(bitmap)
     var currentY = margin.toFloat()
+    var emittedPages = 0
+    var reachedPageLimit = false
 
-    suspend fun flushPage() {
+    suspend fun flushPage(): Boolean {
         emit(bitmap)
+        emittedPages += 1
+        if (emittedPages >= MAX_VIEWER_RENDERED_PAGES) return false
         bitmap = newViewerPage(width, pageHeight)
         canvas = Canvas(bitmap)
         currentY = margin.toFloat()
+        return true
     }
 
-    for (block in blocks) {
+    blockLoop@ for (block in blocks) {
         when (block) {
-            is DocBlock.PageBreak -> flushPage()
+            is DocBlock.PageBreak -> if (!flushPage()) {
+                reachedPageLimit = true
+                break@blockLoop
+            }
             is DocBlock.Paragraph -> {
                 if (block.runs.isEmpty()) {
                     currentY += width * 0.015f
@@ -99,7 +109,10 @@ internal suspend fun FlowCollector<Bitmap>.emitDocxPages(
                     }
                 val layout = buildViewerStaticLayout(text, paint, contentWidth)
                 val blockHeight = layout.height + width * 0.01f
-                if (currentY + blockHeight > pageHeight - margin) flushPage()
+                if (currentY + blockHeight > pageHeight - margin && !flushPage()) {
+                    reachedPageLimit = true
+                    break@blockLoop
+                }
                 canvas.save()
                 canvas.translate(margin.toFloat(), currentY)
                 layout.draw(canvas)
@@ -108,11 +121,18 @@ internal suspend fun FlowCollector<Bitmap>.emitDocxPages(
             }
             is DocBlock.ImageBlock -> {
                 val bytes = media[block.name] ?: continue
-                val source = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: continue
+                val source = ThumbnailInput.decodeImage(
+                    bytes,
+                    contentWidth.coerceIn(1, 2_048),
+                ) ?: continue
                 val scale = (contentWidth.toFloat() / source.width.coerceAtLeast(1)).coerceAtMost(1f)
                 val destinationWidth = source.width * scale
                 val destinationHeight = source.height * scale
-                if (currentY + destinationHeight > pageHeight - margin) flushPage()
+                if (currentY + destinationHeight > pageHeight - margin && !flushPage()) {
+                    source.recycle()
+                    reachedPageLimit = true
+                    break@blockLoop
+                }
                 canvas.drawBitmap(
                     source,
                     null,
@@ -129,5 +149,7 @@ internal suspend fun FlowCollector<Bitmap>.emitDocxPages(
             }
         }
     }
-    if (currentY > margin + 10) emit(bitmap) else bitmap.recycle()
+    if (!reachedPageLimit) {
+        if (currentY > margin + 10) emit(bitmap) else bitmap.recycle()
+    }
 }

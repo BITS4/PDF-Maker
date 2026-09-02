@@ -2,6 +2,7 @@ package com.example.pdfmaker
 
 import java.io.ByteArrayInputStream
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -49,6 +50,21 @@ class ThumbnailInputTest {
 
         assertTrue(runCatching { ThumbnailInput.validateArchiveEntry(1, "../secret") }.isFailure)
         assertTrue(runCatching { ThumbnailInput.validateArchiveEntry(1, "word\\document.xml") }.isFailure)
-        assertTrue(runCatching { ThumbnailInput.validateArchiveEntry(4_097, "word/document.xml") }.isFailure)
+        assertTrue(
+            runCatching {
+                ThumbnailInput.validateArchiveEntry(MAX_VIEWER_ARCHIVE_ENTRIES + 1, "word/document.xml")
+            }.isFailure,
+        )
+    }
+
+    @Test
+    fun imagePolicySamplesLargeImagesAndRejectsPixelBombs() {
+        assertEquals(1, ThumbnailInput.imageSampleSize(800, 600, 1_000))
+        assertEquals(2, ThumbnailInput.imageSampleSize(4_000, 3_000, 1_000))
+        assertEquals(8, ThumbnailInput.imageSampleSize(16_000, 1_000, 1_000))
+
+        assertNull(ThumbnailInput.imageSampleSize(0, 100, 1_000))
+        assertNull(ThumbnailInput.imageSampleSize(32_768, 32_768, 2_048))
+        assertNull(ThumbnailInput.imageSampleSize(1_000, 1_000, 0))
     }
 }

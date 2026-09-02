@@ -171,10 +171,22 @@ private fun unlockViewerFile(
     password: String,
 ): File? {
     return try {
-        val encrypted = File(sourcePath).readBytes()
-        val decrypted = decryptPdf(encrypted, password) ?: return null
-        File.createTempFile("pdfmaker-unlocked-", ".pdf", pdfMakerCacheDirectory(context)).also {
-            it.writeBytes(decrypted)
+        val encrypted = readBoundedViewerFile(File(sourcePath), SecureDocumentStore.MAX_DOCUMENT_BYTES)
+        val decrypted = try {
+            decryptPdf(encrypted, password) ?: return null
+        } finally {
+            encrypted.fill(0)
+        }
+        try {
+            OutputStore.writeUnique(
+                pdfMakerCacheDirectory(context),
+                "pdfmaker-unlocked",
+                "pdf",
+            ) { output ->
+                output.write(decrypted)
+            }
+        } finally {
+            decrypted.fill(0)
         }
     } catch (ignoredError: Exception) {
         Log.w("PdfViewer", "Unable to unlock PDF", ignoredError)

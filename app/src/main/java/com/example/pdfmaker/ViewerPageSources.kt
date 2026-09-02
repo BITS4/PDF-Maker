@@ -1,7 +1,6 @@
 package com.example.pdfmaker
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -14,7 +13,6 @@ import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import java.io.File
-import java.nio.charset.StandardCharsets
 import java.util.zip.ZipInputStream
 
 internal fun pageStreamForFile(
@@ -25,15 +23,17 @@ internal fun pageStreamForFile(
     flow {
         val source = File(file.filePath)
         require(source.isFile) { "Document is unavailable" }
+        require(source.length() in 0..MAX_VIEWER_SOURCE_BYTES) { "Document exceeds the viewer safety limit" }
+        val safeWidth = viewerRenderWidth(targetWidth)
 
         when (kind) {
-            ViewerFileKind.PDF -> emitPdfPages(source, targetWidth)
-            ViewerFileKind.IMAGE -> emitImagePage(source, targetWidth)
-            ViewerFileKind.TXT -> emitTextPages(source.readText(), targetWidth)
-            ViewerFileKind.CSV -> emitCsvPages(source, targetWidth)
-            ViewerFileKind.DOCX -> emitDocxPages(source, targetWidth)
-            ViewerFileKind.XLSX -> emitXlsxPages(source, targetWidth)
-            ViewerFileKind.PPTX -> emitPptxPages(source, targetWidth)
+            ViewerFileKind.PDF -> emitPdfPages(source, safeWidth)
+            ViewerFileKind.IMAGE -> emitImagePage(source, safeWidth)
+            ViewerFileKind.TXT -> emitTextPages(readBoundedViewerText(source), safeWidth)
+            ViewerFileKind.CSV -> emitCsvPages(source, safeWidth)
+            ViewerFileKind.DOCX -> emitDocxPages(source, safeWidth)
+            ViewerFileKind.XLSX -> emitXlsxPages(source, safeWidth)
+            ViewerFileKind.PPTX -> emitPptxPages(source, safeWidth)
             ViewerFileKind.UNSUPPORTED -> Unit
         }
     }.flowOn(Dispatchers.IO)
@@ -44,11 +44,15 @@ private suspend fun FlowCollector<Bitmap>.emitPdfPages(
 ) {
     ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
         PdfRenderer(descriptor).use { renderer ->
-            for (index in 0 until renderer.pageCount) {
-                renderer.openPage(index).use { page ->
-                    val scale = width.toFloat() / page.width.coerceAtLeast(1)
-                    val height = (page.height * scale).toInt().coerceAtLeast(1)
-                    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            for (index in 0 until minOf(renderer.pageCount, MAX_VIEWER_RENDERED_PAGES)) {
+                renderer.openPage(index).use pageUse@{ page ->
+                    val target = RenderSizing.fitWithin(
+                        page.width,
+                        page.height,
+                        width.coerceIn(1, 2_048),
+                        allowUpscale = true,
+                    ) ?: return@pageUse
+                    val bitmap = Bitmap.createBitmap(target.width, target.height, Bitmap.Config.ARGB_8888)
                     Canvas(bitmap).drawColor(Color.WHITE)
                     page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                     emit(bitmap)
@@ -62,9 +66,16 @@ private suspend fun FlowCollector<Bitmap>.emitImagePage(
     file: File,
     width: Int,
 ) {
-    val source = requireNotNull(BitmapFactory.decodeFile(file.absolutePath)) { "Image could not be decoded" }
-    val height = (width.toFloat() / source.width.coerceAtLeast(1) * source.height).toInt().coerceAtLeast(1)
-    val bitmap = Bitmap.createScaledBitmap(source, width, height, true)
+    val source = file.inputStream().use {
+        ThumbnailInput.decodeImage(it, width.coerceIn(1, 2_048))
+    } ?: error("Image could not be decoded safely")
+    val target = RenderSizing.fitWithin(
+        source.width,
+        source.height,
+        width.coerceIn(1, 2_048),
+        allowUpscale = true,
+    ) ?: error("Image dimensions are invalid")
+    val bitmap = Bitmap.createScaledBitmap(source, target.width, target.height, true)
     if (bitmap !== source) source.recycle()
     emit(bitmap)
 }
@@ -84,7 +95,8 @@ private suspend fun FlowCollector<Bitmap>.emitTextPages(
     val layout = buildViewerStaticLayout(text, paint, contentWidth)
     var firstLine = 0
 
-    while (firstLine < layout.lineCount) {
+    var emittedPages = 0
+    while (firstLine < layout.lineCount && emittedPages < MAX_VIEWER_RENDERED_PAGES) {
         val contentHeight = pageHeight - margin * 2
         var lastLine = firstLine
         while (
@@ -102,6 +114,7 @@ private suspend fun FlowCollector<Bitmap>.emitTextPages(
         layout.draw(canvas)
         canvas.restore()
         emit(bitmap)
+        emittedPages += 1
         firstLine = lastLine + 1
     }
 }
@@ -110,7 +123,7 @@ private suspend fun FlowCollector<Bitmap>.emitCsvPages(
     file: File,
     width: Int,
 ) {
-    val rows = parseDelimitedRows(file.readText(), delimiterForFileName(file.name))
+    val rows = parseDelimitedRows(readBoundedViewerText(file), delimiterForFileName(file.name))
     if (rows.isEmpty()) return
     emitViewerTablePages(rows, rows.maxOf { it.size }.coerceAtLeast(1), width, hasHeader = true)
 }
@@ -121,12 +134,15 @@ private suspend fun FlowCollector<Bitmap>.emitXlsxPages(
 ) {
     var sharedStringsXml: String? = null
     var firstSheetXml: String? = null
+    val budget = ViewerArchiveBudget()
     ZipInputStream(file.inputStream().buffered()).use { zip ->
         var entry = zip.nextEntry
         while (entry != null) {
+            budget.beginEntry(entry.name)
             when (entry.name) {
-                "xl/sharedStrings.xml" -> sharedStringsXml = zip.readViewerXml()
-                "xl/worksheets/sheet1.xml" -> firstSheetXml = zip.readViewerXml()
+                "xl/sharedStrings.xml" -> sharedStringsXml = budget.readXml(zip)
+                "xl/worksheets/sheet1.xml" -> firstSheetXml = budget.readXml(zip)
+                else -> budget.skipEntry(zip)
             }
             zip.closeEntry()
             entry = zip.nextEntry
@@ -137,5 +153,3 @@ private suspend fun FlowCollector<Bitmap>.emitXlsxPages(
     if (rows.isEmpty()) return
     emitViewerTablePages(rows, rows.maxOf { it.size }.coerceAtLeast(1), width, hasHeader = true)
 }
-
-internal fun ZipInputStream.readViewerXml(): String = String(readBoundedViewerEntry(this, MAX_VIEWER_XML_BYTES), StandardCharsets.UTF_8)
