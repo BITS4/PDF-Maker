@@ -94,10 +94,7 @@ internal suspend fun runOcr(
     } catch (error: CancellationException) {
         throw error
     } catch (error: Exception) {
-        val message = when (error) {
-            is IllegalArgumentException, is IllegalStateException -> error.message ?: "OCR failed"
-            else -> "OCR failed because the input could not be processed safely"
-        }
+        val message = UserVisibleFailureReporter.message(UserFailureStage.OCR, error)
         withContext(Dispatchers.Main) { onError(message) }
     } finally {
         recognizer.close()

@@ -139,7 +139,10 @@ internal class PrintPdfAdapter(
                     try {
                         PrintPdfPolicy.requireWritableSelection(source.pageCount, selectedPages)
                     } catch (error: IllegalArgumentException) {
-                        throw PrintPipelineException(error.message ?: WRITE_FAILED, error)
+                        throw PrintPipelineException(
+                            UserVisibleFailurePolicy.message(UserFailureStage.PDF_PRINT, error),
+                            error,
+                        )
                     }
 
                 when (writeMode) {

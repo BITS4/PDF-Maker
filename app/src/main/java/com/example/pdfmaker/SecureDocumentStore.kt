@@ -27,7 +27,11 @@ object SecureDocumentStore {
         password: String,
         beforeChunk: () -> Unit = {},
     ): String? =
-        safely(onFailure = { error -> safeError("Could not lock file", error) }) {
+        safely(
+            onFailure = { error ->
+                UserVisibleFailurePolicy.message(UserFailureStage.DOCUMENT_LOCK, error)
+            },
+        ) {
             val target = validateWritableFile(file)
             if (password.length !in 4..128) return@safely "Password must contain 4 to 128 characters"
             if (isLocked(target)) return@safely "File is already locked"
@@ -51,7 +55,11 @@ object SecureDocumentStore {
         password: String,
         beforeChunk: () -> Unit = {},
     ): String? =
-        safely(onFailure = { error -> safeError("Could not unlock file", error) }) {
+        safely(
+            onFailure = { error ->
+                UserVisibleFailurePolicy.message(UserFailureStage.DOCUMENT_UNLOCK, error)
+            },
+        ) {
             val target = validateWritableFile(file)
             val encryptedLength = SecureDocumentLimits.requireEncryptedLength(target.length())
             val decrypted = transformAtomically(target) { input, output ->
@@ -174,11 +182,6 @@ object SecureDocumentStore {
         } catch (_: AtomicMoveNotSupportedException) {
             Files.move(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
         }
-    }
-
-    private fun safeError(prefix: String, error: Exception): String = when (error) {
-        is IllegalArgumentException, is IllegalStateException -> error.message ?: prefix
-        else -> prefix
     }
 
     private inline fun <T> safely(

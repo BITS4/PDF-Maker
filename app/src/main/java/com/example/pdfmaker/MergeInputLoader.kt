@@ -51,7 +51,11 @@ internal suspend fun loadMergeInputs(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                rejected += error.message ?: "A selected PDF could not be read safely."
+                rejected +=
+                    UserVisibleFailureReporter.message(
+                        UserFailureStage.MERGE_INPUT_LOAD,
+                        error,
+                    )
             }
         }
         ownershipTransferred = true

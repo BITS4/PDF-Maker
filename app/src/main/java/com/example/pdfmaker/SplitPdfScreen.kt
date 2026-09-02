@@ -124,7 +124,11 @@ fun SplitPdfScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit = {}) {
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                errMsg = error.message ?: "The PDF preview could not be loaded safely."
+                errMsg =
+                    UserVisibleFailureReporter.message(
+                        UserFailureStage.SPLIT_PREVIEW_LOAD,
+                        error,
+                    )
                 state = SplitState.ERROR
             } finally {
                 pendingSource?.close()
@@ -284,7 +288,11 @@ fun SplitPdfScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit = {}) {
                                 } catch (cancelled: CancellationException) {
                                     throw cancelled
                                 } catch (error: Exception) {
-                                    errMsg = error.message ?: "Split failed. Please try another PDF."
+                                    errMsg =
+                                        UserVisibleFailureReporter.message(
+                                            UserFailureStage.PDF_SPLIT,
+                                            error,
+                                        )
                                     state = SplitState.ERROR
                                 } finally {
                                     if (activeJob === splitJob) activeJob = null

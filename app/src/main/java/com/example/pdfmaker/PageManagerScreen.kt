@@ -88,7 +88,11 @@ fun PageManagerScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit = {}) {
                 if (loadCoordinator.isCurrent(request)) {
                     recyclePageStates(ownedPages.getAndSet(emptyList()))
                     pages = emptyList()
-                    errMsg = error.message ?: "Could not read this PDF"
+                    errMsg =
+                        UserVisibleFailureReporter.message(
+                            UserFailureStage.PAGE_PREVIEW_LOAD,
+                            error,
+                        )
                     pmState = PmState.ERROR
                 }
             }

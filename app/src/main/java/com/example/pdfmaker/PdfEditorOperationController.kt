@@ -57,7 +57,11 @@ internal class PdfEditorOperationController(private val scope: CoroutineScope) {
                 throw cancelled
             } catch (error: Exception) {
                 withContext(Dispatchers.Main) {
-                    errorMessage = error.message ?: "The document operation could not be completed."
+                    errorMessage =
+                        UserVisibleFailureReporter.message(
+                            UserFailureStage.PDF_EDITOR_OPERATION,
+                            error,
+                        )
                 }
             } finally {
                 withContext(NonCancellable + Dispatchers.Main) {

@@ -305,13 +305,21 @@ class SecureDocumentStoreTest {
     @Test
     fun emptyOversizedAndAlreadyLockedFilesAreRejectedWithoutModification() {
         val empty = temporaryFolder.newFile("empty.pdf")
-        assertTrue(SecureDocumentStore.lockInPlace(empty, "password")!!.contains("empty"))
+        assertTrue(
+            SecureDocumentStore
+                .lockInPlace(empty, "password")!!
+                .contains("invalid or unsupported"),
+        )
 
         val oversized = File(temporaryFolder.root, "oversized.pdf")
         java.io.RandomAccessFile(oversized, "rw").use {
             it.setLength(SecureDocumentStore.MAX_DOCUMENT_BYTES + 1)
         }
-        assertTrue(SecureDocumentStore.lockInPlace(oversized, "password")!!.contains("100 MB"))
+        assertTrue(
+            SecureDocumentStore
+                .lockInPlace(oversized, "password")!!
+                .contains("invalid or unsupported"),
+        )
 
         val locked = temporaryFolder.newFile("locked.pdf").apply { writeText("content") }
         assertNull(SecureDocumentStore.lockInPlace(locked, "password"))
@@ -332,7 +340,11 @@ class SecureDocumentStoreTest {
         }
         val originalLength = oversized.length()
 
-        assertTrue(SecureDocumentStore.unlockInPlace(oversized, "password")!!.contains("safety"))
+        assertTrue(
+            SecureDocumentStore
+                .unlockInPlace(oversized, "password")!!
+                .contains("invalid or unsupported"),
+        )
         assertEquals(originalLength, oversized.length())
         assertFalse(temporarySecureFilesExist())
     }

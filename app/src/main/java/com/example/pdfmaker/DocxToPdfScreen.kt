@@ -94,6 +94,7 @@ fun DocxToPdfScreen(
         }
     }
 
+    @Suppress("TooGenericExceptionCaught")
     fun startConvert() {
         val uri = pickedUri ?: return
         state    = DocxState.CONVERTING
@@ -121,9 +122,13 @@ fun DocxToPdfScreen(
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (e: Exception) {
+            } catch (error: Exception) {
                 withContext(Dispatchers.Main) {
-                    errorMsg = e.message ?: "Unknown error"
+                    errorMsg =
+                        UserVisibleFailureReporter.message(
+                            UserFailureStage.DOCX_CONVERSION,
+                            error,
+                        )
                     state    = DocxState.ERROR
                 }
             }
@@ -339,7 +344,11 @@ fun DocxToPdfScreen(
                                 onClick = {
                                     if (file != null) {
                                         shareDocxPdf(context, file).onFailure { error ->
-                                            errorMsg = error.message ?: "This PDF could not be shared."
+                                            errorMsg =
+                                                UserVisibleFailureReporter.message(
+                                                    UserFailureStage.CONVERTED_PDF_SHARE,
+                                                    error,
+                                                )
                                             state = DocxState.ERROR
                                         }
                                     }

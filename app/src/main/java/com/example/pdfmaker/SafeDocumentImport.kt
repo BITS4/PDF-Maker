@@ -8,6 +8,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.Locale
 import java.util.UUID
+import java.util.concurrent.CancellationException
 import java.util.zip.ZipFile
 
 data class IncomingDocumentRequest(
@@ -60,7 +61,8 @@ object SafeDocumentImporter {
                 }
             }
             ImportMetadata(displayName, reportedSize, resolver.getType(request.uri))
-        }.getOrElse {
+        }.getOrElse { error ->
+            if (error is CancellationException) throw error
             return IncomingImportResult.Rejected("The document provider could not be read")
         }
         if (metadata.reportedSize > MAX_IMPORT_BYTES) {
@@ -98,14 +100,16 @@ object SafeDocumentImporter {
                 kind.extension,
             )
             IncomingImportResult.Imported(imported, kind)
+        } catch (cancelled: CancellationException) {
+            temporary.delete()
+            throw cancelled
         } catch (error: Exception) {
             temporary.delete()
             IncomingImportResult.Rejected(
-                when (error) {
-                    is IllegalArgumentException, is IllegalStateException ->
-                        error.message ?: "The document could not be imported"
-                    else -> "The document could not be imported safely"
-                },
+                UserVisibleFailureReporter.message(
+                    UserFailureStage.DOCUMENT_IMPORT,
+                    error,
+                ),
             )
         }
     }

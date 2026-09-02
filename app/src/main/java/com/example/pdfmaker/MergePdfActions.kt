@@ -119,16 +119,7 @@ private fun File.toPdfFile(totalPages: Int): PdfFile =
     )
 
 private fun mergeFailureMessage(error: Exception): String {
-    Timber
-        .tag("MergePdf")
-        .w("PDF merge failed (%s)", error.javaClass.simpleName)
-    return when (error) {
-        is IllegalArgumentException,
-        is IllegalStateException,
-        -> error.message ?: "The selected PDFs are not valid for merging."
-        is SecurityException -> "The selected PDFs are no longer accessible."
-        else -> "The selected PDFs could not be merged safely."
-    }
+    return UserVisibleFailureReporter.message(UserFailureStage.PDF_MERGE, error)
 }
 
 private fun shareMergedPdf(
