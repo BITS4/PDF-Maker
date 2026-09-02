@@ -1,5 +1,7 @@
 package com.example.pdfmaker
 
+import java.io.IOException
+
 internal data class GallerySaveReport(
     val requestedCount: Int,
     val savedCount: Int,
@@ -27,4 +29,11 @@ internal object GallerySavePolicy {
 
     fun report(requestedCount: Int, savedCount: Int, errors: List<String>): GallerySaveReport =
         GallerySaveReport(requestedCount, savedCount, errors.distinct())
+
+    fun failureMessage(error: Exception): String =
+        when (error) {
+            is SecurityException -> "Gallery access was denied. Allow photo access or use Share All instead."
+            is IOException -> "An image could not be written to the gallery. Check available storage and try again."
+            else -> "An image could not be saved to the gallery. Use Share All or try again."
+        }
 }

@@ -1,5 +1,6 @@
 package com.example.pdfmaker
 
+import java.io.IOException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -30,5 +31,22 @@ class GallerySavePolicyTest {
     fun `rejects impossible report counts`() {
         assertTrue(runCatching { GallerySavePolicy.report(-1, 0, emptyList()) }.isFailure)
         assertTrue(runCatching { GallerySavePolicy.report(1, 2, emptyList()) }.isFailure)
+    }
+
+    @Test
+    fun `maps gallery failures without exposing provider details`() {
+        val privateDetail = "/storage/emulated/0/private/customer-name.jpg"
+        val failures =
+            listOf(
+                SecurityException(privateDetail),
+                IOException(privateDetail),
+                IllegalStateException(privateDetail),
+            )
+
+        failures.forEach { error ->
+            val message = GallerySavePolicy.failureMessage(error)
+            assertFalse(message.contains(privateDetail))
+            assertFalse(message.contains("customer-name"))
+        }
     }
 }

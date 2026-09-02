@@ -99,11 +99,7 @@ fun PdfToJpgScreen(onBack: () -> Unit) {
         savedToGallery = false
         galleryMessage = null
         shareMessage = null
-        pickedName = uri.lastPathSegment
-            ?.substringAfterLast("/")
-            ?.substringAfterLast("%2F")
-            ?.removeSuffix(".pdf")
-            ?.take(40) ?: "document"
+        pickedName = PdfToJpgPolicy.displayBaseName(uri.lastPathSegment)
 
         activeJob = scope.launch {
             var pendingSource: StagedPdfSource? = null
@@ -128,7 +124,7 @@ fun PdfToJpgScreen(onBack: () -> Unit) {
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                errorMsg = error.message ?: "Could not open this PDF safely."
+                errorMsg = PdfToJpgPolicy.failureMessage(PdfToJpgFailureStage.LOAD, error)
                 state = JpgConvertState.ERROR
             } finally {
                 pendingSource?.close()
@@ -194,7 +190,7 @@ fun PdfToJpgScreen(onBack: () -> Unit) {
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                errorMsg = error.message ?: "Could not convert this PDF."
+                errorMsg = PdfToJpgPolicy.failureMessage(PdfToJpgFailureStage.CONVERT, error)
                 state = JpgConvertState.ERROR
             } finally {
                 pendingFiles.forEach(File::delete)
@@ -390,11 +386,19 @@ fun PdfToJpgScreen(onBack: () -> Unit) {
                                         onSuccess = { intent ->
                                             runCatching { context.startActivity(intent) }
                                                 .onFailure { error ->
-                                                    shareMessage = error.message ?: "No app could share these images."
+                                                    shareMessage =
+                                                        PdfToJpgPolicy.failureMessage(
+                                                            PdfToJpgFailureStage.SHARE_LAUNCH,
+                                                            error,
+                                                        )
                                                 }
                                         },
                                         onFailure = { error ->
-                                            shareMessage = error.message ?: "Could not prepare these images for sharing."
+                                            shareMessage =
+                                                PdfToJpgPolicy.failureMessage(
+                                                    PdfToJpgFailureStage.SHARE_PREPARE,
+                                                    error,
+                                                )
                                         },
                                     )
                                     sharing = false

@@ -1,6 +1,7 @@
 package com.example.pdfmaker
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -60,5 +61,32 @@ class PdfToJpgPolicyTest {
             }.isFailure,
         )
         assertTrue(runCatching { PdfToJpgPolicy.requireShareBatch(emptyList()) }.isFailure)
+    }
+
+    @Test
+    fun `sanitizes provider paths into bounded display names`() {
+        assertEquals("report", PdfToJpgPolicy.displayBaseName("folder/report.PDF"))
+        assertEquals("invoice", PdfToJpgPolicy.displayBaseName("folder%2Finvoice.pdf"))
+        assertEquals("document", PdfToJpgPolicy.displayBaseName("\u0000\u202E.pdf"))
+        assertEquals(
+            PdfToJpgPolicy.MAX_DISPLAY_NAME_LENGTH,
+            PdfToJpgPolicy.displayBaseName("x".repeat(200) + ".pdf").length,
+        )
+    }
+
+    @Test
+    fun `maps every failure stage without leaking exception details`() {
+        val privateDetail = "/storage/private/customer-report.pdf"
+        PdfToJpgFailureStage.entries.forEach { stage ->
+            listOf(
+                SecurityException(privateDetail),
+                java.io.IOException(privateDetail),
+                IllegalStateException(privateDetail),
+            ).forEach { error ->
+                val message = PdfToJpgPolicy.failureMessage(stage, error)
+                assertFalse(message.contains(privateDetail))
+                assertFalse(message.contains("customer-report"))
+            }
+        }
     }
 }

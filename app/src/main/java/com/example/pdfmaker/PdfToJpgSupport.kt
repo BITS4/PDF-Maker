@@ -1,6 +1,7 @@
 package com.example.pdfmaker
 
 import android.content.ContentValues
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -38,6 +39,7 @@ import java.io.FilterOutputStream
 import java.io.OutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import timber.log.Timber
 
 enum class JpgQuality(
     val label      : String,
@@ -338,6 +340,7 @@ internal fun prepareJpgShareIntent(
             )
             Intent(Intent.ACTION_SEND).apply {
                 type = "image/jpeg"
+                clipData = ClipData.newRawUri("Shared image", uri)
                 putExtra(Intent.EXTRA_STREAM, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
@@ -368,6 +371,7 @@ internal fun prepareJpgShareIntent(
             )
             Intent(Intent.ACTION_SEND).apply {
                 type = "application/zip"
+                clipData = ClipData.newRawUri("Shared images", zipUri)
                 putExtra(Intent.EXTRA_STREAM, zipUri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
@@ -406,7 +410,7 @@ internal fun saveJpgsToGallery(context: Context, files: List<File>): GallerySave
         var insertedUri: Uri? = null
         try {
             require(file.isFile && file.length() in 1..PdfToJpgPolicy.MAX_JPEG_BYTES) {
-                "${file.name} is missing or exceeds the 50 MB image limit"
+                "A converted image is missing or exceeds the 50 MB image limit"
             }
             val values = ContentValues().apply {
                 put(MediaStore.Images.Media.DISPLAY_NAME, "${SafeFileName.baseName(file.nameWithoutExtension)}.jpg")
@@ -414,11 +418,13 @@ internal fun saveJpgsToGallery(context: Context, files: List<File>): GallerySave
                 put(MediaStore.Images.Media.RELATIVE_PATH, "${android.os.Environment.DIRECTORY_PICTURES}/PDFMaker")
                 put(MediaStore.Images.Media.IS_PENDING, 1)
             }
-            val galleryUri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
-                ?: error("Gallery storage rejected ${file.name}")
+            val galleryUri =
+                resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                    ?: error("Gallery storage rejected the image")
             insertedUri = galleryUri
-            val output = resolver.openOutputStream(galleryUri)
-                ?: error("Gallery storage could not open ${file.name}")
+            val output =
+                resolver.openOutputStream(galleryUri)
+                    ?: error("Gallery storage could not open the image")
             output.use { destination ->
                 file.inputStream().use { source ->
                     BoundedIo.copy(source, destination, PdfToJpgPolicy.MAX_JPEG_BYTES)
@@ -428,12 +434,13 @@ internal fun saveJpgsToGallery(context: Context, files: List<File>): GallerySave
             values.clear()
             values.put(MediaStore.Images.Media.IS_PENDING, 0)
             check(resolver.update(galleryUri, values, null, null) > 0) {
-                "Gallery storage could not publish ${file.name}"
+                "Gallery storage could not publish the image"
             }
             savedCount += 1
         } catch (error: Exception) {
             insertedUri?.let { uri -> runCatching { resolver.delete(uri, null, null) } }
-            errors += error.message ?: "${file.name} could not be saved"
+            Timber.tag("GalleryExport").w(error, "event=gallery_image_save_failed")
+            errors += GallerySavePolicy.failureMessage(error)
         }
     }
     return GallerySavePolicy.report(files.size, savedCount, errors)

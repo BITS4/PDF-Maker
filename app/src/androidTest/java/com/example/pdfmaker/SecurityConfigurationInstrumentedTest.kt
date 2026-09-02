@@ -1,10 +1,13 @@
 package com.example.pdfmaker
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.security.NetworkSecurityPolicy
 import androidx.core.content.FileProvider
+import androidx.core.content.IntentCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
@@ -47,7 +50,8 @@ class SecurityConfigurationInstrumentedTest {
         val permissions = packageInfo.requestedPermissions.orEmpty().toSet()
 
         assertTrue(Manifest.permission.POST_NOTIFICATIONS in permissions)
-        assertEquals(0, packageInfo.applicationInfo!!.flags and ApplicationInfo.FLAG_ALLOW_BACKUP)
+        val applicationInfo = requireNotNull(packageInfo.applicationInfo)
+        assertEquals(0, applicationInfo.flags and ApplicationInfo.FLAG_ALLOW_BACKUP)
     }
 
     @Test
@@ -114,6 +118,32 @@ class SecurityConfigurationInstrumentedTest {
             assertFalse("The cache root must not be broadly exposed", exposed)
         } finally {
             outside.delete()
+        }
+    }
+
+    @Test
+    fun jpgSharingUsesAContentUriWithReadOnlyTemporaryAccess() {
+        val image = File(getPdfMakerDir(context), "share-contract.jpg").apply { writeBytes(byteArrayOf(1, 2, 3)) }
+        try {
+            val chooser = prepareJpgShareIntent(context, listOf(image), "share-contract").getOrThrow()
+            val shareIntent =
+                requireNotNull(
+                    IntentCompat.getParcelableExtra(chooser, Intent.EXTRA_INTENT, Intent::class.java),
+                )
+            val stream =
+                requireNotNull(
+                    IntentCompat.getParcelableExtra(shareIntent, Intent.EXTRA_STREAM, Uri::class.java),
+                )
+
+            assertEquals(Intent.ACTION_SEND, shareIntent.action)
+            assertEquals("image/jpeg", shareIntent.type)
+            assertEquals("content", stream.scheme)
+            assertEquals("${context.packageName}.provider", stream.authority)
+            assertTrue(shareIntent.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
+            assertEquals(0, shareIntent.flags and Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            assertEquals(stream, shareIntent.clipData?.getItemAt(0)?.uri)
+        } finally {
+            image.delete()
         }
     }
 }
