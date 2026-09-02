@@ -56,11 +56,7 @@ enum class FileTypeFilter(val label: String, val extensions: Set<String>) {
 }
 
 fun List<PdfFile>.filteredBy(filter: FileTypeFilter): List<PdfFile> {
-    if (filter == FileTypeFilter.ALL) return this
-    return filter { file ->
-        val ext = file.filePath.substringAfterLast('.', "").lowercase()
-        ext in filter.extensions
-    }
+    return FileCatalog.filter(this, filter)
 }
 
 // ── Sort options ──────────────────────────────────────────────────────────────
@@ -73,14 +69,7 @@ enum class SortOrder(val label: String) {
     SIZE_ASC   ("Smallest first")
 }
 
-fun List<PdfFile>.sorted(order: SortOrder): List<PdfFile> = when (order) {
-    SortOrder.DATE_DESC  -> sortedByDescending { it.lastModified }
-    SortOrder.DATE_ASC   -> sortedBy          { it.lastModified }
-    SortOrder.NAME_ASC   -> sortedBy          { it.name.lowercase() }
-    SortOrder.NAME_DESC  -> sortedByDescending { it.name.lowercase() }
-    SortOrder.SIZE_DESC  -> sortedByDescending { it.size }
-    SortOrder.SIZE_ASC   -> sortedBy          { it.size }
-}
+fun List<PdfFile>.sorted(order: SortOrder): List<PdfFile> = FileCatalog.sort(this, order)
 
 // ── Image filter enum ─────────────────────────────────────────────────────────
 enum class ImageFilter(val label: String) {
