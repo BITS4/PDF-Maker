@@ -4,7 +4,11 @@ package com.example.pdfmaker
 internal object PageBitmapCachePolicy {
     const val NEIGHBOR_RADIUS = 1
 
-    fun retainedIndexes(currentPage: Int, pageCount: Int, radius: Int = NEIGHBOR_RADIUS): Set<Int> {
+    fun retainedIndexes(
+        currentPage: Int,
+        pageCount: Int,
+        radius: Int = NEIGHBOR_RADIUS,
+    ): Set<Int> {
         require(radius >= 0) { "Page cache radius cannot be negative" }
         if (pageCount <= 0) return emptySet()
         val current = currentPage.coerceIn(0, pageCount - 1)

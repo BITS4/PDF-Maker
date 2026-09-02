@@ -88,15 +88,17 @@ private suspend fun FlowCollector<Bitmap>.emitImagePage(
     file: File,
     width: Int,
 ) {
-    val source = file.inputStream().use {
-        ThumbnailInput.decodeImage(it, width.coerceIn(1, 2_048))
-    } ?: error("Image could not be decoded safely")
-    val target = RenderSizing.fitWithin(
-        source.width,
-        source.height,
-        width.coerceIn(1, 2_048),
-        allowUpscale = true,
-    ) ?: error("Image dimensions are invalid")
+    val source =
+        file.inputStream().use {
+            ThumbnailInput.decodeImage(it, width.coerceIn(1, 2_048))
+        } ?: error("Image could not be decoded safely")
+    val target =
+        RenderSizing.fitWithin(
+            source.width,
+            source.height,
+            width.coerceIn(1, 2_048),
+            allowUpscale = true,
+        ) ?: error("Image dimensions are invalid")
     val bitmap = Bitmap.createScaledBitmap(source, target.width, target.height, true)
     if (bitmap !== source) source.recycle()
     emit(bitmap)

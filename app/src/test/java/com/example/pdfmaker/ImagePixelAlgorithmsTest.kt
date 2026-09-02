@@ -163,8 +163,12 @@ class ImagePixelAlgorithmsTest {
     private class ProcessingCancelled : RuntimeException()
 
     private companion object {
-        fun argb(alpha: Int, red: Int, green: Int, blue: Int): Int =
-            (alpha shl 24) or (red shl 16) or (green shl 8) or blue
+        fun argb(
+            alpha: Int,
+            red: Int,
+            green: Int,
+            blue: Int,
+        ): Int = (alpha shl 24) or (red shl 16) or (green shl 8) or blue
 
         fun alpha(color: Int): Int = color ushr 24 and 0xff
 

@@ -8,8 +8,6 @@ import android.os.Bundle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicLong
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -19,6 +17,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 
 @RunWith(AndroidJUnit4::class)
 class IncomingIntentLifecycleInstrumentedTest {
@@ -113,8 +113,7 @@ class IncomingIntentLifecycleInstrumentedTest {
             Intent(ApplicationProvider.getApplicationContext<Context>(), MainActivity::class.java),
         )
 
-    private fun incomingView(uri: Uri): Intent =
-        Intent(Intent.ACTION_VIEW, uri).apply { type = "application/pdf" }
+    private fun incomingView(uri: Uri): Intent = Intent(Intent.ACTION_VIEW, uri).apply { type = "application/pdf" }
 
     private companion object {
         const val WAIT_SECONDS = 5L

@@ -61,13 +61,25 @@ internal fun DocxToPdfContent(
                 onChange = onChange,
             )
             when (state.phase) {
-                DocxToPdfPhase.PICK -> DocxPickContent(onChoose)
-                DocxToPdfPhase.PREPARING -> DocxPreparingContent()
-                DocxToPdfPhase.READY -> DocxReadyContent(state.input, onConvert)
-                DocxToPdfPhase.CONVERTING ->
+                DocxToPdfPhase.PICK -> {
+                    DocxPickContent(onChoose)
+                }
+
+                DocxToPdfPhase.PREPARING -> {
+                    DocxPreparingContent()
+                }
+
+                DocxToPdfPhase.READY -> {
+                    DocxReadyContent(state.input, onConvert)
+                }
+
+                DocxToPdfPhase.CONVERTING -> {
                     DocxConvertingContent(state.progress, state.progressText)
-                DocxToPdfPhase.DONE ->
+                }
+
+                DocxToPdfPhase.DONE -> {
                     DocxDoneContent(state.result, onOpen, onShare, onConvertAnother)
+                }
             }
         }
         state.errorMessage?.let { message ->

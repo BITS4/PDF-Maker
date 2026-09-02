@@ -65,9 +65,10 @@ private fun requireJpegShareContent(file: File) {
         require(PdfToJpgPolicy.hasJpegMetadata(bounds.outMimeType, bounds.outWidth, bounds.outHeight)) {
             "Converted image has invalid JPEG content"
         }
-        val plan = requireNotNull(PdfToJpgPolicy.resultThumbnailPlan(bounds.outWidth, bounds.outHeight)) {
-            "Converted image has invalid JPEG dimensions"
-        }
+        val plan =
+            requireNotNull(PdfToJpgPolicy.resultThumbnailPlan(bounds.outWidth, bounds.outHeight)) {
+                "Converted image has invalid JPEG dimensions"
+            }
 
         input.seek(0L)
         val decoded =

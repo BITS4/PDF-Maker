@@ -5,9 +5,10 @@ internal object LockPdfSelectionPolicy {
     fun unlockedPdfCandidates(
         files: List<PdfFile>,
         isLocked: (String) -> Boolean,
-    ): List<PdfFile> = files.filter { file ->
-        hasPdfExtension(file.filePath) && !isLocked(file.filePath)
-    }
+    ): List<PdfFile> =
+        files.filter { file ->
+            hasPdfExtension(file.filePath) && !isLocked(file.filePath)
+        }
 
     fun hasPdfExtension(path: String): Boolean {
         val leaf = path.substringAfterLast('/').substringAfterLast('\\')

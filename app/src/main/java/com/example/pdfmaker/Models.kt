@@ -13,81 +13,96 @@ import java.util.IdentityHashMap
 
 // ── Navigation ────────────────────────────────────────────────────────────────
 enum class Screen {
-    HOME, FILES, VIEWER, SETTINGS,
-    IMAGE_SELECTION, IMAGE_EDIT, IMAGE_CROP, IMAGE_REVIEW, CONVERT_RESULT,
+    HOME,
+    FILES,
+    VIEWER,
+    SETTINGS,
+    IMAGE_SELECTION,
+    IMAGE_EDIT,
+    IMAGE_CROP,
+    IMAGE_REVIEW,
+    CONVERT_RESULT,
     SMART_SCAN,
     ID_CARD_RESULT,
-    COMPRESS,            // PDF compressor
-    PDF_TO_JPG,          // PDF → JPG images
-    MERGE_PDF,           // Merge multiple PDFs into one
-    MORE_TOOLS,          // Tools grid screen
-    DOCX_TO_PDF,         // Word (.docx) → PDF
-    IMPORT_PDF,          // file picker + device PDF list
+    COMPRESS, // PDF compressor
+    PDF_TO_JPG, // PDF → JPG images
+    MERGE_PDF, // Merge multiple PDFs into one
+    MORE_TOOLS, // Tools grid screen
+    DOCX_TO_PDF, // Word (.docx) → PDF
+    IMPORT_PDF, // file picker + device PDF list
     IMPORTED_PDF_VIEWER, // viewer with Edit / Convert / Share
-    SIGNATURE_PAD,       // full-screen signature drawing (launched from viewer)
-    SPLIT_PDF,           // extract page range into new PDF
-    PAGE_MANAGER,        // rotate / delete pages
-    LOCK_PDF,            // AES-256 password-protect PDF
-    UNLOCK_PDF,          // remove password from locked PDF
-    OCR,                 // extract text from PDF/image via ML Kit
-    PRINT_PDF,           // send to Android PrintManager
-    ONBOARDING,          // first-launch onboarding flow
-    CAMERA_DENIED        // camera permission denied screen
+    SIGNATURE_PAD, // full-screen signature drawing (launched from viewer)
+    SPLIT_PDF, // extract page range into new PDF
+    PAGE_MANAGER, // rotate / delete pages
+    LOCK_PDF, // AES-256 password-protect PDF
+    UNLOCK_PDF, // remove password from locked PDF
+    OCR, // extract text from PDF/image via ML Kit
+    PRINT_PDF, // send to Android PrintManager
+    ONBOARDING, // first-launch onboarding flow
+    CAMERA_DENIED, // camera permission denied screen
 }
 
 // ── Core app models ───────────────────────────────────────────────────────────
-data class ToolItem(val id: Int, val name: String)
+data class ToolItem(
+    val id: Int,
+    val name: String,
+)
 
 data class PdfFile(
-    val name        : String,
-    val filePath    : String,
-    val size        : String,
-    val date        : String,
-    val pageCount   : Int  = 1,
-    val lastModified: Long = 0L
+    val name: String,
+    val filePath: String,
+    val size: String,
+    val date: String,
+    val pageCount: Int = 1,
+    val lastModified: Long = 0L,
 )
 
 // ── File type filter ──────────────────────────────────────────────────────────
 
-enum class FileTypeFilter(val label: String, val extensions: Set<String>) {
-    ALL    ("All",   emptySet()),
-    PDF    ("PDF",   setOf("pdf")),
-    DOCS   ("Docs",  setOf("doc", "docx")),
-    SHEETS ("Excel", setOf("xls", "xlsx")),
-    SLIDES ("PPT",   setOf("ppt", "pptx")),
-    TEXT   ("Text",  setOf("txt", "csv", "tsv", "md")),
-    IMAGES ("Image", setOf("jpg", "jpeg", "png", "webp", "bmp", "gif"))
+enum class FileTypeFilter(
+    val label: String,
+    val extensions: Set<String>,
+) {
+    ALL("All", emptySet()),
+    PDF("PDF", setOf("pdf")),
+    DOCS("Docs", setOf("doc", "docx")),
+    SHEETS("Excel", setOf("xls", "xlsx")),
+    SLIDES("PPT", setOf("ppt", "pptx")),
+    TEXT("Text", setOf("txt", "csv", "tsv", "md")),
+    IMAGES("Image", setOf("jpg", "jpeg", "png", "webp", "bmp", "gif")),
 }
 
-fun List<PdfFile>.filteredBy(filter: FileTypeFilter): List<PdfFile> {
-    return FileCatalog.filter(this, filter)
-}
+fun List<PdfFile>.filteredBy(filter: FileTypeFilter): List<PdfFile> = FileCatalog.filter(this, filter)
 
 // ── Sort options ──────────────────────────────────────────────────────────────
-enum class SortOrder(val label: String) {
-    DATE_DESC  ("Newest first"),
-    DATE_ASC   ("Oldest first"),
-    NAME_ASC   ("Name A→Z"),
-    NAME_DESC  ("Name Z→A"),
-    SIZE_DESC  ("Largest first"),
-    SIZE_ASC   ("Smallest first")
+enum class SortOrder(
+    val label: String,
+) {
+    DATE_DESC("Newest first"),
+    DATE_ASC("Oldest first"),
+    NAME_ASC("Name A→Z"),
+    NAME_DESC("Name Z→A"),
+    SIZE_DESC("Largest first"),
+    SIZE_ASC("Smallest first"),
 }
 
 fun List<PdfFile>.sorted(order: SortOrder): List<PdfFile> = FileCatalog.sort(this, order)
 
 // ── Image filter enum ─────────────────────────────────────────────────────────
-enum class ImageFilter(val label: String) {
-    ORIGINAL  ("Original"),
+enum class ImageFilter(
+    val label: String,
+) {
+    ORIGINAL("Original"),
     AI_ENHANCE("AI"),
-    DOCS      ("Docs"),
-    IMAGE     ("Image"),
-    SUPER     ("Super"),
-    ENHANCE   ("Enhance"),
-    ENHANCE2  ("Enhance2"),
-    BW        ("B&W"),
-    BW2       ("B&W2"),
-    GRAY      ("Gray"),
-    INVERT    ("Invert")
+    DOCS("Docs"),
+    IMAGE("Image"),
+    SUPER("Super"),
+    ENHANCE("Enhance"),
+    ENHANCE2("Enhance2"),
+    BW("B&W"),
+    BW2("B&W2"),
+    GRAY("Gray"),
+    INVERT("Invert"),
 }
 
 // ── Per-image edit state ──────────────────────────────────────────────────────
@@ -106,8 +121,7 @@ data class ImageRenderResult(
     val display: Bitmap,
     val final: Bitmap,
 ) {
-    fun generatedBitmaps(source: Bitmap): List<Bitmap> =
-        uniqueBitmaps(display, final).filter { it !== source }
+    fun generatedBitmaps(source: Bitmap): List<Bitmap> = uniqueBitmaps(display, final).filter { it !== source }
 }
 
 class ImageEditState internal constructor(
@@ -115,18 +129,18 @@ class ImageEditState internal constructor(
     private var temporarySource: TemporaryImportLease? = null,
 ) {
     var originalBitmap by mutableStateOf<Bitmap?>(null)
-    var displayBitmap  by mutableStateOf<Bitmap?>(null)
-    var finalBitmap    by mutableStateOf<Bitmap?>(null)
-    var loadError      by mutableStateOf<String?>(null)
-    var isRendering    by mutableStateOf(false)
+    var displayBitmap by mutableStateOf<Bitmap?>(null)
+    var finalBitmap by mutableStateOf<Bitmap?>(null)
+    var loadError by mutableStateOf<String?>(null)
+    var isRendering by mutableStateOf(false)
 
-    var filter        by mutableStateOf(ImageFilter.ORIGINAL)
-    var brightness    by mutableStateOf(0f)
-    var contrast      by mutableStateOf(0f)
-    var details       by mutableStateOf(0f)
+    var filter by mutableStateOf(ImageFilter.ORIGINAL)
+    var brightness by mutableStateOf(0f)
+    var contrast by mutableStateOf(0f)
+    var details by mutableStateOf(0f)
     var totalRotation by mutableStateOf(0f)
 
-    var cropRect    by mutableStateOf(RectF(0f, 0f, 1f, 1f))
+    var cropRect by mutableStateOf(RectF(0f, 0f, 1f, 1f))
     var cropApplied by mutableStateOf(false)
 
     private val renderUseCounts = IdentityHashMap<Bitmap, Int>()
@@ -172,9 +186,10 @@ class ImageEditState internal constructor(
             "Cannot install a recycled render result"
         }
         val source = originalBitmap
-        val retired = deferRetirement(
-            ownedBitmaps().filterNotSameAs(source, result.display, result.final),
-        )
+        val retired =
+            deferRetirement(
+                ownedBitmaps().filterNotSameAs(source, result.display, result.final),
+            )
         displayBitmap = result.display
         finalBitmap = result.final
         loadError = null
@@ -184,13 +199,14 @@ class ImageEditState internal constructor(
     @Synchronized
     fun installCropPreview(bitmap: Bitmap): List<Bitmap> {
         require(!bitmap.isRecycled) { "Cannot install a recycled crop preview" }
-        val retired = deferRetirement(
-            uniqueBitmaps(displayBitmap).filterNotSameAs(
-                originalBitmap,
-                finalBitmap,
-                bitmap,
-            ),
-        )
+        val retired =
+            deferRetirement(
+                uniqueBitmaps(displayBitmap).filterNotSameAs(
+                    originalBitmap,
+                    finalBitmap,
+                    bitmap,
+                ),
+            )
         displayBitmap = bitmap
         return retired
     }
@@ -242,8 +258,7 @@ class ImageEditState internal constructor(
         temporarySource = null
     }
 
-    private fun ownedBitmaps(): List<Bitmap> =
-        uniqueBitmaps(originalBitmap, displayBitmap, finalBitmap)
+    private fun ownedBitmaps(): List<Bitmap> = uniqueBitmaps(originalBitmap, displayBitmap, finalBitmap)
 
     private fun deferRetirement(candidates: Iterable<Bitmap>): List<Bitmap> =
         candidates.filter { bitmap ->
@@ -268,6 +283,7 @@ object BitmapOwnership {
         if (unique.isEmpty()) return
         mainHandler.post {
             val choreographer = Choreographer.getInstance()
+
             fun recycleAfterFrame(framesRemaining: Int) {
                 if (framesRemaining == 0) {
                     unique.forEach { bitmap ->
@@ -292,33 +308,38 @@ private fun uniqueBitmaps(vararg candidates: Bitmap?): List<Bitmap> {
     return unique
 }
 
-private fun List<Bitmap>.filterNotSameAs(vararg retained: Bitmap?): List<Bitmap> =
-    filter { candidate -> retained.none { it === candidate } }
+private fun List<Bitmap>.filterNotSameAs(vararg retained: Bitmap?): List<Bitmap> = filter { candidate -> retained.none { it === candidate } }
 
 // ── PDF conversion options ────────────────────────────────────────────────────
 data class ConvertOptions(
-    val fileName    : String  = "",
-    val usePassword : Boolean = false,
-    val password    : String  = "",
+    val fileName: String = "",
+    val usePassword: Boolean = false,
+    val password: String = "",
     val whiteMargins: Boolean = false,
-    val compression : String  = "Low Compression",
-    val pageSize    : String  = "A4",
-    val orientation : String  = "Auto"
+    val compression: String = "Low Compression",
+    val pageSize: String = "A4",
+    val orientation: String = "Auto",
 )
 
 // ── Docx / viewer content model ───────────────────────────────────────────────
 // Shared between DocxToPdfScreen and PdfViewerScreen
 
 data class DocRun(
-    val text    : String,
-    val bold    : Boolean = false,
-    val italic  : Boolean = false,
-    val fontSize: Float   = 11f   // points
+    val text: String,
+    val bold: Boolean = false,
+    val italic: Boolean = false,
+    val fontSize: Float = 11f, // points
 )
 
 sealed class DocBlock {
-    data class Paragraph(val runs: List<DocRun>, val headingLevel: Int = 0) : DocBlock()
-    data class ImageBlock(val name: String) : DocBlock()
+    data class Paragraph(
+        val runs: List<DocRun>,
+        val headingLevel: Int = 0,
+    ) : DocBlock()
+
+    data class ImageBlock(
+        val name: String,
+    ) : DocBlock()
+
     object PageBreak : DocBlock()
 }
-

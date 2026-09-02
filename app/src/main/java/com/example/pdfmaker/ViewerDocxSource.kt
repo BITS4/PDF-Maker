@@ -10,9 +10,9 @@ import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.TextPaint
 import android.text.style.StyleSpan
+import kotlinx.coroutines.flow.FlowCollector
 import java.io.File
 import java.util.zip.ZipInputStream
-import kotlinx.coroutines.flow.FlowCollector
 
 private data class DocxViewerSource(
     val documentXml: String,
@@ -20,7 +20,10 @@ private data class DocxViewerSource(
     val media: Map<String, ByteArray>,
 )
 
-internal suspend fun FlowCollector<Bitmap>.emitDocxPages(file: File, width: Int) {
+internal suspend fun FlowCollector<Bitmap>.emitDocxPages(
+    file: File,
+    width: Int,
+) {
     val source = loadDocxViewerSource(file) ?: return
     val relationships = source.relationshipsXml?.let(::parseViewerRelationships).orEmpty()
     val blocks = parseViewerDocument(source.documentXml, relationships)
@@ -38,12 +41,21 @@ private fun loadDocxViewerSource(file: File): DocxViewerSource? {
             val name = entry.name
             budget.beginEntry(name)
             when {
-                name == "word/document.xml" -> documentXml = budget.readXml(zip)
-                name == "word/_rels/document.xml.rels" -> relationshipsXml = budget.readXml(zip)
+                name == "word/document.xml" -> {
+                    documentXml = budget.readXml(zip)
+                }
+
+                name == "word/_rels/document.xml.rels" -> {
+                    relationshipsXml = budget.readXml(zip)
+                }
+
                 isAcceptedWordMedia(name, media.size) -> {
                     media[name.substringAfterLast('/')] = budget.readEntry(zip, ViewerResourceLimits.MAX_MEDIA_BYTES)
                 }
-                else -> budget.skipEntry(zip)
+
+                else -> {
+                    budget.skipEntry(zip)
+                }
             }
             zip.closeEntry()
             entry = zip.nextEntry
@@ -52,8 +64,10 @@ private fun loadDocxViewerSource(file: File): DocxViewerSource? {
     return documentXml?.let { xml -> DocxViewerSource(xml, relationshipsXml, media) }
 }
 
-private fun isAcceptedWordMedia(name: String, mediaCount: Int): Boolean =
-    name.startsWith("word/media/") && mediaCount < ViewerResourceLimits.MAX_MEDIA_ITEMS
+private fun isAcceptedWordMedia(
+    name: String,
+    mediaCount: Int,
+): Boolean = name.startsWith("word/media/") && mediaCount < ViewerResourceLimits.MAX_MEDIA_ITEMS
 
 private class DocxPageRenderer(
     private val collector: FlowCollector<Bitmap>,
@@ -115,7 +129,12 @@ private class DocxPageRenderer(
         return text
     }
 
-    private fun applyRunStyle(text: SpannableStringBuilder, run: DocRun, start: Int, end: Int) {
+    private fun applyRunStyle(
+        text: SpannableStringBuilder,
+        run: DocRun,
+        start: Int,
+        end: Int,
+    ) {
         if (run.bold) text.setSpan(StyleSpan(Typeface.BOLD), start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         if (run.italic) text.setSpan(StyleSpan(Typeface.ITALIC), start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
     }
@@ -135,8 +154,7 @@ private class DocxPageRenderer(
             else -> (block.runs.firstOrNull()?.fontSize ?: 11f) / 72f * 96f
         }
 
-    private fun paragraphSpacing(headingLevel: Int): Float =
-        if (headingLevel > 0) width * 0.008f else width * 0.003f
+    private fun paragraphSpacing(headingLevel: Int): Float = if (headingLevel > 0) width * 0.008f else width * 0.003f
 
     private suspend fun renderImage(block: DocBlock.ImageBlock): Boolean {
         val bytes = media[block.name] ?: return true
@@ -164,8 +182,7 @@ private class DocxPageRenderer(
         }
     }
 
-    private suspend fun ensureVerticalSpace(blockHeight: Float): Boolean =
-        currentY + blockHeight <= pageHeight - margin || flushPage()
+    private suspend fun ensureVerticalSpace(blockHeight: Float): Boolean = currentY + blockHeight <= pageHeight - margin || flushPage()
 
     private suspend fun flushPage(): Boolean {
         collector.emit(bitmap)

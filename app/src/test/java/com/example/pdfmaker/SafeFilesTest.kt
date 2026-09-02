@@ -1,6 +1,5 @@
 package com.example.pdfmaker
 
-import java.io.File
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -10,6 +9,7 @@ import org.junit.Assert.fail
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.File
 
 class SafeFileNameTest {
     @Test
@@ -93,16 +93,17 @@ class OutputStoreTest {
     fun failedPreCommitCheckLeavesNeitherOutputNorTemporaryFile() {
         val root = temporaryFolder.newFolder("cancelled")
 
-        val failure = runCatching {
-            OutputStore.writeUnique(
-                directory = root,
-                requestedBaseName = "cancelled",
-                extension = "pdf",
-                beforeCommit = { error("simulated cancellation") },
-            ) { output ->
-                output.write(byteArrayOf(1, 2, 3))
+        val failure =
+            runCatching {
+                OutputStore.writeUnique(
+                    directory = root,
+                    requestedBaseName = "cancelled",
+                    extension = "pdf",
+                    beforeCommit = { error("simulated cancellation") },
+                ) { output ->
+                    output.write(byteArrayOf(1, 2, 3))
+                }
             }
-        }
 
         assertTrue(failure.isFailure)
         assertTrue(root.listFiles().orEmpty().isEmpty())
@@ -143,11 +144,12 @@ class FailureCleanupTest {
         assertEquals("complete", value)
         assertEquals(0, cleanupCount)
 
-        val failure = runCatching {
-            withFailureCleanup(cleanup = { cleanupCount += 1 }) {
-                throw AssertionError("fatal failure")
+        val failure =
+            runCatching {
+                withFailureCleanup(cleanup = { cleanupCount += 1 }) {
+                    throw AssertionError("fatal failure")
+                }
             }
-        }
         assertTrue(failure.exceptionOrNull() is AssertionError)
         assertEquals(1, cleanupCount)
     }

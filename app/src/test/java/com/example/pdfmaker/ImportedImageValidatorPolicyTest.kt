@@ -1,7 +1,5 @@
 package com.example.pdfmaker
 
-import java.io.File
-import java.util.concurrent.CancellationException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -10,6 +8,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.File
+import java.util.concurrent.CancellationException
 
 class ImportedImageValidatorPolicyTest {
     @get:Rule
@@ -105,8 +105,7 @@ class ImportedImageValidatorPolicyTest {
         assertTrue(decoder.decodedClosed)
     }
 
-    private fun sourceFile(label: String = "source"): File =
-        temporaryFolder.newFile("$label.jpg").apply { writeBytes(byteArrayOf(1)) }
+    private fun sourceFile(label: String = "source"): File = temporaryFolder.newFile("$label.jpg").apply { writeBytes(byteArrayOf(1)) }
 
     private class FakeDecoder(
         private val metadata: ImportedImageMetadata?,
@@ -118,7 +117,10 @@ class ImportedImageValidatorPolicyTest {
 
         override fun readBounds(file: File): ImportedImageMetadata? = metadata
 
-        override fun decodeSample(file: File, sampleSize: Int): ImportedDecodedImage? {
+        override fun decodeSample(
+            file: File,
+            sampleSize: Int,
+        ): ImportedDecodedImage? {
             requestedSampleSize = sampleSize
             val decodedWidthValue = decodedWidth ?: return null
             val decodedHeightValue = decodedHeight ?: return null

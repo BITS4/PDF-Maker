@@ -34,19 +34,19 @@ import androidx.compose.ui.unit.dp
 
 // ── App-wide colour tokens ────────────────────────────────────────────────────
 
-val AccentBlue      = Color(0xFF4F8EF7)
-val BadgeRed        = Color(0xFFEF5350)
-val TextSecond      = Color(0xFF9999BB)
-val BgToolIcon      = Color(0xFF252535)
+val AccentBlue = Color(0xFF4F8EF7)
+val BadgeRed = Color(0xFFEF5350)
+val TextSecond = Color(0xFF9999BB)
+val BgToolIcon = Color(0xFF252535)
 
 // Fixed dark-theme colours (the app uses a single dark theme)
-val currentBg          = Color(0xFF0D0D16)
-val currentCard        = Color(0xFF1A1A2A)
-val currentText        = Color.White
-val currentTextSecond  = Color(0xFF9999BB)
-val currentDivider     = Color(0xFF2A2A3A)
-val currentThumbnail   = Color(0xFF252535)
-val currentToolIcon    = Color(0xFF252535)
+val currentBg = Color(0xFF0D0D16)
+val currentCard = Color(0xFF1A1A2A)
+val currentText = Color.White
+val currentTextSecond = Color(0xFF9999BB)
+val currentDivider = Color(0xFF2A2A3A)
+val currentThumbnail = Color(0xFF252535)
+val currentToolIcon = Color(0xFF252535)
 
 // ── Scan mode ─────────────────────────────────────────────────────────────────
 
@@ -55,10 +55,9 @@ enum class ScanMode { DOCS, ID_CARD }
 // ── Global image-to-PDF state ─────────────────────────────────────────────────
 
 object ImageToPdfState {
-
     val editStates = mutableStateListOf<ImageEditState>()
     var currentEditIndex by mutableStateOf(0)
-    var isIdCardScan     by mutableStateOf(false)
+    var isIdCardScan by mutableStateOf(false)
 
     fun addUris(uris: List<Uri>): Int {
         val currentUris = editStates.map(ImageEditState::uri)
@@ -67,7 +66,10 @@ object ImageToPdfState {
         return selection.rejectedCount
     }
 
-    internal fun replaceWithTemporaryImport(uri: Uri, source: TemporaryImportLease) {
+    internal fun replaceWithTemporaryImport(
+        uri: Uri,
+        source: TemporaryImportLease,
+    ) {
         clear()
         editStates += ImageEditState(uri, source)
         currentEditIndex = 0
@@ -77,7 +79,7 @@ object ImageToPdfState {
         editStates.forEach { BitmapOwnership.retire(it.releaseBitmaps()) }
         editStates.clear()
         currentEditIndex = 0
-        isIdCardScan     = false
+        isIdCardScan = false
     }
 
     fun removeAt(index: Int) {
@@ -97,7 +99,6 @@ object SmartScanState {
 // ── Settings manager ──────────────────────────────────────────────────────────
 
 object SettingsManager {
-
     private const val PREFS = "pdfmaker_prefs"
 
     private const val PIN_CREDENTIAL = "pin_credential"
@@ -116,41 +117,60 @@ object SettingsManager {
         val preferences = context.getSharedPreferences(PREFS, 0)
         val credential = preferences.getString(PIN_CREDENTIAL, "").orEmpty()
         return PinCredential.pinLength(credential)
-            ?: preferences.getString(LEGACY_PIN, "").orEmpty().length.takeIf { it in 4..6 }
+            ?: preferences
+                .getString(LEGACY_PIN, "")
+                .orEmpty()
+                .length
+                .takeIf { it in 4..6 }
             ?: 4
     }
 
-    fun savePin(context: Context, pin: String) {
+    fun savePin(
+        context: Context,
+        pin: String,
+    ) {
         require(PinCredential.isValidPin(pin)) { "PIN must contain 4 to 6 digits" }
-        context.getSharedPreferences(PREFS, 0).edit()
+        context
+            .getSharedPreferences(PREFS, 0)
+            .edit()
             .putString(PIN_CREDENTIAL, PinCredential.create(pin))
             .remove(LEGACY_PIN)
             .apply()
         clearPinFailures(context)
     }
 
-    fun verifyPin(context: Context, candidate: String): Boolean {
+    fun verifyPin(
+        context: Context,
+        candidate: String,
+    ): Boolean {
         val preferences = context.getSharedPreferences(PREFS, 0)
         val credential = preferences.getString(PIN_CREDENTIAL, "").orEmpty()
         if (PinCredential.isCredential(credential)) return PinCredential.verify(candidate, credential)
 
         // One-time migration from releases that stored the PIN in plaintext.
         val legacy = preferences.getString(LEGACY_PIN, "").orEmpty()
-        val matches = PinCredential.isValidPin(legacy) &&
-            java.security.MessageDigest.isEqual(candidate.toByteArray(), legacy.toByteArray())
+        val matches =
+            PinCredential.isValidPin(legacy) &&
+                java.security.MessageDigest.isEqual(candidate.toByteArray(), legacy.toByteArray())
         if (matches) savePin(context, candidate)
         return matches
     }
 
     fun failedPinAttempts(context: Context): Int = currentAttemptState(context).failedAttempts
 
-    fun remainingPinLockoutSeconds(context: Context, nowEpochMillis: Long = System.currentTimeMillis()): Int {
+    fun remainingPinLockoutSeconds(
+        context: Context,
+        nowEpochMillis: Long = System.currentTimeMillis(),
+    ): Int {
         val current = normalizedAttemptState(context, nowEpochMillis)
         val millis = PinLockoutPolicy.remainingMillis(current, nowEpochMillis)
         return ((millis + 999L) / 1_000L).toInt()
     }
 
-    fun recordFailedPinAttempt(context: Context, nowEpochMillis: Long = System.currentTimeMillis()): Int {
+    fun recordFailedPinAttempt(
+        context: Context,
+        nowEpochMillis: Long = System.currentTimeMillis(),
+    ): Int {
         val next = PinLockoutPolicy.recordFailure(normalizedAttemptState(context, nowEpochMillis), nowEpochMillis)
         saveAttemptState(context, next)
         return ((PinLockoutPolicy.remainingMillis(next, nowEpochMillis) + 999L) / 1_000L).toInt()
@@ -160,12 +180,18 @@ object SettingsManager {
         saveAttemptState(context, PinAttemptState())
     }
 
-    fun getSecurityEnabled(context: Context): Boolean =
-        context.getSharedPreferences(PREFS, 0).getBoolean("security_enabled", false)
+    fun getSecurityEnabled(context: Context): Boolean = context.getSharedPreferences(PREFS, 0).getBoolean("security_enabled", false)
 
-    fun setSecurityEnabled(context: Context, enabled: Boolean) {
+    fun setSecurityEnabled(
+        context: Context,
+        enabled: Boolean,
+    ) {
         val safeValue = enabled && hasPin(context)
-        context.getSharedPreferences(PREFS, 0).edit().putBoolean("security_enabled", safeValue).apply()
+        context
+            .getSharedPreferences(PREFS, 0)
+            .edit()
+            .putBoolean("security_enabled", safeValue)
+            .apply()
     }
 
     private fun currentAttemptState(context: Context): PinAttemptState {
@@ -176,15 +202,23 @@ object SettingsManager {
         )
     }
 
-    private fun normalizedAttemptState(context: Context, nowEpochMillis: Long): PinAttemptState {
+    private fun normalizedAttemptState(
+        context: Context,
+        nowEpochMillis: Long,
+    ): PinAttemptState {
         val current = currentAttemptState(context)
         val normalized = PinLockoutPolicy.afterExpiry(current, nowEpochMillis)
         if (normalized != current) saveAttemptState(context, normalized)
         return normalized
     }
 
-    private fun saveAttemptState(context: Context, state: PinAttemptState) {
-        context.getSharedPreferences(PREFS, 0).edit()
+    private fun saveAttemptState(
+        context: Context,
+        state: PinAttemptState,
+    ) {
+        context
+            .getSharedPreferences(PREFS, 0)
+            .edit()
             .putInt(PIN_FAILURES, state.failedAttempts)
             .putLong(PIN_LOCKED_UNTIL, state.lockedUntilEpochMillis)
             .apply()
@@ -195,45 +229,76 @@ object SettingsManager {
 
 enum class NavDirection { LEFT, RIGHT, NONE }
 
-fun navDirectionFor(from: Screen, to: Screen): NavDirection {
-    val order = listOf(
-        Screen.HOME, Screen.FILES, Screen.SETTINGS,
-        Screen.IMAGE_SELECTION, Screen.IMAGE_EDIT, Screen.IMAGE_CROP, Screen.IMAGE_REVIEW, Screen.CONVERT_RESULT,
-        Screen.SMART_SCAN, Screen.COMPRESS, Screen.PDF_TO_JPG,
-        Screen.MERGE_PDF, Screen.MORE_TOOLS, Screen.DOCX_TO_PDF,
-        Screen.IMPORT_PDF, Screen.IMPORTED_PDF_VIEWER, Screen.SIGNATURE_PAD,
-        Screen.SPLIT_PDF, Screen.PAGE_MANAGER, Screen.LOCK_PDF, Screen.UNLOCK_PDF,
-        Screen.OCR, Screen.PRINT_PDF, Screen.CAMERA_DENIED,
-        Screen.ONBOARDING, Screen.ID_CARD_RESULT
-    )
+fun navDirectionFor(
+    from: Screen,
+    to: Screen,
+): NavDirection {
+    val order =
+        listOf(
+            Screen.HOME,
+            Screen.FILES,
+            Screen.SETTINGS,
+            Screen.IMAGE_SELECTION,
+            Screen.IMAGE_EDIT,
+            Screen.IMAGE_CROP,
+            Screen.IMAGE_REVIEW,
+            Screen.CONVERT_RESULT,
+            Screen.SMART_SCAN,
+            Screen.COMPRESS,
+            Screen.PDF_TO_JPG,
+            Screen.MERGE_PDF,
+            Screen.MORE_TOOLS,
+            Screen.DOCX_TO_PDF,
+            Screen.IMPORT_PDF,
+            Screen.IMPORTED_PDF_VIEWER,
+            Screen.SIGNATURE_PAD,
+            Screen.SPLIT_PDF,
+            Screen.PAGE_MANAGER,
+            Screen.LOCK_PDF,
+            Screen.UNLOCK_PDF,
+            Screen.OCR,
+            Screen.PRINT_PDF,
+            Screen.CAMERA_DENIED,
+            Screen.ONBOARDING,
+            Screen.ID_CARD_RESULT,
+        )
     val fromIdx = order.indexOf(from)
-    val toIdx   = order.indexOf(to)
+    val toIdx = order.indexOf(to)
     return when {
         fromIdx == -1 || toIdx == -1 || fromIdx == toIdx -> NavDirection.NONE
         toIdx > fromIdx -> NavDirection.LEFT
-        else            -> NavDirection.RIGHT
+        else -> NavDirection.RIGHT
     }
 }
 
 @Composable
 fun ScreenTransition(
     targetState: Screen,
-    direction  : NavDirection,
-    content    : @Composable (Screen) -> Unit
+    direction: NavDirection,
+    content: @Composable (Screen) -> Unit,
 ) {
     val slideDistance = 300
-    val transform: ContentTransform = when (direction) {
-        NavDirection.LEFT  -> slideInHorizontally(tween(260)) { slideDistance } + fadeIn(tween(200)) togetherWith
-                             slideOutHorizontally(tween(260)) { -slideDistance } + fadeOut(tween(200))
-        NavDirection.RIGHT -> slideInHorizontally(tween(260)) { -slideDistance } + fadeIn(tween(200)) togetherWith
-                             slideOutHorizontally(tween(260)) { slideDistance } + fadeOut(tween(200))
-        NavDirection.NONE  -> fadeIn(tween(160)) togetherWith fadeOut(tween(160))
-    }
+    val transform: ContentTransform =
+        when (direction) {
+            NavDirection.LEFT -> {
+                slideInHorizontally(tween(260)) { slideDistance } + fadeIn(tween(200)) togetherWith
+                    slideOutHorizontally(tween(260)) { -slideDistance } + fadeOut(tween(200))
+            }
+
+            NavDirection.RIGHT -> {
+                slideInHorizontally(tween(260)) { -slideDistance } + fadeIn(tween(200)) togetherWith
+                    slideOutHorizontally(tween(260)) { slideDistance } + fadeOut(tween(200))
+            }
+
+            NavDirection.NONE -> {
+                fadeIn(tween(160)) togetherWith fadeOut(tween(160))
+            }
+        }
 
     AnimatedContent(
-        targetState   = targetState,
+        targetState = targetState,
         transitionSpec = { transform },
-        label         = "screenTransition"
+        label = "screenTransition",
     ) { screen ->
         content(screen)
     }
@@ -247,26 +312,28 @@ fun SectionHeaderSkeleton() {
         Modifier
             .fillMaxWidth()
             .padding(top = 8.dp)
-            .background(currentCard, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+            .background(currentCard, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
     ) {
         Row(
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
                 Modifier
-                    .width(100.dp).height(18.dp)
+                    .width(100.dp)
+                    .height(18.dp)
                     .clip(RoundedCornerShape(6.dp))
-                    .background(currentThumbnail)
+                    .background(currentThumbnail),
             )
             Spacer(Modifier.weight(1f))
             Box(
                 Modifier
-                    .width(60.dp).height(14.dp)
+                    .width(60.dp)
+                    .height(14.dp)
                     .clip(RoundedCornerShape(6.dp))
-                    .background(currentThumbnail)
+                    .background(currentThumbnail),
             )
         }
     }
@@ -280,28 +347,30 @@ fun FileItemSkeleton() {
                 Modifier
                     .fillMaxWidth()
                     .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
                     Modifier
                         .size(width = 72.dp, height = 80.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(currentThumbnail)
+                        .background(currentThumbnail),
                 )
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Box(
                         Modifier
-                            .fillMaxWidth(0.7f).height(14.dp)
+                            .fillMaxWidth(0.7f)
+                            .height(14.dp)
                             .clip(RoundedCornerShape(6.dp))
-                            .background(currentThumbnail)
+                            .background(currentThumbnail),
                     )
                     Spacer(Modifier.height(8.dp))
                     Box(
                         Modifier
-                            .fillMaxWidth(0.4f).height(12.dp)
+                            .fillMaxWidth(0.4f)
+                            .height(12.dp)
                             .clip(RoundedCornerShape(6.dp))
-                            .background(currentThumbnail)
+                            .background(currentThumbnail),
                     )
                 }
             }
@@ -309,7 +378,7 @@ fun FileItemSkeleton() {
                 Modifier
                     .fillMaxWidth()
                     .height(0.5.dp)
-                    .background(currentDivider)
+                    .background(currentDivider),
             )
         }
     }

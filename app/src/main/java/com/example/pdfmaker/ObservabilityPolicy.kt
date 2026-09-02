@@ -23,7 +23,11 @@ object ObservabilityPolicy {
         if (uri.host.isNullOrBlank() || uri.rawQuery != null || uri.rawFragment != null) return false
 
         val publicKey = uri.rawUserInfo?.substringBefore(':').orEmpty()
-        val projectId = uri.path.orEmpty().trim('/').substringAfterLast('/')
+        val projectId =
+            uri.path
+                .orEmpty()
+                .trim('/')
+                .substringAfterLast('/')
         return publicKey.isNotBlank() && projectId.matches(safeProjectId)
     }
 
@@ -32,17 +36,24 @@ object ObservabilityPolicy {
             ?.takeIf { it.length in 1..MAX_LOG_TAG_LENGTH && it.matches(safeLogTag) }
             ?: "PdfMaker"
 
-    fun safeLogMessage(priority: Int, throwable: Throwable?): String = buildString {
-        append("event=application_log priority=")
-        append(priority)
-        if (throwable != null) {
-            append(" failure_type=")
-            append(throwable.javaClass.simpleName.take(64).filter(Char::isLetterOrDigit))
+    fun safeLogMessage(
+        priority: Int,
+        throwable: Throwable?,
+    ): String =
+        buildString {
+            append("event=application_log priority=")
+            append(priority)
+            if (throwable != null) {
+                append(" failure_type=")
+                append(
+                    throwable.javaClass.simpleName
+                        .take(64)
+                        .filter(Char::isLetterOrDigit),
+                )
+            }
         }
-    }
 
-    fun sanitizedThrowable(source: Throwable): Throwable =
-        TelemetryFailure().also { safe -> safe.stackTrace = source.stackTrace }
+    fun sanitizedThrowable(source: Throwable): Throwable = TelemetryFailure().also { safe -> safe.stackTrace = source.stackTrace }
 
     private class TelemetryFailure : RuntimeException(REDACTED_EVENT_MESSAGE)
 }

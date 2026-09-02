@@ -14,12 +14,12 @@ import androidx.compose.ui.graphics.toArgb
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import timber.log.Timber
 import java.io.File
 import java.io.FilterOutputStream
 import java.io.OutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
-import timber.log.Timber
 
 private const val PDF_EDITOR_LOG_TAG = "PdfEditor"
 
@@ -51,25 +51,31 @@ private fun renderPageOrThrow(
         PdfRenderer(it).use { renderer ->
             require(pageIndex in 0 until renderer.pageCount) { "PDF page is outside the document" }
             renderer.openPage(pageIndex).use { page ->
-                val target = PdfEditorRenderPolicy.targetSize(page.width, page.height, widthPx)
-                    ?: error("PDF page has invalid dimensions")
+                val target =
+                    PdfEditorRenderPolicy.targetSize(page.width, page.height, widthPx)
+                        ?: error("PDF page has invalid dimensions")
                 renderScaledPdfPage(page, target)
             }
         }
     }
 }
 
-private fun renderScaledPdfPage(page: PdfRenderer.Page, target: PixelSize): Bitmap {
+private fun renderScaledPdfPage(
+    page: PdfRenderer.Page,
+    target: PixelSize,
+): Bitmap {
     val bitmap = Bitmap.createBitmap(target.width, target.height, Bitmap.Config.ARGB_8888)
     var completed = false
     try {
         Canvas(bitmap).drawColor(android.graphics.Color.WHITE)
-        val renderScale = requireNotNull(
-            RenderSizing.scaleTo(page.width, page.height, target),
-        ) { "PDF page has invalid render dimensions" }
-        val transform = Matrix().apply {
-            setScale(renderScale.scaleX, renderScale.scaleY)
-        }
+        val renderScale =
+            requireNotNull(
+                RenderSizing.scaleTo(page.width, page.height, target),
+            ) { "PDF page has invalid render dimensions" }
+        val transform =
+            Matrix().apply {
+                setScale(renderScale.scaleX, renderScale.scaleY)
+            }
         page.render(bitmap, null, transform, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
         completed = true
         return bitmap
@@ -92,12 +98,18 @@ internal fun pdfPageCount(
         0
     }
 
-private fun requirePdfPageCount(context: Context, uri: Uri): Int {
+private fun requirePdfPageCount(
+    context: Context,
+    uri: Uri,
+): Int {
     val descriptor = openPdfDescriptor(context, uri)
     return descriptor.use { PdfRenderer(it).use(PdfRenderer::getPageCount) }
 }
 
-private fun openPdfDescriptor(context: Context, uri: Uri): ParcelFileDescriptor =
+private fun openPdfDescriptor(
+    context: Context,
+    uri: Uri,
+): ParcelFileDescriptor =
     when (uri.scheme) {
         "content" -> {
             require(!uri.authority.isNullOrBlank()) { "The PDF provider is invalid" }
@@ -113,7 +125,9 @@ private fun openPdfDescriptor(context: Context, uri: Uri): ParcelFileDescriptor 
             ParcelFileDescriptor.open(source, ParcelFileDescriptor.MODE_READ_ONLY)
         }
 
-        else -> throw IllegalArgumentException("Only content-provider or app-cached PDFs can be opened")
+        else -> {
+            throw IllegalArgumentException("Only content-provider or app-cached PDFs can be opened")
+        }
     }
 
 internal suspend fun buildAnnotatedPdf(
@@ -148,13 +162,14 @@ internal suspend fun buildAnnotatedPdf(
             }
         }
         currentCoroutineContext().ensureActive()
-        return OutputStore.writeUnique(
-            directory = pdfMakerCacheDirectory(context),
-            requestedBaseName = destName.substringBeforeLast('.'),
-            extension = "pdf",
-        ) { output ->
-            document.writeTo(BoundedIo.limit(output, PdfEditorRenderPolicy.MAX_PACKAGE_BYTES))
-        }.also { onProgress(100) }
+        return OutputStore
+            .writeUnique(
+                directory = pdfMakerCacheDirectory(context),
+                requestedBaseName = destName.substringBeforeLast('.'),
+                extension = "pdf",
+            ) { output ->
+                document.writeTo(BoundedIo.limit(output, PdfEditorRenderPolicy.MAX_PACKAGE_BYTES))
+            }.also { onProgress(100) }
     } finally {
         document.close()
     }
@@ -241,37 +256,38 @@ internal suspend fun pdfToDocx(
     val relationships = mutableListOf<String>()
     val body = StringBuilder()
 
-    return OutputStore.writeUnique(
-        directory = pdfMakerCacheDirectory(context),
-        requestedBaseName = destName.substringBeforeLast('.'),
-        extension = "docx",
-    ) { output ->
-        boundedZip(output).use { zip ->
-            for (index in 0 until count) {
-                operationContext.ensureActive()
-                onProgress((index + 1) * 85 / count)
-                val bitmap = renderPageOrThrow(context, uri, index, width)
-                try {
-                    val image = "image${index + 1}.jpg"
-                    val relationshipId = "rId${200 + index}"
-                    zip.addJpegEntry("word/media/$image", bitmap)
-                    relationships += docxImageRelationshipXml(relationshipId, image)
-                    body.append(docxPictureParagraphXml(index, image, relationshipId, bitmap.width, bitmap.height))
-                    if (index < count - 1) body.append("<w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>")
-                } finally {
-                    bitmap.recycle()
+    return OutputStore
+        .writeUnique(
+            directory = pdfMakerCacheDirectory(context),
+            requestedBaseName = destName.substringBeforeLast('.'),
+            extension = "docx",
+        ) { output ->
+            boundedZip(output).use { zip ->
+                for (index in 0 until count) {
+                    operationContext.ensureActive()
+                    onProgress((index + 1) * 85 / count)
+                    val bitmap = renderPageOrThrow(context, uri, index, width)
+                    try {
+                        val image = "image${index + 1}.jpg"
+                        val relationshipId = "rId${200 + index}"
+                        zip.addJpegEntry("word/media/$image", bitmap)
+                        relationships += docxImageRelationshipXml(relationshipId, image)
+                        body.append(docxPictureParagraphXml(index, image, relationshipId, bitmap.width, bitmap.height))
+                        if (index < count - 1) body.append("<w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>")
+                    } finally {
+                        bitmap.recycle()
+                    }
                 }
-            }
 
-            operationContext.ensureActive()
-            val parts = buildDocxPackageXml(body.toString(), relationships)
-            zip.addEntry("[Content_Types].xml", parts.contentTypes)
-            zip.addEntry("_rels/.rels", parts.rootRelationships)
-            zip.addEntry("word/document.xml", parts.document)
-            zip.addEntry("word/styles.xml", parts.styles)
-            zip.addEntry("word/_rels/document.xml.rels", parts.documentRelationships)
-        }
-    }.also { onProgress(100) }
+                operationContext.ensureActive()
+                val parts = buildDocxPackageXml(body.toString(), relationships)
+                zip.addEntry("[Content_Types].xml", parts.contentTypes)
+                zip.addEntry("_rels/.rels", parts.rootRelationships)
+                zip.addEntry("word/document.xml", parts.document)
+                zip.addEntry("word/styles.xml", parts.styles)
+                zip.addEntry("word/_rels/document.xml.rels", parts.documentRelationships)
+            }
+        }.also { onProgress(100) }
 }
 
 @Suppress("SpellCheckingInspection")
@@ -287,38 +303,39 @@ internal suspend fun pdfToPptx(
     val slides = mutableListOf<String>()
     val slideRelationships = mutableListOf<String>()
 
-    return OutputStore.writeUnique(
-        directory = pdfMakerCacheDirectory(context),
-        requestedBaseName = destName.substringBeforeLast('.'),
-        extension = "pptx",
-    ) { output ->
-        boundedZip(output).use { zip ->
-            for (index in 0 until count) {
+    return OutputStore
+        .writeUnique(
+            directory = pdfMakerCacheDirectory(context),
+            requestedBaseName = destName.substringBeforeLast('.'),
+            extension = "pptx",
+        ) { output ->
+            boundedZip(output).use { zip ->
+                for (index in 0 until count) {
+                    operationContext.ensureActive()
+                    onProgress((index + 1) * 85 / count)
+                    val bitmap = renderPageOrThrow(context, uri, index, width)
+                    try {
+                        val image = "image${index + 1}.jpg"
+                        zip.addJpegEntry("ppt/media/$image", bitmap)
+                        slides += pptxPictureSlideXml(index, image, bitmap.width, bitmap.height)
+                        slideRelationships += pptxImageRelationshipXml(image)
+                    } finally {
+                        bitmap.recycle()
+                    }
+                }
+
                 operationContext.ensureActive()
-                onProgress((index + 1) * 85 / count)
-                val bitmap = renderPageOrThrow(context, uri, index, width)
-                try {
-                    val image = "image${index + 1}.jpg"
-                    zip.addJpegEntry("ppt/media/$image", bitmap)
-                    slides += pptxPictureSlideXml(index, image, bitmap.width, bitmap.height)
-                    slideRelationships += pptxImageRelationshipXml(image)
-                } finally {
-                    bitmap.recycle()
+                val parts = buildPptxPackageXml(slides.size)
+                zip.addEntry("[Content_Types].xml", parts.contentTypes)
+                zip.addEntry("_rels/.rels", parts.rootRelationships)
+                zip.addEntry("ppt/presentation.xml", parts.presentation)
+                zip.addEntry("ppt/_rels/presentation.xml.rels", parts.presentationRelationships)
+                slides.forEachIndexed { index, slide ->
+                    zip.addEntry("ppt/slides/slide${index + 1}.xml", slide)
+                    zip.addEntry("ppt/slides/_rels/slide${index + 1}.xml.rels", slideRelationships[index])
                 }
             }
-
-            operationContext.ensureActive()
-            val parts = buildPptxPackageXml(slides.size)
-            zip.addEntry("[Content_Types].xml", parts.contentTypes)
-            zip.addEntry("_rels/.rels", parts.rootRelationships)
-            zip.addEntry("ppt/presentation.xml", parts.presentation)
-            zip.addEntry("ppt/_rels/presentation.xml.rels", parts.presentationRelationships)
-            slides.forEachIndexed { index, slide ->
-                zip.addEntry("ppt/slides/slide${index + 1}.xml", slide)
-                zip.addEntry("ppt/slides/_rels/slide${index + 1}.xml.rels", slideRelationships[index])
-            }
-        }
-    }.also { onProgress(100) }
+        }.also { onProgress(100) }
 }
 
 private fun boundedZip(output: OutputStream): ZipOutputStream =
@@ -326,13 +343,18 @@ private fun boundedZip(output: OutputStream): ZipOutputStream =
         BoundedIo.limit(CloseShieldOutputStream(output), PdfEditorRenderPolicy.MAX_PACKAGE_BYTES),
     )
 
-private class CloseShieldOutputStream(output: OutputStream) : FilterOutputStream(output) {
+private class CloseShieldOutputStream(
+    output: OutputStream,
+) : FilterOutputStream(output) {
     override fun close() {
         flush()
     }
 }
 
-private fun ZipOutputStream.addJpegEntry(name: String, bitmap: Bitmap) {
+private fun ZipOutputStream.addJpegEntry(
+    name: String,
+    bitmap: Bitmap,
+) {
     putNextEntry(ZipEntry(name))
     try {
         check(bitmap.compress(Bitmap.CompressFormat.JPEG, 88, this)) { "Could not encode PDF page" }

@@ -65,14 +65,15 @@ internal fun extractDocxConversionArchive(
                 val output = File(extractionDirectory, "${UUID.randomUUID()}.media")
                 var completed = false
                 try {
-                    val copied = FileOutputStream(output).use { destination ->
-                        BoundedIo.copy(
-                            zip,
-                            destination,
-                            remainingLimit(SafeDocxInput.MAX_MEDIA_BYTES),
-                            beforeChunk,
-                        )
-                    }
+                    val copied =
+                        FileOutputStream(output).use { destination ->
+                            BoundedIo.copy(
+                                zip,
+                                destination,
+                                remainingLimit(SafeDocxInput.MAX_MEDIA_BYTES),
+                                beforeChunk,
+                            )
+                        }
                     require(copied > 0) { "DOCX contains an empty media item" }
                     totalRead += copied
                     mediaFiles[mediaName] = output
@@ -83,12 +84,13 @@ internal fun extractDocxConversionArchive(
             }
 
             fun skipPart() {
-                val copied = BoundedIo.copy(
-                    zip,
-                    DISCARDING_OUTPUT,
-                    remainingLimit(SafeDocxInput.MAX_CONVERSION_BYTES),
-                    beforeChunk,
-                )
+                val copied =
+                    BoundedIo.copy(
+                        zip,
+                        DISCARDING_OUTPUT,
+                        remainingLimit(SafeDocxInput.MAX_CONVERSION_BYTES),
+                        beforeChunk,
+                    )
                 totalRead += copied
             }
 
@@ -99,31 +101,40 @@ internal fun extractDocxConversionArchive(
                 entryCount += 1
                 require(entryCount <= SafeDocxInput.MAX_ENTRIES) { "DOCX contains too many entries" }
                 when {
-                    entry.isDirectory -> Unit
+                    entry.isDirectory -> {
+                        Unit
+                    }
+
                     entry.name == "word/document.xml" -> {
                         require(documentXml == null) { "DOCX contains duplicate document XML" }
                         documentXml = readXmlPart(SafeDocxInput.MAX_XML_BYTES)
                     }
+
                     entry.name == "word/_rels/document.xml.rels" -> {
                         require(relationshipsXml == null) { "DOCX contains duplicate relationships XML" }
                         relationshipsXml = readXmlPart(SafeDocxInput.MAX_RELATIONSHIPS_BYTES)
                     }
+
                     entry.name.startsWith("word/media/") -> {
                         extractMediaPart(entry.name.substringAfterLast('/'))
                     }
-                    else -> skipPart()
+
+                    else -> {
+                        skipPart()
+                    }
                 }
                 zip.closeEntry()
                 beforeChunk()
                 entry = zip.nextEntry
             }
         }
-        val archive = DocxConversionArchive(
-            documentXml = requireNotNull(documentXml) { "DOCX document XML is missing" },
-            relationshipsXml = relationshipsXml,
-            mediaFiles = mediaFiles.toMap(),
-            extractionDirectory = extractionDirectory,
-        )
+        val archive =
+            DocxConversionArchive(
+                documentXml = requireNotNull(documentXml) { "DOCX document XML is missing" },
+                relationshipsXml = relationshipsXml,
+                mediaFiles = mediaFiles.toMap(),
+                extractionDirectory = extractionDirectory,
+            )
         ownershipTransferred = true
         return archive
     } finally {
@@ -134,8 +145,13 @@ internal fun extractDocxConversionArchive(
     }
 }
 
-private val DISCARDING_OUTPUT = object : OutputStream() {
-    override fun write(value: Int) = Unit
+private val DISCARDING_OUTPUT =
+    object : OutputStream() {
+        override fun write(value: Int) = Unit
 
-    override fun write(bytes: ByteArray, offset: Int, length: Int) = Unit
-}
+        override fun write(
+            bytes: ByteArray,
+            offset: Int,
+            length: Int,
+        ) = Unit
+    }

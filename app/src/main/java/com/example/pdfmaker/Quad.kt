@@ -10,7 +10,10 @@ data class Quad(
 ) {
     fun points(): List<PointF> = listOf(tl, tr, br, bl)
 
-    fun withPoint(index: Int, point: PointF): Quad =
+    fun withPoint(
+        index: Int,
+        point: PointF,
+    ): Quad =
         when (index) {
             0 -> copy(tl = point)
             1 -> copy(tr = point)

@@ -23,46 +23,52 @@ import kotlinx.coroutines.delay
 
 @Composable
 fun SplashScreen(onReady: () -> Unit) {
-    val scale   = remember { Animatable(0.6f) }
-    val alpha   = remember { Animatable(0f) }
+    val scale = remember { Animatable(0.6f) }
+    val alpha = remember { Animatable(0f) }
 
     LaunchedEffect(Unit) {
         // Animate in
-        scale.animateTo(1f,   tween(400))
-        alpha.animateTo(1f,   tween(300))
+        scale.animateTo(1f, tween(400))
+        alpha.animateTo(1f, tween(300))
         delay(800)
         onReady()
     }
 
     Box(
         Modifier.fillMaxSize().background(Color(0xFFC62828)),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.scale(scale.value)
+            modifier = Modifier.scale(scale.value),
         ) {
             // App icon circle
             Box(
-                Modifier.size(100.dp).clip(RoundedCornerShape(24.dp))
+                Modifier
+                    .size(100.dp)
+                    .clip(RoundedCornerShape(24.dp))
                     .background(Color.White.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Default.PictureAsPdf, null,
-                    tint = Color.White, modifier = Modifier.size(60.dp))
+                Icon(
+                    Icons.Default.PictureAsPdf,
+                    null,
+                    tint = Color.White,
+                    modifier = Modifier.size(60.dp),
+                )
             }
             Spacer(Modifier.height(20.dp))
             Text(
                 "PDF Maker",
-                color      = Color.White,
-                fontSize   = 28.sp,
-                fontWeight = FontWeight.Bold
+                color = Color.White,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
             )
             Spacer(Modifier.height(6.dp))
             Text(
                 "Create · Edit · Secure",
-                color    = Color.White.copy(alpha = 0.75f),
-                fontSize = 14.sp
+                color = Color.White.copy(alpha = 0.75f),
+                fontSize = 14.sp,
             )
         }
     }

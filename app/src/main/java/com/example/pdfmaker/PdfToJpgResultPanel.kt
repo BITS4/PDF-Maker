@@ -118,9 +118,10 @@ internal fun JpgResultPanel(
             enabled = !status.savingToGallery && !status.savedToGallery,
             modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (status.savedToGallery) Color(0xFF388E3C) else Color(0xFF4CAF50),
-            ),
+            colors =
+                ButtonDefaults.buttonColors(
+                    containerColor = if (status.savedToGallery) Color(0xFF388E3C) else Color(0xFF4CAF50),
+                ),
         ) {
             Icon(
                 if (status.savedToGallery) Icons.Default.CheckCircle else Icons.Default.SaveAlt,
@@ -190,11 +191,12 @@ private fun JpgResultThumbnail(
     LaunchedEffect(file.absolutePath) {
         var pending: Bitmap? = null
         try {
-            val decoded = withContext(Dispatchers.IO) {
-                decodeSlots.withPermit {
-                    decodeJpgResultThumbnail(file).getOrThrow().also { pending = it }
+            val decoded =
+                withContext(Dispatchers.IO) {
+                    decodeSlots.withPermit {
+                        decodeJpgResultThumbnail(file).getOrThrow().also { pending = it }
+                    }
                 }
-            }
             ensureActive()
             bitmap = decoded
             pending = null
@@ -216,23 +218,31 @@ private fun JpgResultThumbnail(
         contentAlignment = Alignment.Center,
     ) {
         when {
-            bitmap != null -> Image(
-                checkNotNull(bitmap).asImageBitmap(),
-                contentDescription = "Converted page ${index + 1}",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-            )
-            failed -> Icon(
-                Icons.Default.BrokenImage,
-                contentDescription = "Preview unavailable",
-                tint = Color(0xFF9999BB),
-                modifier = Modifier.size(28.dp),
-            )
-            else -> CircularProgressIndicator(
-                color = AccentBlue,
-                strokeWidth = 2.dp,
-                modifier = Modifier.size(24.dp),
-            )
+            bitmap != null -> {
+                Image(
+                    checkNotNull(bitmap).asImageBitmap(),
+                    contentDescription = "Converted page ${index + 1}",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            }
+
+            failed -> {
+                Icon(
+                    Icons.Default.BrokenImage,
+                    contentDescription = "Preview unavailable",
+                    tint = Color(0xFF9999BB),
+                    modifier = Modifier.size(28.dp),
+                )
+            }
+
+            else -> {
+                CircularProgressIndicator(
+                    color = AccentBlue,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
         }
         Box(
             Modifier

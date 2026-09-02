@@ -14,7 +14,10 @@ object ImageTransformPolicy {
     const val MAX_THUMBNAIL_EDGE = 512
     private const val FULL_CROP_EPSILON = 0.001f
 
-    fun requireProcessableDimensions(width: Int, height: Int) {
+    fun requireProcessableDimensions(
+        width: Int,
+        height: Int,
+    ) {
         val fitted = ImageInputPolicy.fitWithinLimits(width, height)
         require(fitted == ImageDimensions(width, height)) {
             "The image exceeds the safe processing limits"
@@ -31,7 +34,11 @@ object ImageTransformPolicy {
         }
     }
 
-    fun requireAdjustment(value: Float, range: ClosedFloatingPointRange<Float>, name: String): Float {
+    fun requireAdjustment(
+        value: Float,
+        range: ClosedFloatingPointRange<Float>,
+        name: String,
+    ): Float {
         require(value.isFinite() && value in range) { "$name is outside the supported range" }
         return value
     }
@@ -67,7 +74,12 @@ object ImageTransformPolicy {
         return PixelCropBounds(x, y, endX - x, endY - y)
     }
 
-    private fun isFullCrop(left: Float, top: Float, right: Float, bottom: Float): Boolean {
+    private fun isFullCrop(
+        left: Float,
+        top: Float,
+        right: Float,
+        bottom: Float,
+    ): Boolean {
         val startsAtOrigin = left <= FULL_CROP_EPSILON && top <= FULL_CROP_EPSILON
         val reachesFarEdge = right >= 1f - FULL_CROP_EPSILON && bottom >= 1f - FULL_CROP_EPSILON
         return startsAtOrigin && reachesFarEdge

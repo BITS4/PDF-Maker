@@ -4,11 +4,12 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class FileSortingTest {
-    private val files = listOf(
-        PdfFile("zulu", "/z.pdf", "900 KB", "old", lastModified = 10L),
-        PdfFile("Alpha", "/a.pdf", "1.2 MB", "new", lastModified = 30L),
-        PdfFile("middle", "/m.pdf", "2 GB", "mid", lastModified = 20L),
-    )
+    private val files =
+        listOf(
+            PdfFile("zulu", "/z.pdf", "900 KB", "old", lastModified = 10L),
+            PdfFile("Alpha", "/a.pdf", "1.2 MB", "new", lastModified = 30L),
+            PdfFile("middle", "/m.pdf", "2 GB", "mid", lastModified = 20L),
+        )
 
     @Test
     fun `sorts names case insensitively in both directions`() {

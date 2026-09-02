@@ -8,11 +8,12 @@ import timber.log.Timber
 class PdfMakerApplication : Application() {
     override fun onCreate() {
         super.onCreate()
-        val telemetryEnabled = ObservabilityPolicy.shouldEnable(
-            enabled = BuildConfig.SENTRY_ENABLED,
-            dsn = BuildConfig.SENTRY_DSN,
-            isDebug = BuildConfig.DEBUG,
-        )
+        val telemetryEnabled =
+            ObservabilityPolicy.shouldEnable(
+                enabled = BuildConfig.SENTRY_ENABLED,
+                dsn = BuildConfig.SENTRY_DSN,
+                isDebug = BuildConfig.DEBUG,
+            )
         if (telemetryEnabled) initializeSentry()
         Timber.plant(PrivacySafeTree(telemetryEnabled))
     }

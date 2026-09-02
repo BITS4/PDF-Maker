@@ -18,14 +18,15 @@ class ObservabilityPolicyTest {
 
     @Test
     fun `dsn validation requires encrypted transport and a complete endpoint`() {
-        val rejected = listOf(
-            "http://public-key@errors.example.com/42",
-            "https://errors.example.com/42",
-            "https://public-key@errors.example.com",
-            "https://public-key@errors.example.com/42?token=secret",
-            "https://public-key@errors.example.com/42#fragment",
-            "not a uri",
-        )
+        val rejected =
+            listOf(
+                "http://public-key@errors.example.com/42",
+                "https://errors.example.com/42",
+                "https://public-key@errors.example.com",
+                "https://public-key@errors.example.com/42?token=secret",
+                "https://public-key@errors.example.com/42#fragment",
+                "not a uri",
+            )
 
         assertTrue(ObservabilityPolicy.isValidDsn(validDsn))
         rejected.forEach { assertFalse(it, ObservabilityPolicy.isValidDsn(it)) }

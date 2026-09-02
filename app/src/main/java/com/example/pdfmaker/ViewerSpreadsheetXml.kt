@@ -27,19 +27,25 @@ internal fun parseViewerSharedStrings(
         var event = parser.eventType
         while (event != XmlPullParser.END_DOCUMENT && strings.size < maximumStrings) {
             when (event) {
-                XmlPullParser.START_TAG ->
+                XmlPullParser.START_TAG -> {
                     if (parser.name == "t") {
                         inText = true
                         text.clear()
                     }
-                XmlPullParser.TEXT -> if (inText) {
-                    text.append(boundedSpreadsheetText(text.length, parser.text, maximumCellCharacters))
                 }
-                XmlPullParser.END_TAG ->
+
+                XmlPullParser.TEXT -> {
+                    if (inText) {
+                        text.append(boundedSpreadsheetText(text.length, parser.text, maximumCellCharacters))
+                    }
+                }
+
+                XmlPullParser.END_TAG -> {
                     if (parser.name == "t") {
                         strings += text.toString()
                         inText = false
                     }
+                }
             }
             event = parser.next()
         }
@@ -73,22 +79,31 @@ internal fun parseViewerSheet(
 
         while (event != XmlPullParser.END_DOCUMENT && rows.size < maximumRows) {
             when (event) {
-                XmlPullParser.START_TAG ->
+                XmlPullParser.START_TAG -> {
                     when (parser.name) {
-                        "row" -> row = mutableListOf()
+                        "row" -> {
+                            row = mutableListOf()
+                        }
+
                         "c" -> {
                             cellType = parser.getAttributeValue(null, "t").orEmpty()
                             inValue = false
                         }
+
                         "v", "t" -> {
                             inValue = true
                             value.clear()
                         }
                     }
-                XmlPullParser.TEXT -> if (inValue) {
-                    value.append(boundedSpreadsheetText(value.length, parser.text, maximumCellCharacters))
                 }
-                XmlPullParser.END_TAG ->
+
+                XmlPullParser.TEXT -> {
+                    if (inValue) {
+                        value.append(boundedSpreadsheetText(value.length, parser.text, maximumCellCharacters))
+                    }
+                }
+
+                XmlPullParser.END_TAG -> {
                     when (parser.name) {
                         "v", "t" -> {
                             val raw = value.toString()
@@ -102,8 +117,12 @@ internal fun parseViewerSheet(
                             }
                             inValue = false
                         }
-                        "row" -> if (row.isNotEmpty()) rows += row.toList()
+
+                        "row" -> {
+                            if (row.isNotEmpty()) rows += row.toList()
+                        }
                     }
+                }
             }
             event = parser.next()
         }

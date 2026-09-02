@@ -2,11 +2,17 @@ package com.example.pdfmaker
 
 import kotlin.math.roundToInt
 
-internal data class PixelSize(val width: Int, val height: Int) {
+internal data class PixelSize(
+    val width: Int,
+    val height: Int,
+) {
     val pixelCount: Long = width.toLong() * height.toLong()
 }
 
-internal data class RenderScale(val scaleX: Float, val scaleY: Float)
+internal data class RenderScale(
+    val scaleX: Float,
+    val scaleY: Float,
+)
 
 internal object RenderSizing {
     fun fitWithin(
@@ -25,7 +31,11 @@ internal object RenderSizing {
         )
     }
 
-    fun scaleTo(sourceWidth: Int, sourceHeight: Int, target: PixelSize): RenderScale? {
+    fun scaleTo(
+        sourceWidth: Int,
+        sourceHeight: Int,
+        target: PixelSize,
+    ): RenderScale? {
         if (sourceWidth <= 0 || sourceHeight <= 0) return null
         if (target.width <= 0 || target.height <= 0) return null
         return RenderScale(

@@ -24,13 +24,13 @@ import java.util.Locale
 
 @Composable
 fun ConvertResultScreen(
-    filePath  : String,
-    fileName  : String,
-    onDone    : () -> Unit,
-    onOpenFile: (PdfFile) -> Unit
+    filePath: String,
+    fileName: String,
+    onDone: () -> Unit,
+    onOpenFile: (PdfFile) -> Unit,
 ) {
-    val file    = File(filePath)
-    val sizeKb  = file.length() / 1024
+    val file = File(filePath)
+    val sizeKb = file.length() / 1024
 
     Column(
         Modifier
@@ -39,40 +39,47 @@ fun ConvertResultScreen(
             .statusBarsPadding()
             .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.Center,
     ) {
         // Success circle
         Box(
             Modifier.size(100.dp).clip(CircleShape).background(Color(0xFF1A3020)),
-            contentAlignment = Alignment.Center
+            contentAlignment = Alignment.Center,
         ) {
             Icon(
-                Icons.Default.CheckCircle, null,
-                tint     = Color(0xFF4CAF50),
-                modifier = Modifier.size(52.dp)
+                Icons.Default.CheckCircle,
+                null,
+                tint = Color(0xFF4CAF50),
+                modifier = Modifier.size(52.dp),
             )
         }
 
         Spacer(Modifier.height(24.dp))
 
         Text(
-            "PDF Created!", color = currentText,
-            fontSize = 22.sp, fontWeight = FontWeight.Bold
+            "PDF Created!",
+            color = currentText,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold,
         )
 
         Spacer(Modifier.height(12.dp))
 
         Text(
-            fileName, color = currentTextSecond,
-            fontSize = 14.sp, textAlign = TextAlign.Center,
-            maxLines = 2, overflow = TextOverflow.Ellipsis
+            fileName,
+            color = currentTextSecond,
+            fontSize = 14.sp,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
 
         Spacer(Modifier.height(8.dp))
 
         Text(
             if (sizeKb >= 1024) "%.1f MB".format(sizeKb / 1024f) else "$sizeKb KB",
-            color = currentTextSecond, fontSize = 13.sp
+            color = currentTextSecond,
+            fontSize = 13.sp,
         )
 
         Spacer(Modifier.height(36.dp))
@@ -80,19 +87,20 @@ fun ConvertResultScreen(
         // Open button
         Button(
             onClick = {
-                val pf = PdfFile(
-                    name         = fileName.removeSuffix(".pdf"),
-                    filePath     = filePath,
-                    size         = if (sizeKb >= 1024) "%.1f MB".format(sizeKb / 1024f) else "$sizeKb KB",
-                    date         = SimpleDateFormat("MM/dd HH:mm", Locale.getDefault()).format(Date()),
-                    pageCount    = 1,
-                    lastModified = file.lastModified()
-                )
+                val pf =
+                    PdfFile(
+                        name = fileName.removeSuffix(".pdf"),
+                        filePath = filePath,
+                        size = if (sizeKb >= 1024) "%.1f MB".format(sizeKb / 1024f) else "$sizeKb KB",
+                        date = SimpleDateFormat("MM/dd HH:mm", Locale.getDefault()).format(Date()),
+                        pageCount = 1,
+                        lastModified = file.lastModified(),
+                    )
                 onOpenFile(pf)
             },
             modifier = Modifier.fillMaxWidth().height(52.dp),
-            colors   = ButtonDefaults.buttonColors(containerColor = AccentBlue),
-            shape    = RoundedCornerShape(14.dp)
+            colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
+            shape = RoundedCornerShape(14.dp),
         ) {
             Icon(Icons.Default.OpenInBrowser, null, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
@@ -102,10 +110,10 @@ fun ConvertResultScreen(
         Spacer(Modifier.height(12.dp))
 
         OutlinedButton(
-            onClick  = onDone,
+            onClick = onDone,
             modifier = Modifier.fillMaxWidth().height(52.dp),
-            shape    = RoundedCornerShape(14.dp),
-            border   = androidx.compose.foundation.BorderStroke(1.dp, currentTextSecond.copy(alpha = 0.4f))
+            shape = RoundedCornerShape(14.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, currentTextSecond.copy(alpha = 0.4f)),
         ) {
             Icon(Icons.Default.Home, null, tint = currentTextSecond, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))

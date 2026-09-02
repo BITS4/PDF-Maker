@@ -27,43 +27,45 @@ internal fun rememberMergeInputPicker(
     val latestOnError by rememberUpdatedState(onError)
     var loading by remember { mutableStateOf(false) }
 
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        if (uris.isEmpty() || loading) return@rememberLauncherForActivityResult
-        val existing = latestItems
-        val remainingSlots = MergePdfPolicy.MAX_SOURCE_FILES - existing.size
-        val selectedUris = uris.take(remainingSlots.coerceAtLeast(0))
-        if (selectedUris.isEmpty()) {
-            latestOnError("No more than ${MergePdfPolicy.MAX_SOURCE_FILES} PDFs can be merged.")
-            return@rememberLauncherForActivityResult
-        }
+    val launcher =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+            if (uris.isEmpty() || loading) return@rememberLauncherForActivityResult
+            val existing = latestItems
+            val remainingSlots = MergePdfPolicy.MAX_SOURCE_FILES - existing.size
+            val selectedUris = uris.take(remainingSlots.coerceAtLeast(0))
+            if (selectedUris.isEmpty()) {
+                latestOnError("No more than ${MergePdfPolicy.MAX_SOURCE_FILES} PDFs can be merged.")
+                return@rememberLauncherForActivityResult
+            }
 
-        loading = true
-        scope.launch(Dispatchers.IO) {
-            var pendingItems: List<MergeItem> = emptyList()
-            try {
-                val batch = loadMergeInputs(
-                    context = context,
-                    uris = selectedUris,
-                    currentPageCount = existing.sumOf(MergeItem::pageCount),
-                )
-                pendingItems = batch.items
-                withContext(Dispatchers.Main) {
-                    if (pendingItems.isNotEmpty()) {
-                        latestOnLoaded(pendingItems)
-                        pendingItems = emptyList()
-                    } else {
-                        latestOnError(
-                            batch.rejectionReasons.firstOrNull()
-                                ?: "The selected PDFs could not be read safely.",
+            loading = true
+            scope.launch(Dispatchers.IO) {
+                var pendingItems: List<MergeItem> = emptyList()
+                try {
+                    val batch =
+                        loadMergeInputs(
+                            context = context,
+                            uris = selectedUris,
+                            currentPageCount = existing.sumOf(MergeItem::pageCount),
                         )
+                    pendingItems = batch.items
+                    withContext(Dispatchers.Main) {
+                        if (pendingItems.isNotEmpty()) {
+                            latestOnLoaded(pendingItems)
+                            pendingItems = emptyList()
+                        } else {
+                            latestOnError(
+                                batch.rejectionReasons.firstOrNull()
+                                    ?: "The selected PDFs could not be read safely.",
+                            )
+                        }
                     }
+                } finally {
+                    BitmapOwnership.retire(pendingItems.mapNotNull(MergeItem::thumb))
+                    withContext(Dispatchers.Main) { loading = false }
                 }
-            } finally {
-                BitmapOwnership.retire(pendingItems.mapNotNull(MergeItem::thumb))
-                withContext(Dispatchers.Main) { loading = false }
             }
         }
-    }
 
     return { launcher.launch(arrayOf("application/pdf")) }
 }

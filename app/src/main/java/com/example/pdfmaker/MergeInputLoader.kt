@@ -29,23 +29,26 @@ internal suspend fun loadMergeInputs(
             try {
                 SafePdfInput.fromUri(context, uri).use { source ->
                     withMergeInputRenderer(source) { renderer ->
-                        runningPageCount = MergePdfPolicy.updatedTotalPages(
-                            runningPageCount,
-                            renderer.pageCount,
-                        )
+                        runningPageCount =
+                            MergePdfPolicy.updatedTotalPages(
+                                runningPageCount,
+                                renderer.pageCount,
+                            )
                         val preview = renderMergeInputPreview(renderer)
-                        loaded += MergeItem(
-                            uri = uri,
-                            name = uri.lastPathSegment
-                                ?.substringAfterLast("/")
-                                ?.substringAfterLast("%2F")
-                                ?.removeSuffix(".pdf")
-                                ?.take(40)
-                                ?: "document",
-                            sizeKb = source.file.length() / 1024,
-                            pageCount = renderer.pageCount,
-                            thumb = preview,
-                        )
+                        loaded +=
+                            MergeItem(
+                                uri = uri,
+                                name =
+                                    uri.lastPathSegment
+                                        ?.substringAfterLast("/")
+                                        ?.substringAfterLast("%2F")
+                                        ?.removeSuffix(".pdf")
+                                        ?.take(40)
+                                        ?: "document",
+                                sizeKb = source.file.length() / 1024,
+                                pageCount = renderer.pageCount,
+                                thumb = preview,
+                            )
                     }
                 }
             } catch (cancelled: CancellationException) {
@@ -69,22 +72,24 @@ internal suspend fun loadMergeInputs(
 
 private fun renderMergeInputPreview(renderer: PdfRenderer): Bitmap =
     renderer.openPage(0).use { page ->
-        val size = RenderSizing.fitWithin(
-            page.width,
-            page.height,
-            300,
-            allowUpscale = true,
-        ) ?: error("PDF page has invalid dimensions")
+        val size =
+            RenderSizing.fitWithin(
+                page.width,
+                page.height,
+                300,
+                allowUpscale = true,
+            ) ?: error("PDF page has invalid dimensions")
         val bitmap = Bitmap.createBitmap(size.width, size.height, Bitmap.Config.ARGB_8888)
         var completed = false
         try {
             Canvas(bitmap).drawColor(Color.WHITE)
-            val transform = Matrix().apply {
-                setScale(
-                    size.width.toFloat() / page.width.toFloat(),
-                    size.height.toFloat() / page.height.toFloat(),
-                )
-            }
+            val transform =
+                Matrix().apply {
+                    setScale(
+                        size.width.toFloat() / page.width.toFloat(),
+                        size.height.toFloat() / page.height.toFloat(),
+                    )
+                }
             page.render(bitmap, null, transform, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
             completed = true
             bitmap

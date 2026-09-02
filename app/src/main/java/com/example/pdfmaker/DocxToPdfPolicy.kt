@@ -133,30 +133,45 @@ internal object DocxToPdfPolicy {
         error: Exception,
     ): String =
         when (stage) {
-            DocxToPdfFailureStage.SELECT ->
+            DocxToPdfFailureStage.SELECT -> {
                 when (error) {
-                    is SecurityException ->
+                    is SecurityException -> {
                         "Access to this Word document was denied. Re-select it and allow file access."
-                    is IOException ->
+                    }
+
+                    is IOException -> {
                         "This Word document could not be read. Check the file and try again."
-                    else ->
+                    }
+
+                    else -> {
                         "This file is not a supported DOCX document. Choose another file."
+                    }
                 }
+            }
 
-            DocxToPdfFailureStage.CONVERT ->
+            DocxToPdfFailureStage.CONVERT -> {
                 when (error) {
-                    is SecurityException ->
+                    is SecurityException -> {
                         "Access to this Word document was lost. Re-select it and try again."
-                    is IOException ->
+                    }
+
+                    is IOException -> {
                         "The PDF could not be written. Check available storage and try again."
-                    else -> DEFAULT_FAILURE
+                    }
+
+                    else -> {
+                        DEFAULT_FAILURE
+                    }
                 }
+            }
 
-            DocxToPdfFailureStage.VERIFY ->
+            DocxToPdfFailureStage.VERIFY -> {
                 "The converted PDF could not be verified. The incomplete output was removed."
+            }
 
-            DocxToPdfFailureStage.SHARE ->
+            DocxToPdfFailureStage.SHARE -> {
                 "The converted PDF is saved, but it could not be shared. Try another compatible app."
+            }
         }
 
     fun formatSize(bytes: Long): String {
@@ -206,6 +221,5 @@ internal object DocxToPdfPolicy {
             else -> throw IllegalArgumentException("The DOCX size metadata is invalid")
         }
 
-    private fun String.removeDocxSuffix(): String =
-        if (endsWith(".docx", ignoreCase = true)) dropLast(5) else this
+    private fun String.removeDocxSuffix(): String = if (endsWith(".docx", ignoreCase = true)) dropLast(5) else this
 }

@@ -18,7 +18,11 @@ import androidx.compose.ui.unit.sp
 // ── Helper composables ────────────────────────────────────────────────────────
 
 @Composable
-internal fun FeatureRow(icon: ImageVector, text: String, tint: Color) {
+internal fun FeatureRow(
+    icon: ImageVector,
+    text: String,
+    tint: Color,
+) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, null, tint = tint, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(10.dp))
@@ -27,18 +31,31 @@ internal fun FeatureRow(icon: ImageVector, text: String, tint: Color) {
 }
 
 @Composable
-internal fun DocxSpinner(progress: Int, color: Color) {
+internal fun DocxSpinner(
+    progress: Int,
+    color: Color,
+) {
     val inf = rememberInfiniteTransition(label = "spin")
     val angle by inf.animateFloat(
-        initialValue  = 0f, targetValue = 360f,
+        initialValue = 0f,
+        targetValue = 360f,
         animationSpec = infiniteRepeatable(tween(1200, easing = LinearEasing)),
-        label         = "angle"
+        label = "angle",
     )
     Canvas(Modifier.size(110.dp)) {
-        drawArc(Color(0xFF2A2A40), 0f, 360f, false,
-            style = Stroke(10.dp.toPx(), cap = StrokeCap.Round))
-        drawArc(color, angle - 90f, (progress * 3.6f).coerceAtLeast(10f), false,
-            style = Stroke(10.dp.toPx(), cap = StrokeCap.Round))
+        drawArc(
+            Color(0xFF2A2A40),
+            0f,
+            360f,
+            false,
+            style = Stroke(10.dp.toPx(), cap = StrokeCap.Round),
+        )
+        drawArc(
+            color,
+            angle - 90f,
+            (progress * 3.6f).coerceAtLeast(10f),
+            false,
+            style = Stroke(10.dp.toPx(), cap = StrokeCap.Round),
+        )
     }
 }
-

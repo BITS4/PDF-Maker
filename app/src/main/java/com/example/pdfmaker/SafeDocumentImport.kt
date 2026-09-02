@@ -24,7 +24,9 @@ data class IncomingDocumentRequest(
     val requestId: Long = 0L,
 )
 
-enum class IncomingDocumentKind(val extension: String) {
+enum class IncomingDocumentKind(
+    val extension: String,
+) {
     PDF("pdf"),
     DOCX("docx"),
     JPEG("jpg"),
@@ -35,9 +37,13 @@ enum class IncomingDocumentKind(val extension: String) {
 }
 
 internal sealed interface IncomingImportResult {
-    data class Imported(val artifact: ImportedDocumentArtifact) : IncomingImportResult
+    data class Imported(
+        val artifact: ImportedDocumentArtifact,
+    ) : IncomingImportResult
 
-    data class Rejected(val message: String) : IncomingImportResult
+    data class Rejected(
+        val message: String,
+    ) : IncomingImportResult
 }
 
 /** Copies untrusted content providers into an owned, bounded and validated file. */
@@ -142,41 +148,42 @@ internal object SafeDocumentImporter {
         metadata: ImportMetadata,
         beforeChunk: () -> Unit,
         providerCancellation: CancellationSignal?,
-    ): ImportedDocumentArtifact = ImportTransaction().use { transaction ->
-        val stagingDirectory = requireStagingDirectory(context.cacheDir)
-        val snapshot = transaction.trackSnapshot(File(stagingDirectory, ".incoming-${UUID.randomUUID()}.tmp"))
-        copyProviderSnapshot(context, request.uri, snapshot, beforeChunk, providerCancellation)
-        val kind = requireSupportedContent(snapshot, request.declaredMimeType, beforeChunk)
-        val outputDirectory =
-            IncomingImportStoragePolicy.destination(
-                kind = kind,
-                retention = retention,
-                documentDirectory = getPdfMakerDir(context),
-                cacheDirectory = context.cacheDir,
-            )
-        val committed =
-            transaction.trackCommitted(
-                commitValidatedSnapshot(
-                    snapshot = snapshot,
-                    outputDirectory = outputDirectory,
-                    requestedName = requestedName(metadata.displayName, request.uri),
+    ): ImportedDocumentArtifact =
+        ImportTransaction().use { transaction ->
+            val stagingDirectory = requireStagingDirectory(context.cacheDir)
+            val snapshot = transaction.trackSnapshot(File(stagingDirectory, ".incoming-${UUID.randomUUID()}.tmp"))
+            copyProviderSnapshot(context, request.uri, snapshot, beforeChunk, providerCancellation)
+            val kind = requireSupportedContent(snapshot, request.declaredMimeType, beforeChunk)
+            val outputDirectory =
+                IncomingImportStoragePolicy.destination(
                     kind = kind,
-                    beforeChunk = beforeChunk,
-                ),
-            )
-        beforeChunk()
-        transaction.removeSnapshot()
-        val artifact =
-            ImportedDocumentArtifact.claim(
-                file = committed,
-                kind = kind,
-                temporary = IncomingImportStoragePolicy.isTemporary(kind, retention),
-                expectedDirectory = outputDirectory,
-            )
-        transaction.trackArtifact(artifact)
-        beforeChunk()
-        transaction.deliver()
-    }
+                    retention = retention,
+                    documentDirectory = getPdfMakerDir(context),
+                    cacheDirectory = context.cacheDir,
+                )
+            val committed =
+                transaction.trackCommitted(
+                    commitValidatedSnapshot(
+                        snapshot = snapshot,
+                        outputDirectory = outputDirectory,
+                        requestedName = requestedName(metadata.displayName, request.uri),
+                        kind = kind,
+                        beforeChunk = beforeChunk,
+                    ),
+                )
+            beforeChunk()
+            transaction.removeSnapshot()
+            val artifact =
+                ImportedDocumentArtifact.claim(
+                    file = committed,
+                    kind = kind,
+                    temporary = IncomingImportStoragePolicy.isTemporary(kind, retention),
+                    expectedDirectory = outputDirectory,
+                )
+            transaction.trackArtifact(artifact)
+            beforeChunk()
+            transaction.deliver()
+        }
 
     private fun requireStagingDirectory(cacheDirectory: File): File {
         val directory = IncomingImportStoragePolicy.temporaryDirectory(cacheDirectory)
@@ -225,7 +232,10 @@ internal object SafeDocumentImporter {
         return kind
     }
 
-    private fun requestedName(displayName: String?, uri: Uri): String =
+    private fun requestedName(
+        displayName: String?,
+        uri: Uri,
+    ): String =
         displayName
             ?.substringBeforeLast('.', displayName)
             ?: uri.lastPathSegment?.substringAfterLast('/')
@@ -329,53 +339,90 @@ object ImportedDocumentInspector {
     private const val MAX_DOCX_EXPANDED_BYTES = 200L * 1024L * 1024L
     private const val MAX_COMPRESSION_RATIO = 250L
 
-    fun inspect(file: File, beforeChunk: () -> Unit = {}): IncomingDocumentKind? {
+    fun inspect(
+        file: File,
+        beforeChunk: () -> Unit = {},
+    ): IncomingDocumentKind? {
         if (!file.isFile || file.length() <= 0) return null
         beforeChunk()
         val prefix = file.inputStream().use { BoundedIo.readPrefix(it, 64) }
         beforeChunk()
         return when (val kind = signature(prefix)) {
             IncomingDocumentKind.PDF -> IncomingDocumentKind.PDF
+
             IncomingDocumentKind.DOCX -> if (isSafeDocx(file, beforeChunk)) IncomingDocumentKind.DOCX else null
+
             IncomingDocumentKind.JPEG,
             IncomingDocumentKind.PNG,
             IncomingDocumentKind.GIF,
             IncomingDocumentKind.WEBP,
-            IncomingDocumentKind.BMP -> kind.takeIf { ImportedImageValidator.validate(file, kind, beforeChunk) }
+            IncomingDocumentKind.BMP,
+            -> kind.takeIf { ImportedImageValidator.validate(file, kind, beforeChunk) }
+
             null -> null
         }
     }
 
-    fun signature(prefix: ByteArray): IncomingDocumentKind? = when {
-        prefix.startsWithAscii("%PDF-") || SecureDocumentCodec.isEncrypted(prefix) -> IncomingDocumentKind.PDF
-        prefix.startsWith(byteArrayOf(0x50, 0x4B, 0x03, 0x04)) -> IncomingDocumentKind.DOCX
-        prefix.startsWith(byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte())) -> IncomingDocumentKind.JPEG
-        prefix.startsWith(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)) -> IncomingDocumentKind.PNG
-        prefix.startsWithAscii("GIF87a") || prefix.startsWithAscii("GIF89a") -> IncomingDocumentKind.GIF
-        prefix.size >= 12 && prefix.startsWithAscii("RIFF") &&
-            prefix.copyOfRange(8, 12).contentEquals("WEBP".toByteArray(Charsets.US_ASCII)) -> IncomingDocumentKind.WEBP
-        prefix.startsWithAscii("BM") -> IncomingDocumentKind.BMP
-        else -> null
-    }
+    fun signature(prefix: ByteArray): IncomingDocumentKind? =
+        when {
+            prefix.startsWithAscii("%PDF-") || SecureDocumentCodec.isEncrypted(prefix) -> IncomingDocumentKind.PDF
 
-    fun mimeTypesMatch(kind: IncomingDocumentKind, vararg rawMimeTypes: String?): Boolean =
-        rawMimeTypes.asSequence()
+            prefix.startsWith(byteArrayOf(0x50, 0x4B, 0x03, 0x04)) -> IncomingDocumentKind.DOCX
+
+            prefix.startsWith(byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte())) -> IncomingDocumentKind.JPEG
+
+            prefix.startsWith(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)) -> IncomingDocumentKind.PNG
+
+            prefix.startsWithAscii("GIF87a") || prefix.startsWithAscii("GIF89a") -> IncomingDocumentKind.GIF
+
+            prefix.size >= 12 && prefix.startsWithAscii("RIFF") &&
+                prefix.copyOfRange(8, 12).contentEquals("WEBP".toByteArray(Charsets.US_ASCII)) -> IncomingDocumentKind.WEBP
+
+            prefix.startsWithAscii("BM") -> IncomingDocumentKind.BMP
+
+            else -> null
+        }
+
+    fun mimeTypesMatch(
+        kind: IncomingDocumentKind,
+        vararg rawMimeTypes: String?,
+    ): Boolean =
+        rawMimeTypes
+            .asSequence()
             .mapNotNull { it?.substringBefore(';')?.trim()?.lowercase(Locale.ROOT) }
             .filterNot { it.isBlank() || it == "*/*" || it == "application/octet-stream" }
             .all { mime ->
                 when (kind) {
-                    IncomingDocumentKind.PDF -> mime == "application/pdf"
-                    IncomingDocumentKind.DOCX -> mime in setOf(
-                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        "application/zip",
-                    )
-                    IncomingDocumentKind.JPEG -> mime == "image/*" || mime == "image/jpeg" || mime == "image/jpg"
-                    IncomingDocumentKind.BMP -> mime == "image/*" || mime == "image/bmp" || mime == "image/x-ms-bmp"
-                    else -> mime == "image/*" || mime == "image/${kind.extension}"
+                    IncomingDocumentKind.PDF -> {
+                        mime == "application/pdf"
+                    }
+
+                    IncomingDocumentKind.DOCX -> {
+                        mime in
+                            setOf(
+                                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                "application/zip",
+                            )
+                    }
+
+                    IncomingDocumentKind.JPEG -> {
+                        mime == "image/*" || mime == "image/jpeg" || mime == "image/jpg"
+                    }
+
+                    IncomingDocumentKind.BMP -> {
+                        mime == "image/*" || mime == "image/bmp" || mime == "image/x-ms-bmp"
+                    }
+
+                    else -> {
+                        mime == "image/*" || mime == "image/${kind.extension}"
+                    }
                 }
             }
 
-    private fun isSafeDocx(file: File, beforeChunk: () -> Unit): Boolean =
+    private fun isSafeDocx(
+        file: File,
+        beforeChunk: () -> Unit,
+    ): Boolean =
         try {
             inspectDocxEntries(file, beforeChunk)
         } catch (cancelled: CancellationException) {
@@ -386,7 +433,10 @@ object ImportedDocumentInspector {
             false
         }
 
-    private fun inspectDocxEntries(file: File, beforeChunk: () -> Unit): Boolean {
+    private fun inspectDocxEntries(
+        file: File,
+        beforeChunk: () -> Unit,
+    ): Boolean {
         val state = DocxScanState()
         ZipFile(file).use { zip ->
             val entries = zip.entries()
@@ -434,7 +484,10 @@ object ImportedDocumentInspector {
             requireSafeCompressionRatio(entry)
         }
 
-        fun recordExpanded(name: String, expandedBytes: Long) {
+        fun recordExpanded(
+            name: String,
+            expandedBytes: Long,
+        ) {
             require(expandedTotal <= MAX_DOCX_EXPANDED_BYTES - expandedBytes) {
                 "DOCX expands beyond its limit"
             }
@@ -454,7 +507,11 @@ object ImportedDocumentInspector {
         object : OutputStream() {
             override fun write(value: Int) = Unit
 
-            override fun write(bytes: ByteArray, offset: Int, length: Int) = Unit
+            override fun write(
+                bytes: ByteArray,
+                offset: Int,
+                length: Int,
+            ) = Unit
         }
 
     private fun isSafeZipName(raw: String): Boolean {
@@ -464,9 +521,7 @@ object ImportedDocumentInspector {
         return normalized.split('/').none { it == "." || it == ".." } && ':' !in normalized
     }
 
-    private fun ByteArray.startsWith(expected: ByteArray): Boolean =
-        size >= expected.size && copyOfRange(0, expected.size).contentEquals(expected)
+    private fun ByteArray.startsWith(expected: ByteArray): Boolean = size >= expected.size && copyOfRange(0, expected.size).contentEquals(expected)
 
-    private fun ByteArray.startsWithAscii(expected: String): Boolean =
-        startsWith(expected.toByteArray(Charsets.US_ASCII))
+    private fun ByteArray.startsWithAscii(expected: String): Boolean = startsWith(expected.toByteArray(Charsets.US_ASCII))
 }

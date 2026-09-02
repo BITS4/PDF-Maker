@@ -1,7 +1,16 @@
 package com.example.pdfmaker
 
-import java.io.ByteArrayOutputStream
+import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FilterInputStream
 import java.security.SecureRandom
@@ -11,15 +20,6 @@ import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
-import org.junit.Assert.assertArrayEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Rule
-import org.junit.Test
-import org.junit.rules.TemporaryFolder
 
 class SecureDocumentCodecTest {
     private val document = "%PDF-1.7\nconfidential document".toByteArray()
@@ -78,13 +78,14 @@ class SecureDocumentCodecTest {
     fun streamingCodecRoundTripsAcrossManyPartialReads() {
         val plaintext = ByteArray(256 * 1024 + 17) { index -> (index * 31).toByte() }
         val encryptedOutput = ByteArrayOutputStream()
-        val encryptedLength = SecureDocumentCodec.encrypt(
-            input = PartialReadInputStream(plaintext, maximumChunk = 37),
-            output = encryptedOutput,
-            plaintextLength = plaintext.size.toLong(),
-            password = "stream-password",
-            iterations = 1_000,
-        )
+        val encryptedLength =
+            SecureDocumentCodec.encrypt(
+                input = PartialReadInputStream(plaintext, maximumChunk = 37),
+                output = encryptedOutput,
+                plaintextLength = plaintext.size.toLong(),
+                password = "stream-password",
+                iterations = 1_000,
+            )
         val encrypted = encryptedOutput.toByteArray()
 
         assertEquals(plaintext.size.toLong() + SecureDocumentLimits.AUTHENTICATED_OVERHEAD_BYTES, encryptedLength)
@@ -128,9 +129,10 @@ class SecureDocumentCodecTest {
             iterations = 1_000,
         )
         val encrypted = encryptedOutput.toByteArray()
-        val tampered = encrypted.copyOf().also { bytes ->
-            bytes[bytes.lastIndex] = (bytes.last().toInt() xor 1).toByte()
-        }
+        val tampered =
+            encrypted.copyOf().also { bytes ->
+                bytes[bytes.lastIndex] = (bytes.last().toInt() xor 1).toByte()
+            }
 
         assertFalse(
             SecureDocumentCodec.decrypt(
@@ -176,19 +178,20 @@ class SecureDocumentCodecTest {
     fun streamingCodecChecksCancellationBeforeProcessingChunks() {
         var checks = 0
 
-        val failure = runCatching {
-            SecureDocumentCodec.encrypt(
-                ByteArrayInputStream(ByteArray(64 * 1024)),
-                ByteArrayOutputStream(),
-                64L * 1024L,
-                "password",
-                iterations = 1_000,
-                beforeChunk = {
-                    checks += 1
-                    if (checks == 2) error("cancelled")
-                },
-            )
-        }
+        val failure =
+            runCatching {
+                SecureDocumentCodec.encrypt(
+                    ByteArrayInputStream(ByteArray(64 * 1024)),
+                    ByteArrayOutputStream(),
+                    64L * 1024L,
+                    "password",
+                    iterations = 1_000,
+                    beforeChunk = {
+                        checks += 1
+                        if (checks == 2) error("cancelled")
+                    },
+                )
+            }
 
         assertTrue(failure.isFailure)
         assertEquals(2, checks)
@@ -220,24 +223,29 @@ class SecureDocumentCodecTest {
         }
     }
 
-    private fun legacyEncrypt(plaintext: ByteArray, password: String): ByteArray {
+    private fun legacyEncrypt(
+        plaintext: ByteArray,
+        password: String,
+    ): ByteArray {
         val random = SecureRandom()
         val salt = ByteArray(16).also(random::nextBytes)
         val iv = ByteArray(16).also(random::nextBytes)
         val spec = PBEKeySpec(password.toCharArray(), salt, 65_536, 256)
-        val key = try {
-            SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
-        } finally {
-            spec.clearPassword()
-        }
+        val key =
+            try {
+                SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
+            } finally {
+                spec.clearPassword()
+            }
         val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
         cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), IvParameterSpec(iv))
-        return ByteArrayOutputStream().apply {
-            write(LEGACY_DOCUMENT_MAGIC.toByteArray())
-            write(salt)
-            write(iv)
-            write(cipher.doFinal(plaintext))
-        }.toByteArray()
+        return ByteArrayOutputStream()
+            .apply {
+                write(LEGACY_DOCUMENT_MAGIC.toByteArray())
+                write(salt)
+                write(iv)
+                write(cipher.doFinal(plaintext))
+            }.toByteArray()
     }
 
     private fun expectIllegalArgument(block: () -> Unit) {
@@ -253,8 +261,11 @@ class SecureDocumentCodecTest {
         bytes: ByteArray,
         private val maximumChunk: Int,
     ) : FilterInputStream(ByteArrayInputStream(bytes)) {
-        override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
-            super.read(buffer, offset, minOf(length, maximumChunk))
+        override fun read(
+            buffer: ByteArray,
+            offset: Int,
+            length: Int,
+        ): Int = super.read(buffer, offset, minOf(length, maximumChunk))
     }
 }
 
@@ -366,11 +377,12 @@ class SecureDocumentStoreTest {
 
     @Test
     fun rejectedDecryptedCopyLeavesNoOutputOrTemporaryFile() {
-        val encrypted = SecureDocumentCodec.encrypt(
-            "%PDF-1.7\nprivate".toByteArray(),
-            "password",
-            iterations = 1_000,
-        )
+        val encrypted =
+            SecureDocumentCodec.encrypt(
+                "%PDF-1.7\nprivate".toByteArray(),
+                "password",
+                iterations = 1_000,
+            )
         val source = temporaryFolder.newFile("locked.pdf").apply { writeBytes(encrypted) }
         val outputs = temporaryFolder.newFolder("rejected-viewer-cache")
 
@@ -380,17 +392,19 @@ class SecureDocumentStoreTest {
 
     @Test
     fun cancellationPropagatesAndAtomicLockPreservesTheOriginal() {
-        val original = "%PDF-1.7\n".toByteArray() +
-            ByteArray(64 * 1024) { index -> index.toByte() }
+        val original =
+            "%PDF-1.7\n".toByteArray() +
+                ByteArray(64 * 1024) { index -> index.toByte() }
         val source = temporaryFolder.newFile("cancelled.pdf").apply { writeBytes(original) }
         var checks = 0
 
-        val failure = runCatching {
-            SecureDocumentStore.lockInPlace(source, "password") {
-                checks += 1
-                if (checks == 2) throw CancellationException("cancelled")
-            }
-        }.exceptionOrNull()
+        val failure =
+            runCatching {
+                SecureDocumentStore.lockInPlace(source, "password") {
+                    checks += 1
+                    if (checks == 2) throw CancellationException("cancelled")
+                }
+            }.exceptionOrNull()
 
         assertTrue(failure is CancellationException)
         assertArrayEquals(original, source.readBytes())
@@ -398,5 +412,8 @@ class SecureDocumentStoreTest {
     }
 
     private fun temporarySecureFilesExist(): Boolean =
-        temporaryFolder.root.listFiles().orEmpty().any { it.name.startsWith(".pdfmaker-secure-") }
+        temporaryFolder.root
+            .listFiles()
+            .orEmpty()
+            .any { it.name.startsWith(".pdfmaker-secure-") }
 }

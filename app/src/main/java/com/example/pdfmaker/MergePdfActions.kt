@@ -225,5 +225,4 @@ private fun File.toPdfFile(totalPages: Int): PdfFile =
         lastModified = lastModified(),
     )
 
-private fun mergeFailureMessage(error: Exception): String =
-    UserVisibleFailureReporter.message(UserFailureStage.PDF_MERGE, error)
+private fun mergeFailureMessage(error: Exception): String = UserVisibleFailureReporter.message(UserFailureStage.PDF_MERGE, error)

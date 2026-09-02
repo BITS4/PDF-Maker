@@ -54,7 +54,10 @@ private class TablePageRenderer(
         if (currentY >= margin + rowHeight) collector.emit(bitmap) else bitmap.recycle()
     }
 
-    private fun drawRow(rowIndex: Int, row: List<String>) {
+    private fun drawRow(
+        rowIndex: Int,
+        row: List<String>,
+    ) {
         canvas.drawRect(
             margin.toFloat(),
             currentY.toFloat(),
@@ -79,7 +82,11 @@ private class TablePageRenderer(
             else -> paints.oddBackground
         }
 
-    private fun drawCell(rowIndex: Int, row: List<String>, column: Int) {
+    private fun drawCell(
+        rowIndex: Int,
+        row: List<String>,
+        column: Int,
+    ) {
         val cell = row.getOrElse(column) { "" }
         val x = margin + column * columnWidth
         val textPaint = if (rowIndex == 0 && hasHeader) paints.headerText else paints.text
@@ -129,12 +136,19 @@ private fun tablePaints(textSize: Float): TablePaints =
             },
     )
 
-internal fun newViewerPage(width: Int, height: Int): Bitmap =
+internal fun newViewerPage(
+    width: Int,
+    height: Int,
+): Bitmap =
     Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also {
         Canvas(it).drawColor(Color.WHITE)
     }
 
-internal fun buildViewerStaticLayout(text: CharSequence, paint: TextPaint, width: Int): StaticLayout =
+internal fun buildViewerStaticLayout(
+    text: CharSequence,
+    paint: TextPaint,
+    width: Int,
+): StaticLayout =
     StaticLayout.Builder
         .obtain(text, 0, text.length, paint, width.coerceAtLeast(1))
         .setAlignment(Layout.Alignment.ALIGN_NORMAL)

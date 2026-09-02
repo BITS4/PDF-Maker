@@ -1,6 +1,5 @@
 package com.example.pdfmaker
 
-import java.io.IOException
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -8,6 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.IOException
 
 class ImagePdfExportTest {
     @get:Rule
@@ -40,17 +40,28 @@ class ImagePdfExportTest {
         val result = ImagePdfExport.write(temporaryFolder.root, "private", "123") { it.write(pdf) }
 
         assertTrue(result.isFailure)
-        assertFalse(temporaryFolder.root.listFiles().orEmpty().any { it.extension == "pdf" })
+        assertFalse(
+            temporaryFolder.root
+                .listFiles()
+                .orEmpty()
+                .any { it.extension == "pdf" },
+        )
     }
 
     @Test
     fun writerFailureLeavesNoTargetOrTemporaryFile() {
-        val result = ImagePdfExport.write(temporaryFolder.root, "broken", null) {
-            it.write(pdf)
-            throw IOException("simulated storage failure")
-        }
+        val result =
+            ImagePdfExport.write(temporaryFolder.root, "broken", null) {
+                it.write(pdf)
+                throw IOException("simulated storage failure")
+            }
 
         assertTrue(result.isFailure)
-        assertTrue(temporaryFolder.root.listFiles().orEmpty().isEmpty())
+        assertTrue(
+            temporaryFolder.root
+                .listFiles()
+                .orEmpty()
+                .isEmpty(),
+        )
     }
 }

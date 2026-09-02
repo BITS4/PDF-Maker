@@ -14,10 +14,9 @@ internal data class MergeSummary(
 )
 
 internal object MergeScreenPolicy {
-    private const val MinimumMergeFiles = 2
+    private const val MINIMUM_MERGE_FILES = 2
 
-    fun canMerge(fileCount: Int): Boolean =
-        fileCount in MinimumMergeFiles..MergePdfPolicy.MAX_SOURCE_FILES
+    fun canMerge(fileCount: Int): Boolean = fileCount in MINIMUM_MERGE_FILES..MergePdfPolicy.MAX_SOURCE_FILES
 
     fun summary(
         pageCounts: List<Int>,

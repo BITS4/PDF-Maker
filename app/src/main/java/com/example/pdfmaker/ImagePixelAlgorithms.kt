@@ -277,7 +277,11 @@ internal object ImagePixelAlgorithms {
         }
     }
 
-    private fun clipAndRedistribute(histogram: IntArray, sampleCount: Int, clipLimit: Float) {
+    private fun clipAndRedistribute(
+        histogram: IntArray,
+        sampleCount: Int,
+        clipLimit: Float,
+    ) {
         val maximumBin = (clipLimit * sampleCount / histogram.size).roundToInt().coerceAtLeast(1)
         var excess = 0
         histogram.indices.forEach { bin ->
@@ -294,7 +298,11 @@ internal object ImagePixelAlgorithms {
         check(histogram.sum() == sampleCount) { "CLAHE histogram redistribution lost samples" }
     }
 
-    private fun populateLookupTable(histogram: IntArray, sampleCount: Int, output: FloatArray) {
+    private fun populateLookupTable(
+        histogram: IntArray,
+        sampleCount: Int,
+        output: FloatArray,
+    ) {
         var cumulative = 0
         histogram.indices.forEach { bin ->
             cumulative += histogram[bin]
@@ -344,27 +352,46 @@ internal object ImagePixelAlgorithms {
         }
     }
 
-    private fun validatePixels(pixels: IntArray, width: Int, height: Int) {
+    private fun validatePixels(
+        pixels: IntArray,
+        width: Int,
+        height: Int,
+    ) {
         validateSamples(pixels.size, width, height)
         require(width.toLong() * height <= ImageInputPolicy.MAX_DECODE_PIXELS) {
             "Pixel buffer exceeds the processing limit"
         }
     }
 
-    private fun validateLuma(luma: FloatArray, width: Int, height: Int) {
+    private fun validateLuma(
+        luma: FloatArray,
+        width: Int,
+        height: Int,
+    ) {
         validateSamples(luma.size, width, height)
         require(luma.all(Float::isFinite)) { "Luma samples must be finite" }
     }
 
-    private fun validateSamples(sampleCount: Int, width: Int, height: Int) {
+    private fun validateSamples(
+        sampleCount: Int,
+        width: Int,
+        height: Int,
+    ) {
         require(width > 0 && height > 0) { "Image dimensions must be positive" }
         require(width.toLong() * height == sampleCount.toLong()) { "Pixel buffer dimensions do not match" }
     }
 
     private fun Float.roundToChannel(): Int = roundToInt().coerceIn(0, CHANNEL_MAX)
 
-    private fun channel(color: Int, shift: Int): Int = color ushr shift and CHANNEL_MAX
+    private fun channel(
+        color: Int,
+        shift: Int,
+    ): Int = color ushr shift and CHANNEL_MAX
 
-    private fun pack(alpha: Int, red: Int, green: Int, blue: Int): Int =
-        (alpha shl ALPHA_SHIFT) or (red shl RED_SHIFT) or (green shl GREEN_SHIFT) or blue
+    private fun pack(
+        alpha: Int,
+        red: Int,
+        green: Int,
+        blue: Int,
+    ): Int = (alpha shl ALPHA_SHIFT) or (red shl RED_SHIFT) or (green shl GREEN_SHIFT) or blue
 }

@@ -127,7 +127,7 @@ internal object AppNavigationPolicy {
         }
         if (screen in originBackScreens) return originDecision(context.fromMoreTools)
         return when (screen) {
-            Screen.VIEWER ->
+            Screen.VIEWER -> {
                 if (context.fromFiles) {
                     BackDecision(
                         destination = Screen.FILES,
@@ -136,26 +136,33 @@ internal object AppNavigationPolicy {
                 } else {
                     BackDecision(destination = Screen.HOME)
                 }
+            }
 
-            Screen.IMAGE_SELECTION ->
+            Screen.IMAGE_SELECTION -> {
                 when {
                     context.addingMoreImages -> BackDecision(destination = Screen.IMAGE_REVIEW)
                     else -> originDecision(context.fromMoreTools, clearImageState = true)
                 }
+            }
 
-            Screen.IMAGE_EDIT ->
+            Screen.IMAGE_EDIT -> {
                 when {
                     context.addingMoreImages -> BackDecision(destination = Screen.IMAGE_REVIEW)
                     context.fromSmartScan -> BackDecision(destination = Screen.SMART_SCAN)
                     else -> BackDecision(destination = Screen.IMAGE_SELECTION)
                 }
+            }
 
-            Screen.CONVERT_RESULT ->
+            Screen.CONVERT_RESULT -> {
                 BackDecision(
                     destination = Screen.HOME,
                     clearImageState = true,
                 )
-            else -> error("Screen $screen is missing a system-back policy")
+            }
+
+            else -> {
+                error("Screen $screen is missing a system-back policy")
+            }
         }
     }
 

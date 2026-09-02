@@ -76,7 +76,10 @@ fun ConvertingOverlay(
 }
 
 @Composable
-internal fun PdfEditorOperationErrorDialog(message: String, onDismiss: () -> Unit) {
+internal fun PdfEditorOperationErrorDialog(
+    message: String,
+    onDismiss: () -> Unit,
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Document operation failed") },

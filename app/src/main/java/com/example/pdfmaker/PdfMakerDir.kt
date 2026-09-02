@@ -11,8 +11,9 @@ import java.io.File
  * the system share sheet, which grants read-only access without exposing unrelated app data.
  */
 fun getPdfMakerDir(context: Context): File {
-    val root = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)
-        ?: File(context.filesDir, "documents")
+    val root =
+        context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)
+            ?: File(context.filesDir, "documents")
     return File(root, "PDFMaker").also { directory ->
         check((directory.exists() && directory.isDirectory) || directory.mkdirs()) {
             "Could not create the application document directory"

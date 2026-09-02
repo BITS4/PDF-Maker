@@ -10,8 +10,8 @@ import android.net.Uri
 import android.os.ParcelFileDescriptor
 import com.google.mlkit.common.MlKitException
 import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.TextRecognizer
 import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.TextRecognizer
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -76,9 +76,13 @@ private suspend fun importOcrDocument(
                     beforeChunk = { operationContext.ensureActive() },
                 )
         ) {
-            is IncomingImportResult.Imported ->
+            is IncomingImportResult.Imported -> {
                 imported.artifact.also(pendingArtifact::set)
-            is IncomingImportResult.Rejected -> error(imported.message)
+            }
+
+            is IncomingImportResult.Rejected -> {
+                error(imported.message)
+            }
         }
     }
 
@@ -174,21 +178,23 @@ private suspend fun recognizePdfPage(
         val bitmap = Bitmap.createBitmap(size.width, size.height, Bitmap.Config.ARGB_8888)
         try {
             Canvas(bitmap).drawColor(Color.WHITE)
-            val matrix = android.graphics.Matrix().apply {
-                setScale(
-                    size.width.toFloat() / page.width.toFloat(),
-                    size.height.toFloat() / page.height.toFloat(),
-                )
-            }
+            val matrix =
+                android.graphics.Matrix().apply {
+                    setScale(
+                        size.width.toFloat() / page.width.toFloat(),
+                        size.height.toFloat() / page.height.toFloat(),
+                    )
+                }
             page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
             currentCoroutineContext().ensureActive()
             val recognizedText = recognizeBitmapText(bitmap, recognizer)
             currentCoroutineContext().ensureActive()
-            val accepted = OcrResourcePolicy.acceptRecognizedText(
-                pageNumber = index + 1,
-                recognizedText = recognizedText,
-                currentCharacters = currentCharacters,
-            )
+            val accepted =
+                OcrResourcePolicy.acceptRecognizedText(
+                    pageNumber = index + 1,
+                    recognizedText = recognizedText,
+                    currentCharacters = currentCharacters,
+                )
             return OcrPageResult(
                 text = accepted.text,
                 totalCharacters = accepted.totalCharacters,
@@ -205,12 +211,13 @@ private suspend fun recognizePdfPage(
 private suspend fun recognizeBitmapText(
     bitmap: Bitmap,
     recognizer: TextRecognizer,
-): String = withContext(Dispatchers.IO) {
-    val task = recognizer.process(InputImage.fromBitmap(bitmap, 0))
-    // ML Kit does not expose cancellation for this task. Finish the active page before
-    // recycling its bitmap, then let the caller observe cancellation before another page.
-    withContext(NonCancellable) { task.await().text }
-}
+): String =
+    withContext(Dispatchers.IO) {
+        val task = recognizer.process(InputImage.fromBitmap(bitmap, 0))
+        // ML Kit does not expose cancellation for this task. Finish the active page before
+        // recycling its bitmap, then let the caller observe cancellation before another page.
+        withContext(NonCancellable) { task.await().text }
+    }
 
 private fun decodeBoundedOcrImage(file: File): Bitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }

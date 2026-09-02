@@ -9,7 +9,10 @@ import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sqrt
 
-fun perspectiveWarp(source: Bitmap, quad: Quad): Bitmap {
+fun perspectiveWarp(
+    source: Bitmap,
+    quad: Quad,
+): Bitmap {
     val sourceWidth = source.width.toFloat()
     val sourceHeight = source.height.toFloat()
     val topLeft = quad.tl.scaled(sourceWidth, sourceHeight)
@@ -79,13 +82,22 @@ private fun perspectiveMatrix(
 
 private fun warpPaint(): Paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
 
-private fun PointF.scaled(width: Float, height: Float): PointF = PointF(x * width, y * height)
+private fun PointF.scaled(
+    width: Float,
+    height: Float,
+): PointF = PointF(x * width, y * height)
 
-private fun distance(first: PointF, second: PointF): Float =
-    sqrt((second.x - first.x).pow(2) + (second.y - first.y).pow(2))
+private fun distance(
+    first: PointF,
+    second: PointF,
+): Float = sqrt((second.x - first.x).pow(2) + (second.y - first.y).pow(2))
 
 /** Fallback: scans the edge map to find conservative document boundaries. */
-internal fun edgeScanFallback(edges: BooleanArray, width: Int, height: Int): Quad {
+internal fun edgeScanFallback(
+    edges: BooleanArray,
+    width: Int,
+    height: Int,
+): Quad {
     val bounds = findEdgeBounds(edges, width, height)
     val left = (bounds.left.toFloat() / width).coerceIn(0.03f, 0.45f)
     val right = (bounds.right.toFloat() / width).coerceIn(0.55f, 0.97f)
@@ -94,7 +106,11 @@ internal fun edgeScanFallback(edges: BooleanArray, width: Int, height: Int): Qua
     return Quad(PointF(left, top), PointF(right, top), PointF(right, bottom), PointF(left, bottom))
 }
 
-internal fun findEdgeBounds(edges: BooleanArray, width: Int, height: Int): EdgeBounds {
+internal fun findEdgeBounds(
+    edges: BooleanArray,
+    width: Int,
+    height: Int,
+): EdgeBounds {
     require(width > 0 && height > 0 && edges.size == width * height) { "Edge map dimensions are invalid" }
     val margin = (min(width, height) * 0.04f).toInt()
     val top =

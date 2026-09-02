@@ -24,7 +24,12 @@ class DocxToPdfActionsTest {
 
             assertEquals(DocxToPdfPhase.READY, harness.state.phase)
             assertEquals("report", harness.state.input?.displayName)
-            assertEquals("valid", harness.boundaries.inspectedSources.single().testId)
+            assertEquals(
+                "valid",
+                harness.boundaries.inspectedSources
+                    .single()
+                    .testId,
+            )
 
             val secret = "content://private/customer-name.docx"
             harness.boundaries.inspectBlock = { _, _ -> throw IOException(secret) }

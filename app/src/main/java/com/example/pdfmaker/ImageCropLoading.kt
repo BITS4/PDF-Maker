@@ -32,19 +32,21 @@ internal fun CropLoadingSkeleton() {
     val shimmerX by shimmerTransition.animateFloat(
         initialValue = -1f,
         targetValue = 2f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1_200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
+        animationSpec =
+            infiniteRepeatable(
+                animation = tween(1_200, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart,
+            ),
         label = "shimmerX",
     )
     val scanY by shimmerTransition.animateFloat(
         initialValue = 0.15f,
         targetValue = 0.85f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1_800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
+        animationSpec =
+            infiniteRepeatable(
+                animation = tween(1_800, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
         label = "scanY",
     )
 
@@ -66,17 +68,19 @@ internal fun CropLoadingSkeleton() {
                 cornerRadius = CornerRadius(12f),
             )
             drawRoundRect(
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        Color.Transparent,
-                        Color.White.copy(alpha = 0.08f),
-                        Color.White.copy(alpha = 0.15f),
-                        Color.White.copy(alpha = 0.08f),
-                        Color.Transparent,
+                brush =
+                    Brush.linearGradient(
+                        colors =
+                            listOf(
+                                Color.Transparent,
+                                Color.White.copy(alpha = 0.08f),
+                                Color.White.copy(alpha = 0.15f),
+                                Color.White.copy(alpha = 0.08f),
+                                Color.Transparent,
+                            ),
+                        start = Offset(shimmerX * width, cardTop),
+                        end = Offset(shimmerX * width + width * 0.5f, cardBottom),
                     ),
-                    start = Offset(shimmerX * width, cardTop),
-                    end = Offset(shimmerX * width + width * 0.5f, cardBottom),
-                ),
                 topLeft = Offset(cardLeft, cardTop),
                 size = Size(cardWidth, cardHeight),
                 cornerRadius = CornerRadius(12f),
@@ -129,17 +133,19 @@ internal fun CropLoadingSkeleton() {
 
             val scanLineY = cardTop + cardHeight * scanY
             drawLine(
-                brush = Brush.horizontalGradient(
-                    colors = listOf(
-                        Color.Transparent,
-                        Color(0xFFFFD700).copy(alpha = 0.7f),
-                        Color(0xFFFFD700).copy(alpha = 0.9f),
-                        Color(0xFFFFD700).copy(alpha = 0.7f),
-                        Color.Transparent,
+                brush =
+                    Brush.horizontalGradient(
+                        colors =
+                            listOf(
+                                Color.Transparent,
+                                Color(0xFFFFD700).copy(alpha = 0.7f),
+                                Color(0xFFFFD700).copy(alpha = 0.9f),
+                                Color(0xFFFFD700).copy(alpha = 0.7f),
+                                Color.Transparent,
+                            ),
+                        startX = cardLeft,
+                        endX = cardRight,
                     ),
-                    startX = cardLeft,
-                    endX = cardRight,
-                ),
                 start = Offset(cardLeft, scanLineY),
                 end = Offset(cardRight, scanLineY),
                 strokeWidth = 2f,

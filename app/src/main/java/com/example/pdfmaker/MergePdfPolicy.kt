@@ -18,7 +18,10 @@ internal object MergePdfPolicy {
         return sourceCount
     }
 
-    fun updatedTotalPages(currentTotal: Int, sourcePages: Int): Int {
+    fun updatedTotalPages(
+        currentTotal: Int,
+        sourcePages: Int,
+    ): Int {
         require(sourcePages in 1..MAX_PAGES_PER_SOURCE) {
             "A source PDF must contain between 1 and $MAX_PAGES_PER_SOURCE pages"
         }

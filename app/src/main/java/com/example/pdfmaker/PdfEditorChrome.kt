@@ -52,8 +52,14 @@ internal fun PdfEditorTopBar(
             modifier = Modifier.weight(1f).padding(start = 2.dp),
         )
         when (editMode) {
-            PdfEditMode.DOODLE -> TextButton(onClick = onResetDoodle) { Text("Reset", color = Color.White) }
-            PdfEditMode.TEXT -> TextButton(onClick = onResetText) { Text("Reset", color = Color.White) }
+            PdfEditMode.DOODLE -> {
+                TextButton(onClick = onResetDoodle) { Text("Reset", color = Color.White) }
+            }
+
+            PdfEditMode.TEXT -> {
+                TextButton(onClick = onResetText) { Text("Reset", color = Color.White) }
+            }
+
             else -> {
                 IconButton(onClick = {}) { Icon(Icons.Default.Edit, null, tint = Color.White) }
                 IconButton(onClick = {}) { Icon(Icons.Default.Search, null, tint = Color.White) }

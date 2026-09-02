@@ -22,7 +22,10 @@ internal object OcrResourcePolicy {
         return pageCount
     }
 
-    fun pdfRenderSize(sourceWidth: Int, sourceHeight: Int): PixelSize =
+    fun pdfRenderSize(
+        sourceWidth: Int,
+        sourceHeight: Int,
+    ): PixelSize =
         requireNotNull(
             RenderSizing.fitWithin(
                 sourceWidth = sourceWidth,
@@ -32,7 +35,10 @@ internal object OcrResourcePolicy {
             ),
         ) { "PDF page has invalid dimensions" }
 
-    fun imageDecodeSize(sourceWidth: Int, sourceHeight: Int): PixelSize =
+    fun imageDecodeSize(
+        sourceWidth: Int,
+        sourceHeight: Int,
+    ): PixelSize =
         requireNotNull(
             RenderSizing.fitWithin(
                 sourceWidth = sourceWidth,
@@ -41,7 +47,11 @@ internal object OcrResourcePolicy {
             ),
         ) { "Image has invalid dimensions" }
 
-    fun imageSampleSize(sourceWidth: Int, sourceHeight: Int, target: PixelSize): Int {
+    fun imageSampleSize(
+        sourceWidth: Int,
+        sourceHeight: Int,
+        target: PixelSize,
+    ): Int {
         require(sourceWidth > 0 && sourceHeight > 0) { "Image has invalid dimensions" }
         require(target.width > 0 && target.height > 0) { "OCR target has invalid dimensions" }
         var sampleSize = 1
@@ -51,7 +61,10 @@ internal object OcrResourcePolicy {
         return sampleSize
     }
 
-    fun requireDecodedImage(width: Int, height: Int): PixelSize {
+    fun requireDecodedImage(
+        width: Int,
+        height: Int,
+    ): PixelSize {
         require(
             width in 1..MAX_IMAGE_DIMENSION &&
                 height in 1..MAX_IMAGE_DIMENSION,
@@ -59,7 +72,10 @@ internal object OcrResourcePolicy {
         return PixelSize(width, height)
     }
 
-    fun updatedRenderedPixels(currentPixels: Long, additionalPixels: Long): Long {
+    fun updatedRenderedPixels(
+        currentPixels: Long,
+        additionalPixels: Long,
+    ): Long {
         require(currentPixels in 0..MAX_TOTAL_RENDERED_PIXELS) {
             "OCR render workload is invalid"
         }
@@ -91,7 +107,10 @@ internal object OcrResourcePolicy {
         )
     }
 
-    fun requireFormattedLength(currentLength: Int, additionalLength: Int): Int {
+    fun requireFormattedLength(
+        currentLength: Int,
+        additionalLength: Int,
+    ): Int {
         require(currentLength in 0..MAX_FORMATTED_TEXT_CHARACTERS) {
             "Formatted OCR text size is invalid"
         }

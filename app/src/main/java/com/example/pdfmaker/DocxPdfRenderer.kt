@@ -38,9 +38,10 @@ internal suspend fun renderDocxPdf(
     val contentWidth = pageWidth - leftMargin - rightMargin
     val document = PdfDocument()
     var pageNumber = 1
-    var activePage: PdfDocument.Page? = document.startPage(
-        PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create(),
-    )
+    var activePage: PdfDocument.Page? =
+        document.startPage(
+            PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create(),
+        )
     var canvas = requireNotNull(activePage).canvas
     var currentY = topMargin
 
@@ -49,9 +50,10 @@ internal suspend fun renderDocxPdf(
         document.finishPage(requireNotNull(activePage))
         activePage = null
         pageNumber = DocxConversionPolicy.nextPage(pageNumber)
-        activePage = document.startPage(
-            PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create(),
-        )
+        activePage =
+            document.startPage(
+                PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create(),
+            )
         canvas = requireNotNull(activePage).canvas
         currentY = topMargin
     }
@@ -67,17 +69,21 @@ internal suspend fun renderDocxPdf(
             operationContext.ensureActive()
             onProgress(50 + index * 45 / totalBlocks, "Rendering…")
             when (block) {
-                is DocBlock.PageBreak -> newPage()
+                is DocBlock.PageBreak -> {
+                    newPage()
+                }
+
                 is DocBlock.Paragraph -> {
                     if (block.runs.isEmpty()) {
                         currentY += 8f
                     } else {
                         val text = styledDocxText(block)
-                        val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-                            color = Color.BLACK
-                            textSize = docxFontSize(block)
-                            if (block.headingLevel > 0) typeface = Typeface.DEFAULT_BOLD
-                        }
+                        val paint =
+                            TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                                color = Color.BLACK
+                                textSize = docxFontSize(block)
+                                if (block.headingLevel > 0) typeface = Typeface.DEFAULT_BOLD
+                            }
                         val layout = buildDocxLayout(text, paint, contentWidth.toInt())
                         val blockHeight = layout.height.toFloat() + if (block.headingLevel > 0) 8f else 4f
                         ensureSpace(blockHeight)
@@ -86,10 +92,11 @@ internal suspend fun renderDocxPdf(
                         layout.draw(canvas)
                         canvas.restore()
                         if (block.headingLevel == 1) {
-                            val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                                color = Color.parseColor("#CCCCCC")
-                                strokeWidth = 0.5f
-                            }
+                            val linePaint =
+                                Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                    color = Color.parseColor("#CCCCCC")
+                                    strokeWidth = 0.5f
+                                }
                             canvas.drawLine(
                                 leftMargin,
                                 currentY + layout.height + 3,
@@ -101,19 +108,23 @@ internal suspend fun renderDocxPdf(
                         currentY += blockHeight + if (block.headingLevel > 0) 4f else 2f
                     }
                 }
+
                 is DocBlock.ImageBlock -> {
-                    val mediaFile = requireNotNull(mediaFiles[block.name]) {
-                        "DOCX refers to missing media content"
-                    }
-                    val bitmap = requireNotNull(decodeBoundedDocxImage(mediaFile)) {
-                        "DOCX contains an unsupported image"
-                    }
+                    val mediaFile =
+                        requireNotNull(mediaFiles[block.name]) {
+                            "DOCX refers to missing media content"
+                        }
+                    val bitmap =
+                        requireNotNull(decodeBoundedDocxImage(mediaFile)) {
+                            "DOCX contains an unsupported image"
+                        }
                     try {
-                        val scale = minOf(
-                            1f,
-                            contentWidth / bitmap.width.toFloat(),
-                            (pageHeight - topMargin - bottomMargin) / bitmap.height.toFloat(),
-                        )
+                        val scale =
+                            minOf(
+                                1f,
+                                contentWidth / bitmap.width.toFloat(),
+                                (pageHeight - topMargin - bottomMargin) / bitmap.height.toFloat(),
+                            )
                         val displayWidth = bitmap.width * scale
                         val displayHeight = bitmap.height * scale
                         ensureSpace(displayHeight + 8f)
@@ -139,16 +150,19 @@ internal suspend fun renderDocxPdf(
         document.finishPage(requireNotNull(activePage))
         activePage = null
         onProgress(97, "Saving…")
-        val output = OutputStore.writeUnique(
-            directory = getPdfMakerDir(context),
-            requestedBaseName = baseName,
-            extension = "pdf",
-            beforeCommit = { operationContext.ensureActive() },
-        ) { destination ->
-            document.writeTo(BoundedIo.limit(destination, DocxConversionPolicy.MAX_OUTPUT_BYTES) {
-                operationContext.ensureActive()
-            })
-        }
+        val output =
+            OutputStore.writeUnique(
+                directory = getPdfMakerDir(context),
+                requestedBaseName = baseName,
+                extension = "pdf",
+                beforeCommit = { operationContext.ensureActive() },
+            ) { destination ->
+                document.writeTo(
+                    BoundedIo.limit(destination, DocxConversionPolicy.MAX_OUTPUT_BYTES) {
+                        operationContext.ensureActive()
+                    },
+                )
+            }
         operationContext.ensureActive()
         onProgress(100, "Done!")
         return DocxPdfResult(output, pageNumber)
@@ -190,7 +204,8 @@ private fun buildDocxLayout(
     width: Int,
 ): StaticLayout =
     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-        StaticLayout.Builder.obtain(text, 0, text.length, paint, width)
+        StaticLayout.Builder
+            .obtain(text, 0, text.length, paint, width)
             .setAlignment(Layout.Alignment.ALIGN_NORMAL)
             .setLineSpacing(2f, 1.2f)
             .setIncludePad(false)

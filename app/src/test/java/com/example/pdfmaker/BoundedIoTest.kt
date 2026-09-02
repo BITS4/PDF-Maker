@@ -1,14 +1,14 @@
 package com.example.pdfmaker
 
+import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.util.concurrent.CancellationException
-import org.junit.Assert.assertArrayEquals
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Test
 
 class BoundedIoTest {
     @Test
@@ -24,9 +24,10 @@ class BoundedIoTest {
     fun copyRejectsTheFirstByteOverTheLimit() {
         val output = ByteArrayOutputStream()
 
-        val error = runCatching {
-            BoundedIo.copy(ByteArrayInputStream(ByteArray(17)), output, 16)
-        }.exceptionOrNull()
+        val error =
+            runCatching {
+                BoundedIo.copy(ByteArrayInputStream(ByteArray(17)), output, 16)
+            }.exceptionOrNull()
 
         assertTrue(error is IOException)
         assertTrue(output.size() <= 16)
@@ -34,10 +35,16 @@ class BoundedIoTest {
 
     @Test
     fun copyRejectsAProviderThatNeverMakesProgress() {
-        val stalled = object : InputStream() {
-            override fun read(): Int = 0
-            override fun read(bytes: ByteArray, offset: Int, length: Int): Int = 0
-        }
+        val stalled =
+            object : InputStream() {
+                override fun read(): Int = 0
+
+                override fun read(
+                    bytes: ByteArray,
+                    offset: Int,
+                    length: Int,
+                ): Int = 0
+            }
 
         val error = runCatching { BoundedIo.copy(stalled, ByteArrayOutputStream(), 100) }.exceptionOrNull()
 
@@ -65,13 +72,15 @@ class BoundedIoTest {
 
     @Test
     fun invalidLimitsAreRejectedBeforeReading() {
-        val tracking = object : InputStream() {
-            var wasRead = false
-            override fun read(): Int {
-                wasRead = true
-                return -1
+        val tracking =
+            object : InputStream() {
+                var wasRead = false
+
+                override fun read(): Int {
+                    wasRead = true
+                    return -1
+                }
             }
-        }
 
         assertTrue(runCatching { BoundedIo.copy(tracking, ByteArrayOutputStream(), 0) }.isFailure)
         assertTrue(!tracking.wasRead)
@@ -111,10 +120,11 @@ class BoundedIoTest {
         val destination = ByteArrayOutputStream()
         var writesAllowed = true
         var checks = 0
-        val bounded = BoundedIo.limit(destination, 10) {
-            checks += 1
-            check(writesAllowed) { "cancelled" }
-        }
+        val bounded =
+            BoundedIo.limit(destination, 10) {
+                checks += 1
+                check(writesAllowed) { "cancelled" }
+            }
 
         bounded.write(byteArrayOf(1, 2))
         writesAllowed = false

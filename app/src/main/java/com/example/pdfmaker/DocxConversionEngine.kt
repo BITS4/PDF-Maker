@@ -19,9 +19,10 @@ internal suspend fun docxToPdf(
         context.contentResolver.openInputStream(uri)
             ?: error("The DOCX provider returned no data")
     val workingDirectory = File(context.cacheDir, "pdfmaker")
-    val stagedDocx = SafeDocxInput.stage(providerInput, workingDirectory) {
-        operationContext.ensureActive()
-    }
+    val stagedDocx =
+        SafeDocxInput.stage(providerInput, workingDirectory) {
+            operationContext.ensureActive()
+        }
     try {
         operationContext.ensureActive()
         extractDocxConversionArchive(stagedDocx, workingDirectory) {

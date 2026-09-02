@@ -1,8 +1,8 @@
 package com.example.pdfmaker
 
+import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
-import timber.log.Timber
 
 internal enum class IncomingImportRetention {
     USER_DOCUMENT,
@@ -24,11 +24,12 @@ internal object IncomingImportStoragePolicy {
             documentDirectory
         }
 
-    fun isTemporary(kind: IncomingDocumentKind, retention: IncomingImportRetention): Boolean =
-        retention == IncomingImportRetention.OPERATION_TEMPORARY || kind.isImage
+    fun isTemporary(
+        kind: IncomingDocumentKind,
+        retention: IncomingImportRetention,
+    ): Boolean = retention == IncomingImportRetention.OPERATION_TEMPORARY || kind.isImage
 
-    fun temporaryDirectory(cacheDirectory: File): File =
-        File(cacheDirectory, TEMPORARY_IMPORT_PATH)
+    fun temporaryDirectory(cacheDirectory: File): File = File(cacheDirectory, TEMPORARY_IMPORT_PATH)
 }
 
 internal class ImportedDocumentArtifact private constructor(
@@ -95,8 +96,10 @@ internal class TemporaryImportLease private constructor(
     }
 
     companion object {
-        fun claim(file: File, expectedDirectory: File): TemporaryImportLease =
-            TemporaryImportLease(requireOwnedImport(file, expectedDirectory))
+        fun claim(
+            file: File,
+            expectedDirectory: File,
+        ): TemporaryImportLease = TemporaryImportLease(requireOwnedImport(file, expectedDirectory))
     }
 }
 
@@ -145,7 +148,10 @@ internal object OwnedImportCleanup {
     }
 }
 
-private fun requireOwnedImport(file: File, expectedDirectory: File): File {
+private fun requireOwnedImport(
+    file: File,
+    expectedDirectory: File,
+): File {
     val source = file.canonicalFile
     val directory = expectedDirectory.canonicalFile
     require(source.isFile && source.parentFile == directory) {

@@ -52,8 +52,8 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 import timber.log.Timber
+import java.io.File
 
 @Composable
 internal fun ViewerUnlockGate(

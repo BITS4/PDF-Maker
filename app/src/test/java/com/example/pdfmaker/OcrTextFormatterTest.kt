@@ -49,11 +49,14 @@ class OcrTextFormatterTest {
     @Test
     fun rejectsAnOversizedFormattedAggregate() {
         val pagesNeededToExceedLimit =
-            (OcrResourcePolicy.MAX_FORMATTED_TEXT_CHARACTERS /
-                OcrResourcePolicy.MAX_TEXT_CHARACTERS_PER_PAGE) + 1
-        val oversized = List(pagesNeededToExceedLimit) { index ->
-            index + 1 to "x".repeat(OcrResourcePolicy.MAX_TEXT_CHARACTERS_PER_PAGE)
-        }
+            (
+                OcrResourcePolicy.MAX_FORMATTED_TEXT_CHARACTERS /
+                    OcrResourcePolicy.MAX_TEXT_CHARACTERS_PER_PAGE
+            ) + 1
+        val oversized =
+            List(pagesNeededToExceedLimit) { index ->
+                index + 1 to "x".repeat(OcrResourcePolicy.MAX_TEXT_CHARACTERS_PER_PAGE)
+            }
 
         assertThrows(IllegalArgumentException::class.java) {
             OcrTextFormatter.format(oversized)

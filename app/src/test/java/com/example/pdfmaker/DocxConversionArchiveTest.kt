@@ -1,33 +1,34 @@
 package com.example.pdfmaker
 
-import java.io.ByteArrayOutputStream
-import java.io.File
-import java.nio.file.Files
-import java.util.concurrent.CancellationException
-import java.util.zip.ZipEntry
-import java.util.zip.ZipOutputStream
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.nio.file.Files
+import java.util.concurrent.CancellationException
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 class DocxConversionArchiveTest {
     @Test
     fun `extracts required parts and cleans staged media`() {
         val root = Files.createTempDirectory("docx-conversion-test").toFile()
         try {
-            val archiveFile = File(root, "source.docx").apply {
-                writeBytes(
-                    zipBytes(
-                        "word/document.xml" to "<document/>".toByteArray(),
-                        "word/_rels/document.xml.rels" to "<Relationships/>".toByteArray(),
-                        "word/media/image.png" to byteArrayOf(1, 2, 3),
-                        "custom/ignored.bin" to byteArrayOf(4, 5),
-                    ),
-                )
-            }
+            val archiveFile =
+                File(root, "source.docx").apply {
+                    writeBytes(
+                        zipBytes(
+                            "word/document.xml" to "<document/>".toByteArray(),
+                            "word/_rels/document.xml.rels" to "<Relationships/>".toByteArray(),
+                            "word/media/image.png" to byteArrayOf(1, 2, 3),
+                            "custom/ignored.bin" to byteArrayOf(4, 5),
+                        ),
+                    )
+                }
 
             val extracted = extractDocxConversionArchive(archiveFile, root)
             val mediaFile = requireNotNull(extracted.mediaFiles["image.png"])
@@ -48,14 +49,15 @@ class DocxConversionArchiveTest {
     fun `rejects a missing core part and removes partial extraction`() {
         val root = Files.createTempDirectory("docx-conversion-duplicate-test").toFile()
         try {
-            val archiveFile = File(root, "source.docx").apply {
-                writeBytes(
-                    zipBytes(
-                        "word/_rels/document.xml.rels" to "<Relationships/>".toByteArray(),
-                        "word/media/image.png" to byteArrayOf(1, 2, 3),
-                    ),
-                )
-            }
+            val archiveFile =
+                File(root, "source.docx").apply {
+                    writeBytes(
+                        zipBytes(
+                            "word/_rels/document.xml.rels" to "<Relationships/>".toByteArray(),
+                            "word/media/image.png" to byteArrayOf(1, 2, 3),
+                        ),
+                    )
+                }
 
             assertThrows(IllegalArgumentException::class.java) {
                 extractDocxConversionArchive(archiveFile, root)

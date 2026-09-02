@@ -19,6 +19,7 @@ object ImageProcessing {
         requireUsable(request.source)
 
         var current = request.source
+
         fun replaceIntermediate(next: Bitmap) {
             val previous = current
             current = next
@@ -58,7 +59,10 @@ object ImageProcessing {
         }
     }
 
-    fun rotateBitmap(source: Bitmap, degrees: Float): Bitmap {
+    fun rotateBitmap(
+        source: Bitmap,
+        degrees: Float,
+    ): Bitmap {
         requireUsable(source)
         val rotation = ImageTransformPolicy.normalizedRotation(degrees)
         if (rotation == 0f) return source
@@ -66,7 +70,11 @@ object ImageProcessing {
         return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
     }
 
-    suspend fun filterThumbnail(source: Bitmap, filter: ImageFilter, size: Int): Bitmap {
+    suspend fun filterThumbnail(
+        source: Bitmap,
+        filter: ImageFilter,
+        size: Int,
+    ): Bitmap {
         val context = currentCoroutineContext()
         val checkpoint = { context.ensureActive() }
         requireUsable(source)
@@ -95,10 +103,19 @@ object ImageProcessing {
         checkpoint: () -> Unit,
     ): Bitmap =
         when (filter) {
-            ImageFilter.ORIGINAL -> source
-            ImageFilter.AI_ENHANCE -> applyAiEnhance(source, checkpoint)
-            ImageFilter.DOCS -> applySharpenedMatrix(source, ImageColorMatrices.docs(), 0.75f, 2, 4, checkpoint)
-            ImageFilter.BW2 ->
+            ImageFilter.ORIGINAL -> {
+                source
+            }
+
+            ImageFilter.AI_ENHANCE -> {
+                applyAiEnhance(source, checkpoint)
+            }
+
+            ImageFilter.DOCS -> {
+                applySharpenedMatrix(source, ImageColorMatrices.docs(), 0.75f, 2, 4, checkpoint)
+            }
+
+            ImageFilter.BW2 -> {
                 applySharpenedMatrix(
                     source,
                     ImageColorMatrices.highContrastBlackAndWhite(),
@@ -107,14 +124,21 @@ object ImageProcessing {
                     3,
                     checkpoint,
                 )
+            }
 
-            ImageFilter.SUPER ->
+            ImageFilter.SUPER -> {
                 applySharpenedMatrix(source, ImageColorMatrices.vividDocument(), 0.55f, 1, 5, checkpoint)
+            }
 
-            else -> applyColorMatrix(source, ImageColorMatrices.forFilter(filter), checkpoint)
+            else -> {
+                applyColorMatrix(source, ImageColorMatrices.forFilter(filter), checkpoint)
+            }
         }
 
-    private fun applyAiEnhance(source: Bitmap, checkpoint: () -> Unit): Bitmap {
+    private fun applyAiEnhance(
+        source: Bitmap,
+        checkpoint: () -> Unit,
+    ): Bitmap {
         val pixels = IntArray(source.width * source.height)
         source.getPixels(pixels, 0, source.width, 0, 0, source.width, source.height)
         val enhanced =
@@ -241,7 +265,10 @@ object ImageProcessing {
         }
     }
 
-    private fun cropBitmap(source: Bitmap, rect: RectF): Bitmap {
+    private fun cropBitmap(
+        source: Bitmap,
+        rect: RectF,
+    ): Bitmap {
         val bounds =
             ImageTransformPolicy.cropBoundsOrNull(
                 imageWidth = source.width,
@@ -254,12 +281,19 @@ object ImageProcessing {
         return Bitmap.createBitmap(source, bounds.x, bounds.y, bounds.width, bounds.height)
     }
 
-    private fun bitmapFromPixels(pixels: IntArray, width: Int, height: Int): Bitmap =
+    private fun bitmapFromPixels(
+        pixels: IntArray,
+        width: Int,
+        height: Int,
+    ): Bitmap =
         Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { bitmap ->
             bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
         }
 
-    private fun scaledCopy(source: Bitmap, edge: Int): Bitmap =
+    private fun scaledCopy(
+        source: Bitmap,
+        edge: Int,
+    ): Bitmap =
         Bitmap.createBitmap(edge, edge, Bitmap.Config.ARGB_8888).also { bitmap ->
             Canvas(bitmap).drawBitmap(
                 source,
@@ -273,5 +307,4 @@ object ImageProcessing {
         require(!source.isRecycled) { "The image is no longer available" }
         ImageTransformPolicy.requireProcessableDimensions(source.width, source.height)
     }
-
 }

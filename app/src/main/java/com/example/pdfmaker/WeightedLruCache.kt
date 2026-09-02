@@ -6,7 +6,10 @@ internal class WeightedLruCache<K, V>(
     private val maximumWeight: Long,
     private val weightOf: (V) -> Long,
 ) {
-    private data class Entry<V>(val value: V, val weight: Long)
+    private data class Entry<V>(
+        val value: V,
+        val weight: Long,
+    )
 
     private val entries = LinkedHashMap<K, Entry<V>>(16, 0.75f, true)
     private var retainedWeight = 0L
@@ -20,7 +23,10 @@ internal class WeightedLruCache<K, V>(
     operator fun get(key: K): V? = entries[key]?.value
 
     @Synchronized
-    fun put(key: K, value: V) {
+    fun put(
+        key: K,
+        value: V,
+    ) {
         val weight = weightOf(value)
         require(weight > 0) { "Cached values must have a positive weight" }
         entries.remove(key)?.let { previous -> retainedWeight -= previous.weight }
@@ -67,4 +73,7 @@ internal class WeightedLruCache<K, V>(
     }
 }
 
-internal data class CacheStatistics(val entryCount: Int, val retainedWeight: Long)
+internal data class CacheStatistics(
+    val entryCount: Int,
+    val retainedWeight: Long,
+)

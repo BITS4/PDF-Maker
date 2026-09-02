@@ -6,7 +6,11 @@ internal object PdfEditorRenderPolicy {
     const val MAX_RENDER_EDGE = 2_048
     const val MAX_PACKAGE_BYTES = 512L * 1024L * 1024L
 
-    fun targetSize(pageWidth: Int, pageHeight: Int, requestedWidth: Int): PixelSize? =
+    fun targetSize(
+        pageWidth: Int,
+        pageHeight: Int,
+        requestedWidth: Int,
+    ): PixelSize? =
         RenderSizing.fitWithin(
             sourceWidth = pageWidth,
             sourceHeight = pageHeight,

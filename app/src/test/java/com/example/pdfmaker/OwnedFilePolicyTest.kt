@@ -1,11 +1,11 @@
 package com.example.pdfmaker
 
-import java.io.File
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.File
 
 class OwnedFilePolicyTest {
     @get:Rule
@@ -15,10 +15,11 @@ class OwnedFilePolicyTest {
     fun `accepts nested files under any configured root`() {
         val firstRoot = temporaryFolder.newFolder("first")
         val secondRoot = temporaryFolder.newFolder("second")
-        val nested = File(secondRoot, "nested/report.pdf").apply {
-            parentFile?.mkdirs()
-            writeText("pdf")
-        }
+        val nested =
+            File(secondRoot, "nested/report.pdf").apply {
+                parentFile?.mkdirs()
+                writeText("pdf")
+            }
 
         assertTrue(OwnedFilePolicy.contains(listOf(firstRoot, secondRoot), nested))
     }

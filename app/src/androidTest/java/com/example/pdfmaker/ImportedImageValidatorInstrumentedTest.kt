@@ -4,11 +4,6 @@ import android.content.Context
 import android.graphics.Bitmap
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import java.io.ByteArrayOutputStream
-import java.io.File
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
-import java.util.concurrent.CancellationException
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -16,6 +11,11 @@ import org.junit.Assert.assertThrows
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.util.concurrent.CancellationException
 
 @RunWith(AndroidJUnit4::class)
 class ImportedImageValidatorInstrumentedTest {
@@ -36,6 +36,7 @@ class ImportedImageValidatorInstrumentedTest {
     fun acceptsEverySupportedImageCodecAfterRealDecode() {
         val jpeg = imageFile("complete.jpg", Bitmap.CompressFormat.JPEG)
         val png = imageFile("complete.png", Bitmap.CompressFormat.PNG)
+
         @Suppress("DEPRECATION")
         val webp = imageFile("complete.webp", Bitmap.CompressFormat.WEBP)
         val gif = file("complete.gif", onePixelGif())
@@ -84,8 +85,10 @@ class ImportedImageValidatorInstrumentedTest {
         assertEquals(6, checkpoints)
     }
 
-    private fun imageFile(name: String, format: Bitmap.CompressFormat): File =
-        file(name, encodedImage(format))
+    private fun imageFile(
+        name: String,
+        format: Bitmap.CompressFormat,
+    ): File = file(name, encodedImage(format))
 
     private fun encodedImage(format: Bitmap.CompressFormat): ByteArray {
         val bitmap = Bitmap.createBitmap(24, 16, Bitmap.Config.ARGB_8888)
@@ -101,12 +104,49 @@ class ImportedImageValidatorInstrumentedTest {
 
     private fun onePixelGif(): ByteArray =
         byteArrayOf(
-            0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00,
-            0x01, 0x00, 0x80.toByte(), 0x00, 0x00, 0x00, 0x00, 0x00,
-            0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0x21, 0xF9.toByte(), 0x04, 0x01, 0x00,
-            0x00, 0x00, 0x00, 0x2C, 0x00, 0x00, 0x00, 0x00,
-            0x01, 0x00, 0x01, 0x00, 0x00, 0x02, 0x02, 0x44,
-            0x01, 0x00, 0x3B,
+            0x47,
+            0x49,
+            0x46,
+            0x38,
+            0x39,
+            0x61,
+            0x01,
+            0x00,
+            0x01,
+            0x00,
+            0x80.toByte(),
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0xFF.toByte(),
+            0xFF.toByte(),
+            0xFF.toByte(),
+            0x21,
+            0xF9.toByte(),
+            0x04,
+            0x01,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x2C,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x00,
+            0x01,
+            0x00,
+            0x00,
+            0x02,
+            0x02,
+            0x44,
+            0x01,
+            0x00,
+            0x3B,
         )
 
     private fun onePixelBmp(): ByteArray =
@@ -131,7 +171,10 @@ class ImportedImageValidatorInstrumentedTest {
             array()
         }
 
-    private fun file(name: String, bytes: ByteArray): File =
+    private fun file(
+        name: String,
+        bytes: ByteArray,
+    ): File =
         File(context.cacheDir, "${System.nanoTime()}-$name").apply {
             writeBytes(bytes)
             createdFiles += this

@@ -24,7 +24,8 @@ internal fun viewerMediaName(target: String): String? =
         .takeIf { it.isNotBlank() && it != "." && it != ".." }
 
 internal fun viewerCoordinate(raw: String): Float =
-    raw.toFloatOrNull()
+    raw
+        .toFloatOrNull()
         ?.takeIf { it.isFinite() && it >= 0f }
         ?.coerceAtMost(ViewerResourceLimits.MAX_OOXML_COORDINATE)
         ?: 0f

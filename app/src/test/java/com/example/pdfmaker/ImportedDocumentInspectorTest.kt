@@ -1,10 +1,5 @@
 package com.example.pdfmaker
 
-import java.io.File
-import java.io.FileOutputStream
-import java.util.concurrent.CancellationException
-import java.util.zip.ZipEntry
-import java.util.zip.ZipOutputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -13,6 +8,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.File
+import java.io.FileOutputStream
+import java.util.concurrent.CancellationException
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 class ImportedDocumentInspectorTest {
     @get:Rule
@@ -46,10 +46,11 @@ class ImportedDocumentInspectorTest {
 
     @Test
     fun acceptsOnlyDocxContainersWithRequiredParts() {
-        val valid = createZip(
-            "valid.docx",
-            mapOf("[Content_Types].xml" to "types", "word/document.xml" to "document"),
-        )
+        val valid =
+            createZip(
+                "valid.docx",
+                mapOf("[Content_Types].xml" to "types", "word/document.xml" to "document"),
+            )
         val genericZip = createZip("generic.zip", mapOf("notes.txt" to "hello"))
 
         assertEquals(IncomingDocumentKind.DOCX, ImportedDocumentInspector.inspect(valid))
@@ -58,14 +59,19 @@ class ImportedDocumentInspectorTest {
 
     @Test
     fun rejectsDocxTraversalEntriesAndCompressionBombs() {
-        val traversal = createZip(
-            "traversal.docx",
-            mapOf("[Content_Types].xml" to "types", "word/document.xml" to "doc", "../escape" to "bad"),
-        )
+        val traversal =
+            createZip(
+                "traversal.docx",
+                mapOf("[Content_Types].xml" to "types", "word/document.xml" to "doc", "../escape" to "bad"),
+            )
         val bomb = temporaryFolder.newFile("bomb.docx")
         ZipOutputStream(FileOutputStream(bomb)).use { output ->
-            output.putNextEntry(ZipEntry("[Content_Types].xml")); output.write("types".toByteArray()); output.closeEntry()
-            output.putNextEntry(ZipEntry("word/document.xml")); output.write(ByteArray(2 * 1024 * 1024)); output.closeEntry()
+            output.putNextEntry(ZipEntry("[Content_Types].xml"))
+            output.write("types".toByteArray())
+            output.closeEntry()
+            output.putNextEntry(ZipEntry("word/document.xml"))
+            output.write(ByteArray(2 * 1024 * 1024))
+            output.closeEntry()
         }
 
         assertNull(ImportedDocumentInspector.inspect(traversal))
@@ -105,7 +111,10 @@ class ImportedDocumentInspectorTest {
         assertFalse(ImportedDocumentInspector.mimeTypesMatch(IncomingDocumentKind.JPEG, "image/png"))
     }
 
-    private fun createZip(name: String, entries: Map<String, String>): File {
+    private fun createZip(
+        name: String,
+        entries: Map<String, String>,
+    ): File {
         val file = temporaryFolder.newFile(name)
         ZipOutputStream(FileOutputStream(file)).use { output ->
             entries.forEach { (entryName, contents) ->

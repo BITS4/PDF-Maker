@@ -59,8 +59,10 @@ internal class ViewerArchiveBudget(
         entryCount += 1
     }
 
-    fun readEntry(input: InputStream, maximumEntryBytes: Int): ByteArray =
-        consume(input, maximumEntryBytes, capture = true) ?: byteArrayOf()
+    fun readEntry(
+        input: InputStream,
+        maximumEntryBytes: Int,
+    ): ByteArray = consume(input, maximumEntryBytes, capture = true) ?: byteArrayOf()
 
     fun readXml(input: InputStream): String =
         SafeDocxInput.decodeXml(
@@ -86,11 +88,15 @@ internal class ViewerArchiveBudget(
         while (!finished) {
             val count = input.read(buffer)
             when {
-                count < 0 -> finished = true
+                count < 0 -> {
+                    finished = true
+                }
+
                 count == 0 -> {
                     emptyReads += 1
                     requireArchiveProgress(emptyReads)
                 }
+
                 else -> {
                     emptyReads = 0
                     requireEntryCapacity(entryBytes, count, maximumEntryBytes)
@@ -129,7 +135,10 @@ private fun requireArchiveCapacity(
     }
 }
 
-internal fun readBoundedViewerFile(file: File, maximumBytes: Long): ByteArray {
+internal fun readBoundedViewerFile(
+    file: File,
+    maximumBytes: Long,
+): ByteArray {
     require(maximumBytes > 0) { "maximumBytes must be positive" }
     require(file.isFile) { "Preview source is unavailable" }
     require(file.length() in 0..maximumBytes) { "Preview source exceeds its size limit" }
@@ -143,8 +152,8 @@ internal fun readBoundedViewerFile(file: File, maximumBytes: Long): ByteArray {
 internal fun readBoundedViewerText(file: File): String =
     String(readBoundedViewerFile(file, ViewerResourceLimits.MAX_TEXT_BYTES.toLong()), StandardCharsets.UTF_8)
 
-internal fun isSafeViewerArchiveEntryName(name: String): Boolean {
-    return when {
+internal fun isSafeViewerArchiveEntryName(name: String): Boolean =
+    when {
         name.isBlank() -> false
         name.length > 240 -> false
         name.startsWith('/') || name.startsWith('\\') -> false
@@ -152,4 +161,3 @@ internal fun isSafeViewerArchiveEntryName(name: String): Boolean {
         ':' in name || '\\' in name -> false
         else -> name.split('/').none { it == "." || it == ".." }
     }
-}

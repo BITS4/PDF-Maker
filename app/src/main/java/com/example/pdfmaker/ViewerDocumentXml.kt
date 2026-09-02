@@ -1,10 +1,10 @@
 package com.example.pdfmaker
 
-import java.io.IOException
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserException
 import org.xmlpull.v1.XmlPullParserFactory
 import timber.log.Timber
+import java.io.IOException
 
 internal fun boundedViewerTextFragment(
     currentLength: Int,
@@ -37,7 +37,10 @@ private fun parseViewerRelationshipsOrThrow(xml: String): Map<String, String> {
     return relationships
 }
 
-private fun readViewerRelationship(parser: XmlPullParser, event: Int): Pair<String, String>? {
+private fun readViewerRelationship(
+    parser: XmlPullParser,
+    event: Int,
+): Pair<String, String>? {
     if (event != XmlPullParser.START_TAG || parser.name != "Relationship") return null
     val id = parser.getAttributeValue(null, "Id").orEmpty()
     val target = parser.getAttributeValue(null, "Target").orEmpty()
@@ -110,7 +113,10 @@ private class ViewerDocumentState(
     val blocks: List<DocBlock> get() = mutableBlocks
     val canAcceptBlocks: Boolean get() = mutableBlocks.size < ViewerResourceLimits.MAX_DOCUMENT_BLOCKS
 
-    fun consume(parser: XmlPullParser, event: Int) {
+    fun consume(
+        parser: XmlPullParser,
+        event: Int,
+    ) {
         when (event) {
             XmlPullParser.START_TAG -> handleStartTag(parser, parser.name.orEmpty())
             XmlPullParser.TEXT -> handleText(parser.text)
@@ -118,7 +124,10 @@ private class ViewerDocumentState(
         }
     }
 
-    private fun handleStartTag(parser: XmlPullParser, name: String) {
+    private fun handleStartTag(
+        parser: XmlPullParser,
+        name: String,
+    ) {
         when (name) {
             "body" -> inBody = true
             "p" -> if (inBody) inParagraph = true
@@ -129,7 +138,10 @@ private class ViewerDocumentState(
         }
     }
 
-    private fun handleRunContentTag(parser: XmlPullParser, name: String) {
+    private fun handleRunContentTag(
+        parser: XmlPullParser,
+        name: String,
+    ) {
         when (name) {
             "b" -> if (inRunProperties) bold = true
             "i" -> if (inRunProperties) italic = true

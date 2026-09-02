@@ -8,8 +8,8 @@ import android.net.Uri
 import android.os.CancellationSignal
 import android.os.OperationCanceledException
 import android.os.ParcelFileDescriptor
-import android.provider.OpenableColumns
 import android.os.SystemClock
+import android.provider.OpenableColumns
 import java.io.File
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -48,16 +48,26 @@ class BlockingTestDocumentProvider : ContentProvider() {
 
     override fun getType(uri: Uri): String = "application/pdf"
 
-    override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor {
+    override fun openFile(
+        uri: Uri,
+        mode: String,
+    ): ParcelFileDescriptor {
         val appContext = checkNotNull(context)
         val source = File(appContext.cacheDir, "blocking-provider.pdf")
         source.writeText("%PDF-1.7\n%%EOF")
         return ParcelFileDescriptor.open(source, ParcelFileDescriptor.MODE_READ_ONLY)
     }
 
-    override fun insert(uri: Uri, values: ContentValues?): Uri? = null
+    override fun insert(
+        uri: Uri,
+        values: ContentValues?,
+    ): Uri? = null
 
-    override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?): Int = 0
+    override fun delete(
+        uri: Uri,
+        selection: String?,
+        selectionArgs: Array<out String>?,
+    ): Int = 0
 
     override fun update(
         uri: Uri,
@@ -101,11 +111,17 @@ class BlockingTestDocumentProvider : ContentProvider() {
             blocking = false
         }
 
-        fun awaitQueries(expected: Int, timeout: Long, unit: TimeUnit): Boolean =
-            awaitCounter(queryCount, expected, timeout, unit)
+        fun awaitQueries(
+            expected: Int,
+            timeout: Long,
+            unit: TimeUnit,
+        ): Boolean = awaitCounter(queryCount, expected, timeout, unit)
 
-        fun awaitCancellations(expected: Int, timeout: Long, unit: TimeUnit): Boolean =
-            awaitCounter(cancellationCount, expected, timeout, unit)
+        fun awaitCancellations(
+            expected: Int,
+            timeout: Long,
+            unit: TimeUnit,
+        ): Boolean = awaitCounter(cancellationCount, expected, timeout, unit)
 
         private fun awaitCounter(
             counter: AtomicInteger,

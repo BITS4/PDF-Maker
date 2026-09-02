@@ -39,8 +39,7 @@ object SecureDocumentLimits {
         return length
     }
 
-    fun authenticatedLength(plaintextLength: Long): Long =
-        Math.addExact(requirePlaintextLength(plaintextLength), AUTHENTICATED_OVERHEAD_BYTES)
+    fun authenticatedLength(plaintextLength: Long): Long = Math.addExact(requirePlaintextLength(plaintextLength), AUTHENTICATED_OVERHEAD_BYTES)
 }
 
 /** Versioned authenticated encryption with read compatibility for the original CBC format. */
@@ -99,15 +98,16 @@ object SecureDocumentCodec {
         val header = newAuthenticatedHeader(random, iterations)
         val cipher = authenticatedCipher(Cipher.ENCRYPT_MODE, password, header, iterations)
         output.write(header)
-        val payloadBytes = transformExactly(
-            input = input,
-            expectedInputBytes = plaintextLength,
-            output = output,
-            cipher = cipher,
-            maximumOutputBytes = plaintextLength + TAG_BITS / Byte.SIZE_BITS,
-            clearTransformedBytes = false,
-            beforeChunk = beforeChunk,
-        )
+        val payloadBytes =
+            transformExactly(
+                input = input,
+                expectedInputBytes = plaintextLength,
+                output = output,
+                cipher = cipher,
+                maximumOutputBytes = plaintextLength + TAG_BITS / Byte.SIZE_BITS,
+                clearTransformedBytes = false,
+                beforeChunk = beforeChunk,
+            )
         val written = header.size.toLong() + payloadBytes
         check(written == SecureDocumentLimits.authenticatedLength(plaintextLength)) {
             "Encrypted document length is inconsistent"
@@ -115,7 +115,10 @@ object SecureDocumentCodec {
         return written
     }
 
-    fun decrypt(encrypted: ByteArray, password: String): ByteArray? {
+    fun decrypt(
+        encrypted: ByteArray,
+        password: String,
+    ): ByteArray? {
         if (password.length !in 4..128) return null
         if (encrypted.size.toLong() !in
             SecureDocumentLimits.MIN_ENCRYPTED_BYTES..SecureDocumentLimits.MAX_ENCRYPTED_BYTES
@@ -129,8 +132,7 @@ object SecureDocumentCodec {
         }
     }
 
-    fun isEncrypted(bytes: ByteArray): Boolean =
-        bytes.hasMagic(AUTHENTICATED_DOCUMENT_MAGIC) || bytes.hasMagic(LEGACY_DOCUMENT_MAGIC)
+    fun isEncrypted(bytes: ByteArray): Boolean = bytes.hasMagic(AUTHENTICATED_DOCUMENT_MAGIC) || bytes.hasMagic(LEGACY_DOCUMENT_MAGIC)
 
     /** Decrypts V2 and legacy files while keeping any unauthenticated output in caller-owned temporary storage. */
     internal fun decrypt(
@@ -148,22 +150,30 @@ object SecureDocumentCodec {
         val magic = readExactly(input, authenticatedMagic.size, beforeChunk) ?: return false
         return try {
             when {
-                magic.contentEquals(authenticatedMagic) -> decryptAuthenticated(
-                    input,
-                    output,
-                    encryptedLength,
-                    password,
-                    magic,
-                    beforeChunk,
-                )
-                magic.contentEquals(legacyMagic) -> decryptLegacy(
-                    input,
-                    output,
-                    encryptedLength,
-                    password,
-                    beforeChunk,
-                )
-                else -> false
+                magic.contentEquals(authenticatedMagic) -> {
+                    decryptAuthenticated(
+                        input,
+                        output,
+                        encryptedLength,
+                        password,
+                        magic,
+                        beforeChunk,
+                    )
+                }
+
+                magic.contentEquals(legacyMagic) -> {
+                    decryptLegacy(
+                        input,
+                        output,
+                        encryptedLength,
+                        password,
+                        beforeChunk,
+                    )
+                }
+
+                else -> {
+                    false
+                }
             }
         } catch (_: AEADBadTagException) {
             false
@@ -174,7 +184,10 @@ object SecureDocumentCodec {
         }
     }
 
-    private fun decryptAuthenticated(encrypted: ByteArray, password: String): ByteArray? {
+    private fun decryptAuthenticated(
+        encrypted: ByteArray,
+        password: String,
+    ): ByteArray? {
         if (encrypted.size < MIN_V2_SIZE) return null
         return try {
             val buffer = ByteBuffer.wrap(encrypted)
@@ -198,7 +211,10 @@ object SecureDocumentCodec {
         }
     }
 
-    private fun decryptLegacy(encrypted: ByteArray, password: String): ByteArray? {
+    private fun decryptLegacy(
+        encrypted: ByteArray,
+        password: String,
+    ): ByteArray? {
         if (encrypted.size <= LEGACY_HEADER_SIZE) return null
         return try {
             val salt = encrypted.copyOfRange(8, 24)
@@ -269,10 +285,14 @@ object SecureDocumentCodec {
         return true
     }
 
-    private fun newAuthenticatedHeader(random: SecureRandom, iterations: Int): ByteArray {
+    private fun newAuthenticatedHeader(
+        random: SecureRandom,
+        iterations: Int,
+    ): ByteArray {
         val salt = ByteArray(SALT_SIZE).also(random::nextBytes)
         val nonce = ByteArray(NONCE_SIZE).also(random::nextBytes)
-        return ByteBuffer.allocate(V2_HEADER_SIZE)
+        return ByteBuffer
+            .allocate(V2_HEADER_SIZE)
             .put(authenticatedMagic)
             .putInt(iterations)
             .put(salt)
@@ -311,7 +331,11 @@ object SecureDocumentCodec {
         }
     }
 
-    private fun decryptArray(cipher: Cipher, encrypted: ByteArray, inputOffset: Int): ByteArray {
+    private fun decryptArray(
+        cipher: Cipher,
+        encrypted: ByteArray,
+        inputOffset: Int,
+    ): ByteArray {
         val inputLength = encrypted.size - inputOffset
         val candidate = ByteArray(cipher.getOutputSize(inputLength))
         var keepCandidate = false
@@ -347,36 +371,42 @@ object SecureDocumentCodec {
                 beforeChunk()
                 val read = input.read(inputBuffer)
                 when {
-                    read < 0 -> finished = true
+                    read < 0 -> {
+                        finished = true
+                    }
+
                     read == 0 -> {
                         emptyReads += 1
                         check(emptyReads <= MAX_EMPTY_READS) { "Document input made no progress" }
                     }
+
                     else -> {
                         emptyReads = 0
                         inputBytes += read
                         require(inputBytes <= expectedInputBytes) {
                             "Document changed while it was being processed"
                         }
-                        outputBytes = writeTransformed(
-                            output,
-                            cipher.update(inputBuffer, 0, read),
-                            outputBytes,
-                            maximumOutputBytes,
-                            clearTransformedBytes,
-                        )
+                        outputBytes =
+                            writeTransformed(
+                                output,
+                                cipher.update(inputBuffer, 0, read),
+                                outputBytes,
+                                maximumOutputBytes,
+                                clearTransformedBytes,
+                            )
                     }
                 }
             }
             require(inputBytes == expectedInputBytes) { "Document changed while it was being processed" }
             beforeChunk()
-            outputBytes = writeTransformed(
-                output,
-                cipher.doFinal(),
-                outputBytes,
-                maximumOutputBytes,
-                clearTransformedBytes,
-            )
+            outputBytes =
+                writeTransformed(
+                    output,
+                    cipher.doFinal(),
+                    outputBytes,
+                    maximumOutputBytes,
+                    clearTransformedBytes,
+                )
             return outputBytes
         } finally {
             inputBuffer.fill(0)
@@ -424,12 +454,19 @@ object SecureDocumentCodec {
         return bytes
     }
 
-    private fun validatePasswordAndIterations(password: String, iterations: Int) {
+    private fun validatePasswordAndIterations(
+        password: String,
+        iterations: Int,
+    ) {
         require(password.length in 4..128) { "Password must contain 4 to 128 characters" }
         require(iterations in MIN_ITERATIONS..MAX_ITERATIONS) { "Invalid key derivation work factor" }
     }
 
-    private fun deriveKey(password: String, salt: ByteArray, iterations: Int): ByteArray {
+    private fun deriveKey(
+        password: String,
+        salt: ByteArray,
+        iterations: Int,
+    ): ByteArray {
         val spec = PBEKeySpec(password.toCharArray(), salt, iterations, KEY_BITS)
         return try {
             SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
@@ -439,11 +476,12 @@ object SecureDocumentCodec {
     }
 
     private fun ByteArray.hasMagic(value: String): Boolean {
-        val expected = when (value) {
-            AUTHENTICATED_DOCUMENT_MAGIC -> authenticatedMagic
-            LEGACY_DOCUMENT_MAGIC -> legacyMagic
-            else -> value.toByteArray(Charsets.US_ASCII)
-        }
+        val expected =
+            when (value) {
+                AUTHENTICATED_DOCUMENT_MAGIC -> authenticatedMagic
+                LEGACY_DOCUMENT_MAGIC -> legacyMagic
+                else -> value.toByteArray(Charsets.US_ASCII)
+            }
         if (size < expected.size) return false
         return expected.indices.all { index -> this[index] == expected[index] }
     }

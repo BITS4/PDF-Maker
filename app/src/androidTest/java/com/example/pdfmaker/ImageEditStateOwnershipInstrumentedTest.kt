@@ -4,13 +4,13 @@ import android.graphics.Bitmap
 import android.net.Uri
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.File
 
 @RunWith(AndroidJUnit4::class)
 class ImageEditStateOwnershipInstrumentedTest {
@@ -65,9 +65,10 @@ class ImageEditStateOwnershipInstrumentedTest {
     fun installingDecodedPixelsReleasesTheTemporaryImport() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val directory = File(context.cacheDir, "pdfmaker/incoming").apply { mkdirs() }
-        val sourceFile = File(directory, "owned-${System.nanoTime()}.png").apply {
-            writeBytes(byteArrayOf(1))
-        }
+        val sourceFile =
+            File(directory, "owned-${System.nanoTime()}.png").apply {
+                writeBytes(byteArrayOf(1))
+            }
         val state = ImageEditState(Uri.EMPTY, TemporaryImportLease.claim(sourceFile, directory))
         val bitmap = bitmap()
 

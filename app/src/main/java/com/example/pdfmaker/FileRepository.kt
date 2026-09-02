@@ -18,10 +18,12 @@ object FileRepository {
         return found.values.sortedByDescending { it.lastModified }
     }
 
-    private fun ownedRoots(context: Context): Set<File> = buildSet {
+    private fun ownedRoots(context: Context): Set<File> =
+        buildSet {
             add(getPdfMakerDir(context).canonicalFile)
             add(File(context.filesDir, "documents/PDFMaker").canonicalFile)
-            context.getExternalFilesDirs(Environment.DIRECTORY_DOCUMENTS)
+            context
+                .getExternalFilesDirs(Environment.DIRECTORY_DOCUMENTS)
                 .filterNotNull()
                 .forEach { add(File(it, "PDFMaker").canonicalFile) }
         }
@@ -42,14 +44,15 @@ object FileRepository {
             } else {
                 val extension = file.extension.lowercase(Locale.ROOT)
                 if (extension in supportedExtensions && file.path !in found) {
-                    found[file.path] = PdfFile(
-                        name = file.nameWithoutExtension,
-                        filePath = file.absolutePath,
-                        size = formatSize(file.length()),
-                        date = formatDate(file.lastModified()),
-                        pageCount = if (extension == "pdf") estimatePageCount(file.length()) else 1,
-                        lastModified = file.lastModified(),
-                    )
+                    found[file.path] =
+                        PdfFile(
+                            name = file.nameWithoutExtension,
+                            filePath = file.absolutePath,
+                            size = formatSize(file.length()),
+                            date = formatDate(file.lastModified()),
+                            pageCount = if (extension == "pdf") estimatePageCount(file.length()) else 1,
+                            lastModified = file.lastModified(),
+                        )
                 }
             }
         }
@@ -60,7 +63,10 @@ object FileRepository {
         return loadPdfFiles(context).filter { it.lastModified >= cutoff }
     }
 
-    fun deleteFile(context: Context, filePath: String): Boolean =
+    fun deleteFile(
+        context: Context,
+        filePath: String,
+    ): Boolean =
         try {
             val candidate = File(filePath).canonicalFile
             OwnedFilePolicy.contains(ownedRoots(context), candidate) && candidate.isFile && candidate.delete()
@@ -70,15 +76,14 @@ object FileRepository {
             false
         }
 
-    fun formatSize(bytes: Long): String = when {
-        bytes >= 1_048_576 -> "%.1f MB".format(bytes / 1_048_576.0)
-        bytes >= 1_024 -> "${bytes / 1_024} kB"
-        else -> "$bytes B"
-    }
+    fun formatSize(bytes: Long): String =
+        when {
+            bytes >= 1_048_576 -> "%.1f MB".format(bytes / 1_048_576.0)
+            bytes >= 1_024 -> "${bytes / 1_024} kB"
+            else -> "$bytes B"
+        }
 
-    fun formatDate(millis: Long): String =
-        SimpleDateFormat("MM/dd HH:mm", Locale.getDefault()).format(Date(millis))
+    fun formatDate(millis: Long): String = SimpleDateFormat("MM/dd HH:mm", Locale.getDefault()).format(Date(millis))
 
-    private fun estimatePageCount(bytes: Long): Int =
-        (bytes / 102_400).toInt().coerceAtLeast(1)
+    private fun estimatePageCount(bytes: Long): Int = (bytes / 102_400).toInt().coerceAtLeast(1)
 }

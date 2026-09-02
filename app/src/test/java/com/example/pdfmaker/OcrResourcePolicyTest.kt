@@ -119,11 +119,12 @@ class OcrResourcePolicyTest {
 
     @Test
     fun `normalizes accepted text and tracks retained characters`() {
-        val accepted = OcrResourcePolicy.acceptRecognizedText(
-            pageNumber = 2,
-            recognizedText = "  recognized text\n",
-            currentCharacters = 10,
-        )
+        val accepted =
+            OcrResourcePolicy.acceptRecognizedText(
+                pageNumber = 2,
+                recognizedText = "  recognized text\n",
+                currentCharacters = 10,
+            )
 
         assertEquals("recognized text", accepted.text)
         assertEquals(25, accepted.totalCharacters)
@@ -131,11 +132,12 @@ class OcrResourcePolicyTest {
 
     @Test
     fun `accepts the exact aggregate text boundary`() {
-        val accepted = OcrResourcePolicy.acceptRecognizedText(
-            pageNumber = OcrResourcePolicy.MAX_PDF_PAGES,
-            recognizedText = "x",
-            currentCharacters = OcrResourcePolicy.MAX_TOTAL_TEXT_CHARACTERS - 1,
-        )
+        val accepted =
+            OcrResourcePolicy.acceptRecognizedText(
+                pageNumber = OcrResourcePolicy.MAX_PDF_PAGES,
+                recognizedText = "x",
+                currentCharacters = OcrResourcePolicy.MAX_TOTAL_TEXT_CHARACTERS - 1,
+            )
 
         assertEquals(OcrResourcePolicy.MAX_TOTAL_TEXT_CHARACTERS, accepted.totalCharacters)
     }

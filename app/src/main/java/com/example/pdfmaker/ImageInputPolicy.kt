@@ -29,15 +29,16 @@ object ImageInputPolicy {
     const val MAX_DECODE_EDGE_PX = 1_600
     const val MAX_DECODE_PIXELS = 1_200_000L
     const val MAX_ENCODED_BYTES = 40L * 1024L * 1024L
-    private val supportedMimeTypes = setOf(
-        "image/bmp",
-        "image/gif",
-        "image/heic",
-        "image/heif",
-        "image/jpeg",
-        "image/png",
-        "image/webp",
-    )
+    private val supportedMimeTypes =
+        setOf(
+            "image/bmp",
+            "image/gif",
+            "image/heic",
+            "image/heif",
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+        )
 
     fun <T> mergeDistinct(
         existing: Iterable<T>,
@@ -75,7 +76,7 @@ object ImageInputPolicy {
         var dimensions = sampledDimensions(width, height, sampleSize)
         while (
             maxOf(dimensions.width, dimensions.height) > maximumEdge ||
-                dimensions.pixels > maximumPixels
+            dimensions.pixels > maximumPixels
         ) {
             check(sampleSize <= Int.MAX_VALUE / 2) { "Image dimensions cannot be sampled safely" }
             sampleSize *= 2
@@ -105,15 +106,20 @@ object ImageInputPolicy {
         )
     }
 
-    fun isSupportedMimeType(mimeType: String?): Boolean =
-        mimeType?.lowercase(Locale.ROOT) in supportedMimeTypes
+    fun isSupportedMimeType(mimeType: String?): Boolean = mimeType?.lowercase(Locale.ROOT) in supportedMimeTypes
 
-    private fun sampledDimensions(width: Int, height: Int, sampleSize: Int): ImageDimensions =
+    private fun sampledDimensions(
+        width: Int,
+        height: Int,
+        sampleSize: Int,
+    ): ImageDimensions =
         ImageDimensions(
             width = ceilDivide(width, sampleSize),
             height = ceilDivide(height, sampleSize),
         )
 
-    private fun ceilDivide(value: Int, divisor: Int): Int =
-        ((value.toLong() + divisor - 1L) / divisor).toInt().coerceAtLeast(1)
+    private fun ceilDivide(
+        value: Int,
+        divisor: Int,
+    ): Int = ((value.toLong() + divisor - 1L) / divisor).toInt().coerceAtLeast(1)
 }

@@ -3,11 +3,11 @@ package com.example.pdfmaker
 import android.graphics.pdf.PdfDocument
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.File
 
 @RunWith(AndroidJUnit4::class)
 class PdfFileMetadataInstrumentedTest {

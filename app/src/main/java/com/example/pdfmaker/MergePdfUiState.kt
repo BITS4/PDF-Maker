@@ -70,7 +70,7 @@ internal class MergePdfUiState(
 
     fun reject(message: String) {
         if (phase == MergeState.MERGING || phase == MergeState.DONE) return
-        errorMessage = message.ifBlank { DefaultMergeError }
+        errorMessage = message.ifBlank { DEFAULT_MERGE_ERROR }
         shareMessage = null
         phase = MergeState.ERROR
     }
@@ -152,7 +152,7 @@ internal class MergePdfUiState(
         if (phase != MergeState.MERGING || !operation.fail(generation)) return false
         progress = 0
         progressText = ""
-        errorMessage = message.ifBlank { DefaultMergeError }
+        errorMessage = message.ifBlank { DEFAULT_MERGE_ERROR }
         shareMessage = null
         phase = MergeState.ERROR
         return true
@@ -160,7 +160,7 @@ internal class MergePdfUiState(
 
     fun reportShareResult(launched: Boolean): Boolean {
         if (phase != MergeState.DONE || resultFile == null || resultPdfFile == null) return false
-        shareMessage = if (launched) null else ShareFailureMessage
+        shareMessage = if (launched) null else SHARE_FAILURE_MESSAGE
         return true
     }
 
@@ -198,8 +198,8 @@ internal class MergePdfUiState(
     }
 
     private companion object {
-        const val DefaultMergeError = "The selected PDFs could not be merged safely."
-        const val ShareFailureMessage =
+        const val DEFAULT_MERGE_ERROR = "The selected PDFs could not be merged safely."
+        const val SHARE_FAILURE_MESSAGE =
             "The merged PDF is saved, but no compatible sharing app could be opened. Tap Share to try again."
     }
 }

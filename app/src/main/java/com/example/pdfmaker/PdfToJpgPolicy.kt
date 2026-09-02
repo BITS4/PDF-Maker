@@ -60,16 +60,20 @@ internal object PdfToJpgPolicy {
         if (requestedMaxEdge <= 0) return null
         val edgeLimit = requestedMaxEdge.coerceAtMost(MAX_RENDER_EDGE)
         val edgeBounded = RenderSizing.fitWithin(pageWidth, pageHeight, edgeLimit) ?: return null
-        val fullyBounded = ImageInputPolicy.fitWithinLimits(
-            width = edgeBounded.width,
-            height = edgeBounded.height,
-            maximumEdge = edgeLimit,
-            maximumPixels = MAX_RENDER_PIXELS,
-        ) ?: return null
+        val fullyBounded =
+            ImageInputPolicy.fitWithinLimits(
+                width = edgeBounded.width,
+                height = edgeBounded.height,
+                maximumEdge = edgeLimit,
+                maximumPixels = MAX_RENDER_PIXELS,
+            ) ?: return null
         return PixelSize(fullyBounded.width, fullyBounded.height)
     }
 
-    fun resultThumbnailPlan(width: Int, height: Int): ImageDecodePlan? =
+    fun resultThumbnailPlan(
+        width: Int,
+        height: Int,
+    ): ImageDecodePlan? =
         ImageInputPolicy.decodePlan(
             width = width,
             height = height,
@@ -77,7 +81,10 @@ internal object PdfToJpgPolicy {
             maximumPixels = RESULT_THUMBNAIL_PIXELS,
         )
 
-    fun recordExportedFile(currentBytes: Long, fileBytes: Long): Long {
+    fun recordExportedFile(
+        currentBytes: Long,
+        fileBytes: Long,
+    ): Long {
         require(currentBytes in 0..MAX_EXPORT_BYTES) { "Export size is invalid" }
         require(fileBytes in 1..MAX_JPEG_BYTES) { "A converted image exceeds the 50 MB limit" }
         val updated = Math.addExact(currentBytes, fileBytes)
@@ -136,19 +143,21 @@ internal object PdfToJpgPolicy {
         error: Throwable,
     ): String =
         when (stage) {
-            PdfToJpgFailureStage.LOAD ->
+            PdfToJpgFailureStage.LOAD -> {
                 when (error) {
                     is SecurityException -> "Access to this PDF was denied. Re-select it and allow file access."
                     is java.io.IOException -> "This PDF could not be read. Check the file and try again."
                     else -> "This file is not a supported PDF. Choose another document."
                 }
+            }
 
-            PdfToJpgFailureStage.CONVERT ->
+            PdfToJpgFailureStage.CONVERT -> {
                 when (error) {
                     is SecurityException -> "Access to this PDF was lost. Re-select it and try again."
                     is java.io.IOException -> "The JPG files could not be written. Check available storage and try again."
                     else -> "This PDF could not be converted safely. Try another file or quality setting."
                 }
+            }
 
             PdfToJpgFailureStage.SHARE_PREPARE,
             PdfToJpgFailureStage.SHARE_LAUNCH,

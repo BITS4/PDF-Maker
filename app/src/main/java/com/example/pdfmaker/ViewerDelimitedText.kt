@@ -37,7 +37,11 @@ private class DelimitedRowAccumulator(
     val hasRowCapacity: Boolean
         get() = rows.size < maximumRows
 
-    fun consume(text: String, index: Int, delimiter: Char): Int {
+    fun consume(
+        text: String,
+        index: Int,
+        delimiter: Char,
+    ): Int {
         val character = text[index]
         if (character == '"' && inQuotes && text.getOrNull(index + 1) == '"') {
             append('"')
@@ -49,14 +53,17 @@ private class DelimitedRowAccumulator(
                 inQuotes = !inQuotes
                 1
             }
+
             character == delimiter && !inQuotes -> {
                 finishCell()
                 1
             }
+
             (character == '\r' || character == '\n') && !inQuotes -> {
                 finishRow()
                 if (character == '\r' && text.getOrNull(index + 1) == '\n') 2 else 1
             }
+
             else -> {
                 append(character)
                 1

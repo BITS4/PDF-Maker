@@ -63,8 +63,7 @@ internal class AndroidDocxToPdfBoundaries(
     override suspend fun inspect(
         source: DocxInputSource,
         fallbackName: String?,
-    ): DocxInputMetadata =
-        readDocxInputMetadata(context, source.requireProviderUri(), fallbackName)
+    ): DocxInputMetadata = readDocxInputMetadata(context, source.requireProviderUri(), fallbackName)
 
     override suspend fun convert(
         source: DocxInputSource,
@@ -78,8 +77,7 @@ internal class AndroidDocxToPdfBoundaries(
             onProgress = onProgress,
         )
 
-    override suspend fun verify(converted: DocxPdfResult): DocxSavedResult =
-        verifyConvertedDocxOutput(converted)
+    override suspend fun verify(converted: DocxPdfResult): DocxSavedResult = verifyConvertedDocxOutput(converted)
 
     override fun share(file: File): Boolean = shareDocxPdf(context, file)
 

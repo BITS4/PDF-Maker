@@ -20,7 +20,10 @@ internal interface ImportedDecodedImage : Closeable {
 internal interface ImportedImageDecoder {
     fun readBounds(file: File): ImportedImageMetadata?
 
-    fun decodeSample(file: File, sampleSize: Int): ImportedDecodedImage?
+    fun decodeSample(
+        file: File,
+        sampleSize: Int,
+    ): ImportedDecodedImage?
 }
 
 /** Performs a bounded real decode before an untrusted image is accepted as an import. */
@@ -62,24 +65,34 @@ internal object ImportedImageValidator {
         } ?: false
     }
 
-    internal fun mimeMatches(kind: IncomingDocumentKind, rawMimeType: String?): Boolean {
+    internal fun mimeMatches(
+        kind: IncomingDocumentKind,
+        rawMimeType: String?,
+    ): Boolean {
         val mimeType = rawMimeType?.lowercase(Locale.ROOT) ?: return false
         return when (kind) {
             IncomingDocumentKind.JPEG -> mimeType == "image/jpeg"
+
             IncomingDocumentKind.PNG -> mimeType == "image/png"
+
             IncomingDocumentKind.GIF -> mimeType == "image/gif"
+
             IncomingDocumentKind.WEBP -> mimeType == "image/webp"
+
             IncomingDocumentKind.BMP -> mimeType == "image/bmp" || mimeType == "image/x-ms-bmp"
+
             IncomingDocumentKind.PDF,
             IncomingDocumentKind.DOCX,
             -> false
         }
     }
 
-    internal fun hasSupportedEncodedSize(sizeBytes: Long): Boolean =
-        sizeBytes in 1..ImageInputPolicy.MAX_ENCODED_BYTES
+    internal fun hasSupportedEncodedSize(sizeBytes: Long): Boolean = sizeBytes in 1..ImageInputPolicy.MAX_ENCODED_BYTES
 
-    private fun hasSafeSourceDimensions(width: Int, height: Int): Boolean =
+    private fun hasSafeSourceDimensions(
+        width: Int,
+        height: Int,
+    ): Boolean =
         width > 0 &&
             height > 0 &&
             width.toLong() * height.toLong() <= MAX_SOURCE_PIXELS
@@ -101,17 +114,23 @@ private object AndroidImportedImageDecoder : ImportedImageDecoder {
         return ImportedImageMetadata(options.outMimeType, options.outWidth, options.outHeight)
     }
 
-    override fun decodeSample(file: File, sampleSize: Int): ImportedDecodedImage? =
-        BitmapFactory.decodeFile(
-            file.absolutePath,
-            BitmapFactory.Options().apply {
-                inSampleSize = sampleSize
-                inPreferredConfig = Bitmap.Config.RGB_565
-                inScaled = false
-            },
-        )?.let(::BitmapDecodedImage)
+    override fun decodeSample(
+        file: File,
+        sampleSize: Int,
+    ): ImportedDecodedImage? =
+        BitmapFactory
+            .decodeFile(
+                file.absolutePath,
+                BitmapFactory.Options().apply {
+                    inSampleSize = sampleSize
+                    inPreferredConfig = Bitmap.Config.RGB_565
+                    inScaled = false
+                },
+            )?.let(::BitmapDecodedImage)
 
-    private class BitmapDecodedImage(private val bitmap: Bitmap) : ImportedDecodedImage {
+    private class BitmapDecodedImage(
+        private val bitmap: Bitmap,
+    ) : ImportedDecodedImage {
         override val width: Int
             get() = bitmap.width
 

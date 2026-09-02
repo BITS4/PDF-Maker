@@ -6,14 +6,14 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
 import android.text.TextPaint
-import java.io.File
-import java.io.IOException
-import java.util.zip.ZipInputStream
 import kotlinx.coroutines.flow.FlowCollector
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserException
 import org.xmlpull.v1.XmlPullParserFactory
 import timber.log.Timber
+import java.io.File
+import java.io.IOException
+import java.util.zip.ZipInputStream
 
 private const val PRESENTATION_WIDTH_EMU = 9_144_000f
 private const val PRESENTATION_HEIGHT_EMU = 5_143_500f
@@ -33,7 +33,10 @@ internal data class ViewerSlideElements(
     val images: List<ViewerSlideImage>,
 )
 
-internal suspend fun FlowCollector<Bitmap>.emitPptxPages(file: File, width: Int) {
+internal suspend fun FlowCollector<Bitmap>.emitPptxPages(
+    file: File,
+    width: Int,
+) {
     val slideXml = sortedMapOf<Int, String>()
     val relationshipXml = mutableMapOf<Int, String>()
     val media = mutableMapOf<String, ByteArray>()
@@ -67,17 +70,28 @@ private fun readPresentationEntry(
     val slideNumber = viewerSlideNumber(name)
     val relationshipNumber = viewerSlideRelationshipNumber(name)
     when {
-        slideNumber != null -> slideXml[slideNumber] = budget.readXml(zip)
-        relationshipNumber != null -> relationshipXml[relationshipNumber] = budget.readXml(zip)
+        slideNumber != null -> {
+            slideXml[slideNumber] = budget.readXml(zip)
+        }
+
+        relationshipNumber != null -> {
+            relationshipXml[relationshipNumber] = budget.readXml(zip)
+        }
+
         isAcceptedPresentationMedia(name, media.size) -> {
             media[name.substringAfterLast('/')] = budget.readEntry(zip, ViewerResourceLimits.MAX_MEDIA_BYTES)
         }
-        else -> budget.skipEntry(zip)
+
+        else -> {
+            budget.skipEntry(zip)
+        }
     }
 }
 
-private fun isAcceptedPresentationMedia(name: String, mediaCount: Int): Boolean =
-    name.startsWith("ppt/media/") && mediaCount < ViewerResourceLimits.MAX_MEDIA_ITEMS
+private fun isAcceptedPresentationMedia(
+    name: String,
+    mediaCount: Int,
+): Boolean = name.startsWith("ppt/media/") && mediaCount < ViewerResourceLimits.MAX_MEDIA_ITEMS
 
 private fun renderViewerSlide(
     xml: String,
@@ -120,7 +134,11 @@ private fun drawSlideImage(
     }
 }
 
-private fun drawSlideText(canvas: Canvas, text: ViewerSlideText, width: Int) {
+private fun drawSlideText(
+    canvas: Canvas,
+    text: ViewerSlideText,
+    width: Int,
+) {
     if (text.bounds.width() < 4 || text.bounds.height() < 4) return
     val fontSize = (text.bounds.height() * 0.18f).coerceIn(width * 0.018f, width * 0.055f)
     val paint =
@@ -138,7 +156,11 @@ private fun drawSlideText(canvas: Canvas, text: ViewerSlideText, width: Int) {
     }
 }
 
-internal fun parseViewerSlideElements(xml: String, width: Int, height: Int): ViewerSlideElements =
+internal fun parseViewerSlideElements(
+    xml: String,
+    width: Int,
+    height: Int,
+): ViewerSlideElements =
     try {
         parseViewerSlideElementsOrThrow(xml, width, height)
     } catch (error: XmlPullParserException) {
@@ -149,7 +171,11 @@ internal fun parseViewerSlideElements(xml: String, width: Int, height: Int): Vie
         failedSlideParse(error)
     }
 
-private fun parseViewerSlideElementsOrThrow(xml: String, width: Int, height: Int): ViewerSlideElements {
+private fun parseViewerSlideElementsOrThrow(
+    xml: String,
+    width: Int,
+    height: Int,
+): ViewerSlideElements {
     val parser =
         XmlPullParserFactory
             .newInstance()
@@ -190,7 +216,10 @@ private class ViewerSlideState(
 
     fun elements(): ViewerSlideElements = ViewerSlideElements(texts, images)
 
-    fun consume(parser: XmlPullParser, event: Int) {
+    fun consume(
+        parser: XmlPullParser,
+        event: Int,
+    ) {
         when (event) {
             XmlPullParser.START_TAG -> handleStartTag(parser, parser.name.orEmpty())
             XmlPullParser.TEXT -> appendText(parser.text)
@@ -198,7 +227,10 @@ private class ViewerSlideState(
         }
     }
 
-    private fun handleStartTag(parser: XmlPullParser, name: String) {
+    private fun handleStartTag(
+        parser: XmlPullParser,
+        name: String,
+    ) {
         when (name) {
             "sp", "pic" -> resetElement()
             "spPr" -> inProperties = true

@@ -35,8 +35,14 @@ class MainActivity : ComponentActivity() {
 
     internal fun handleNewIncomingIntent(intent: Intent) {
         when (val parsed = IncomingIntentPayloadParser.parse(intent)) {
-            IncomingIntentParseResult.NotIncoming -> Unit
-            IncomingIntentParseResult.Invalid -> discardIncomingIntent()
+            IncomingIntentParseResult.NotIncoming -> {
+                Unit
+            }
+
+            IncomingIntentParseResult.Invalid -> {
+                discardIncomingIntent()
+            }
+
             is IncomingIntentParseResult.Accepted -> {
                 setIntent(intent)
                 acceptIncomingIntent(parsed, incomingIntentLifecycle.recordDelivery())
@@ -65,8 +71,14 @@ class MainActivity : ComponentActivity() {
             return
         }
         when (val parsed = IncomingIntentPayloadParser.parse(intent)) {
-            IncomingIntentParseResult.NotIncoming -> discardIncomingIntent()
-            IncomingIntentParseResult.Invalid -> discardIncomingIntent()
+            IncomingIntentParseResult.NotIncoming -> {
+                discardIncomingIntent()
+            }
+
+            IncomingIntentParseResult.Invalid -> {
+                discardIncomingIntent()
+            }
+
             is IncomingIntentParseResult.Accepted -> {
                 val requestId =
                     incomingIntentLifecycle.pendingRequestId

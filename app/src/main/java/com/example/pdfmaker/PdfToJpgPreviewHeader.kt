@@ -43,7 +43,11 @@ internal fun PdfToJpgPreviewHeader(
     cardBackground: Color,
 ) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(cardBackground).padding(14.dp),
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(cardBackground)
+            .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
@@ -76,7 +80,8 @@ internal fun PdfToJpgPreviewHeader(
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         itemsIndexed(previews) { index, bitmap ->
             Box(
-                Modifier.size(width = 72.dp, height = 96.dp)
+                Modifier
+                    .size(width = 72.dp, height = 96.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .background(Color(0xFF1E1E2E)),
             ) {
@@ -87,7 +92,8 @@ internal fun PdfToJpgPreviewHeader(
                     contentScale = ContentScale.Fit,
                 )
                 Box(
-                    Modifier.align(Alignment.BottomEnd)
+                    Modifier
+                        .align(Alignment.BottomEnd)
                         .padding(4.dp)
                         .clip(RoundedCornerShape(4.dp))
                         .background(Color(0xAA000000))
@@ -100,7 +106,8 @@ internal fun PdfToJpgPreviewHeader(
         if (pageCount > previews.size) {
             item {
                 Box(
-                    Modifier.size(width = 72.dp, height = 96.dp)
+                    Modifier
+                        .size(width = 72.dp, height = 96.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .background(Color(0xFF1E1E2E)),
                     contentAlignment = Alignment.Center,

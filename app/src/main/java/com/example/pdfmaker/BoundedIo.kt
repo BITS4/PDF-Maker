@@ -36,7 +36,10 @@ object BoundedIo {
         }
     }
 
-    fun readPrefix(input: InputStream, maximumBytes: Int): ByteArray {
+    fun readPrefix(
+        input: InputStream,
+        maximumBytes: Int,
+    ): ByteArray {
         require(maximumBytes > 0) { "Maximum byte count must be positive" }
         val result = ByteArray(maximumBytes)
         var offset = 0

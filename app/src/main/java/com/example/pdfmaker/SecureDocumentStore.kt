@@ -1,6 +1,7 @@
 package com.example.pdfmaker
 
 import android.content.Context
+import timber.log.Timber
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.FileInputStream
@@ -14,7 +15,6 @@ import java.security.GeneralSecurityException
 import java.security.ProviderException
 import java.util.UUID
 import java.util.concurrent.CancellationException
-import timber.log.Timber
 
 /** Applies the secure-document codec to application-owned files using atomic replacement. */
 object SecureDocumentStore {
@@ -63,35 +63,37 @@ object SecureDocumentStore {
         ) {
             val target = validateWritableFile(file)
             val encryptedLength = SecureDocumentLimits.requireEncryptedLength(target.length())
-            val decrypted = transformAtomically(
-                target = target,
-                validateOutput = SecureDocumentTypePolicy::requirePlainPdfFile,
-            ) { input, output ->
-                SecureDocumentCodec.decrypt(
-                    input,
-                    output,
-                    encryptedLength,
-                    password,
-                    beforeChunk,
-                )
-            }
+            val decrypted =
+                transformAtomically(
+                    target = target,
+                    validateOutput = SecureDocumentTypePolicy::requirePlainPdfFile,
+                ) { input, output ->
+                    SecureDocumentCodec.decrypt(
+                        input,
+                        output,
+                        encryptedLength,
+                        password,
+                        beforeChunk,
+                    )
+                }
             if (!decrypted) return@safely "Wrong password or damaged file"
             null
         }
 
-    fun isLocked(file: File): Boolean = safely(onFailure = { false }) {
-        if (!file.isFile || file.length() < DOCUMENT_MAGIC_BYTES) return@safely false
-        file.inputStream().use { input ->
-            val header = ByteArray(DOCUMENT_MAGIC_BYTES)
-            var offset = 0
-            while (offset < header.size) {
-                val read = input.read(header, offset, header.size - offset)
-                if (read <= 0) return@safely false
-                offset += read
+    fun isLocked(file: File): Boolean =
+        safely(onFailure = { false }) {
+            if (!file.isFile || file.length() < DOCUMENT_MAGIC_BYTES) return@safely false
+            file.inputStream().use { input ->
+                val header = ByteArray(DOCUMENT_MAGIC_BYTES)
+                var offset = 0
+                while (offset < header.size) {
+                    val read = input.read(header, offset, header.size - offset)
+                    if (read <= 0) return@safely false
+                    offset += read
+                }
+                SecureDocumentCodec.isEncrypted(header)
             }
-            SecureDocumentCodec.isEncrypted(header)
         }
-    }
 
     fun encryptedCopy(
         context: Context,
@@ -105,52 +107,56 @@ object SecureDocumentStore {
         bytes: ByteArray,
         password: String,
         baseName: String,
-    ): Pair<String, String>? = safely(onFailure = { null }) {
-        SecureDocumentLimits.requirePlaintextLength(bytes.size.toLong())
-        SecureDocumentTypePolicy.requirePlainPdf(
-            bytes.copyOfRange(0, minOf(bytes.size, SecureDocumentTypePolicy.SIGNATURE_BYTES)),
-        )
-        val output = OutputStore.writeUnique(
-            destinationDirectory,
-            "${SafeFileName.baseName(baseName)}_locked",
-            "pdf",
-        ) { destination ->
-            ByteArrayInputStream(bytes).use { input ->
-                SecureDocumentCodec.encrypt(input, destination, bytes.size.toLong(), password)
-            }
+    ): Pair<String, String>? =
+        safely(onFailure = { null }) {
+            SecureDocumentLimits.requirePlaintextLength(bytes.size.toLong())
+            SecureDocumentTypePolicy.requirePlainPdf(
+                bytes.copyOfRange(0, minOf(bytes.size, SecureDocumentTypePolicy.SIGNATURE_BYTES)),
+            )
+            val output =
+                OutputStore.writeUnique(
+                    destinationDirectory,
+                    "${SafeFileName.baseName(baseName)}_locked",
+                    "pdf",
+                ) { destination ->
+                    ByteArrayInputStream(bytes).use { input ->
+                        SecureDocumentCodec.encrypt(input, destination, bytes.size.toLong(), password)
+                    }
+                }
+            output.absolutePath to output.name
         }
-        output.absolutePath to output.name
-    }
 
     fun decryptedCopy(
         source: File,
         destinationDirectory: File,
         password: String,
         beforeChunk: () -> Unit = {},
-    ): File? = safely(onFailure = { null }) {
-        val inputFile = source.canonicalFile
-        require(inputFile.isFile && inputFile.canRead()) { "Locked file is unavailable" }
-        val encryptedLength = SecureDocumentLimits.requireEncryptedLength(inputFile.length())
-        OutputStore.writeUnique(
-            destinationDirectory,
-            "pdfmaker-unlocked",
-            "pdf",
-            beforeCommit = beforeChunk,
-        ) { destination ->
-            val validatingOutput = PlainPdfValidatingOutputStream(destination)
-            val decrypted = FileInputStream(inputFile).use { input ->
-                SecureDocumentCodec.decrypt(
-                    input,
-                    validatingOutput,
-                    encryptedLength,
-                    password,
-                    beforeChunk,
-                )
+    ): File? =
+        safely(onFailure = { null }) {
+            val inputFile = source.canonicalFile
+            require(inputFile.isFile && inputFile.canRead()) { "Locked file is unavailable" }
+            val encryptedLength = SecureDocumentLimits.requireEncryptedLength(inputFile.length())
+            OutputStore.writeUnique(
+                destinationDirectory,
+                "pdfmaker-unlocked",
+                "pdf",
+                beforeCommit = beforeChunk,
+            ) { destination ->
+                val validatingOutput = PlainPdfValidatingOutputStream(destination)
+                val decrypted =
+                    FileInputStream(inputFile).use { input ->
+                        SecureDocumentCodec.decrypt(
+                            input,
+                            validatingOutput,
+                            encryptedLength,
+                            password,
+                            beforeChunk,
+                        )
+                    }
+                if (!decrypted) throw SecureDocumentRejectedException()
+                validatingOutput.requirePlainPdf()
             }
-            if (!decrypted) throw SecureDocumentRejectedException()
-            validatingOutput.requirePlainPdf()
         }
-    }
 
     private fun validateWritableFile(file: File): File {
         val target = file.canonicalFile
@@ -169,16 +175,17 @@ object SecureDocumentStore {
         require(temporary.parentFile == parent) { "Temporary file escaped its directory" }
         var committed = false
         try {
-            val transformed = FileInputStream(target).use { input ->
-                FileOutputStream(temporary).use { output ->
-                    val success = transform(input, output)
-                    if (success) {
-                        output.flush()
-                        output.fd.sync()
+            val transformed =
+                FileInputStream(target).use { input ->
+                    FileOutputStream(temporary).use { output ->
+                        val success = transform(input, output)
+                        if (success) {
+                            output.flush()
+                            output.fd.sync()
+                        }
+                        success
                     }
-                    success
                 }
-            }
             if (!transformed) return false
             validateOutput(temporary)
             moveReplacing(temporary, target)
@@ -189,7 +196,10 @@ object SecureDocumentStore {
         }
     }
 
-    private fun moveReplacing(source: File, target: File) {
+    private fun moveReplacing(
+        source: File,
+        target: File,
+    ) {
         try {
             Files.move(
                 source.toPath(),
@@ -205,37 +215,38 @@ object SecureDocumentStore {
     private inline fun <T> safely(
         onFailure: (Exception) -> T,
         operation: () -> T,
-    ): T = try {
-        operation()
-    } catch (error: SecureDocumentRejectedException) {
-        onFailure(error)
-    } catch (cancelled: CancellationException) {
-        throw cancelled
-    } catch (error: java.io.IOException) {
-        reportFailure(error)
-        onFailure(error)
-    } catch (error: GeneralSecurityException) {
-        reportFailure(error)
-        onFailure(error)
-    } catch (error: SecurityException) {
-        reportFailure(error)
-        onFailure(error)
-    } catch (error: ProviderException) {
-        reportFailure(error)
-        onFailure(error)
-    } catch (error: IllegalArgumentException) {
-        reportFailure(error)
-        onFailure(error)
-    } catch (error: IllegalStateException) {
-        reportFailure(error)
-        onFailure(error)
-    } catch (error: ArithmeticException) {
-        reportFailure(error)
-        onFailure(error)
-    } catch (error: UnsupportedOperationException) {
-        reportFailure(error)
-        onFailure(error)
-    }
+    ): T =
+        try {
+            operation()
+        } catch (error: SecureDocumentRejectedException) {
+            onFailure(error)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: java.io.IOException) {
+            reportFailure(error)
+            onFailure(error)
+        } catch (error: GeneralSecurityException) {
+            reportFailure(error)
+            onFailure(error)
+        } catch (error: SecurityException) {
+            reportFailure(error)
+            onFailure(error)
+        } catch (error: ProviderException) {
+            reportFailure(error)
+            onFailure(error)
+        } catch (error: IllegalArgumentException) {
+            reportFailure(error)
+            onFailure(error)
+        } catch (error: IllegalStateException) {
+            reportFailure(error)
+            onFailure(error)
+        } catch (error: ArithmeticException) {
+            reportFailure(error)
+            onFailure(error)
+        } catch (error: UnsupportedOperationException) {
+            reportFailure(error)
+            onFailure(error)
+        }
 
     private fun reportFailure(error: Exception) {
         Timber.tag("SecureDocumentStore").w(

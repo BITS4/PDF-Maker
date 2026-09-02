@@ -28,11 +28,31 @@ private data class Gradients(
 
 private val gaussianKernel =
     floatArrayOf(
-        2f, 4f, 5f, 4f, 2f,
-        4f, 9f, 12f, 9f, 4f,
-        5f, 12f, 15f, 12f, 5f,
-        4f, 9f, 12f, 9f, 4f,
-        2f, 4f, 5f, 4f, 2f,
+        2f,
+        4f,
+        5f,
+        4f,
+        2f,
+        4f,
+        9f,
+        12f,
+        9f,
+        4f,
+        5f,
+        12f,
+        15f,
+        12f,
+        5f,
+        4f,
+        9f,
+        12f,
+        9f,
+        4f,
+        2f,
+        4f,
+        5f,
+        4f,
+        2f,
     )
 
 internal fun createDocumentEdgeMap(bitmap: Bitmap): DocumentEdgeMap {
@@ -66,7 +86,11 @@ private fun toGrayscale(pixels: IntArray): FloatArray =
             0.114f * (color and 0xFF)
     }
 
-private fun gaussianBlur(gray: FloatArray, width: Int, height: Int): FloatArray {
+private fun gaussianBlur(
+    gray: FloatArray,
+    width: Int,
+    height: Int,
+): FloatArray {
     val blurred = FloatArray(gray.size)
     for (y in 0 until height) {
         for (x in 0 until width) blurred[y * width + x] = blurredPixel(gray, width, height, x, y)
@@ -74,7 +98,13 @@ private fun gaussianBlur(gray: FloatArray, width: Int, height: Int): FloatArray 
     return blurred
 }
 
-private fun blurredPixel(gray: FloatArray, width: Int, height: Int, x: Int, y: Int): Float {
+private fun blurredPixel(
+    gray: FloatArray,
+    width: Int,
+    height: Int,
+    x: Int,
+    y: Int,
+): Float {
     var weightedSum = 0f
     for (kernelY in -2..2) {
         for (kernelX in -2..2) {
@@ -86,7 +116,11 @@ private fun blurredPixel(gray: FloatArray, width: Int, height: Int, x: Int, y: I
     return weightedSum / 159f
 }
 
-private fun sobelGradients(blurred: FloatArray, width: Int, height: Int): Gradients {
+private fun sobelGradients(
+    blurred: FloatArray,
+    width: Int,
+    height: Int,
+): Gradients {
     val horizontal = FloatArray(blurred.size)
     val vertical = FloatArray(blurred.size)
     val magnitude = FloatArray(blurred.size)
@@ -103,17 +137,31 @@ private fun sobelGradients(blurred: FloatArray, width: Int, height: Int): Gradie
     return Gradients(horizontal, vertical, magnitude)
 }
 
-private fun sobelHorizontal(values: FloatArray, width: Int, x: Int, y: Int): Float =
+private fun sobelHorizontal(
+    values: FloatArray,
+    width: Int,
+    x: Int,
+    y: Int,
+): Float =
     -values[(y - 1) * width + x - 1] + values[(y - 1) * width + x + 1] -
         2 * values[y * width + x - 1] + 2 * values[y * width + x + 1] -
         values[(y + 1) * width + x - 1] + values[(y + 1) * width + x + 1]
 
-private fun sobelVertical(values: FloatArray, width: Int, x: Int, y: Int): Float =
+private fun sobelVertical(
+    values: FloatArray,
+    width: Int,
+    x: Int,
+    y: Int,
+): Float =
     -values[(y - 1) * width + x - 1] - 2 * values[(y - 1) * width + x] -
         values[(y - 1) * width + x + 1] + values[(y + 1) * width + x - 1] +
         2 * values[(y + 1) * width + x] + values[(y + 1) * width + x + 1]
 
-private fun suppressNonMaximum(gradients: Gradients, width: Int, height: Int): FloatArray {
+private fun suppressNonMaximum(
+    gradients: Gradients,
+    width: Int,
+    height: Int,
+): FloatArray {
     val thinned = FloatArray(gradients.magnitude.size)
     for (y in 1 until height - 1) {
         for (x in 1 until width - 1) retainLocalMaximum(gradients, thinned, width, x, y)
@@ -132,8 +180,10 @@ private fun retainLocalMaximum(
     val value = gradients.magnitude[index]
     if (value < 1f) return
     val degrees =
-        (atan2(gradients.vertical[index].toDouble(), gradients.horizontal[index].toDouble()) * 180.0 / PI +
-            180.0) % 180.0
+        (
+            atan2(gradients.vertical[index].toDouble(), gradients.horizontal[index].toDouble()) * 180.0 / PI +
+                180.0
+        ) % 180.0
     val (firstNeighbor, secondNeighbor) = gradientNeighbors(gradients.magnitude, width, x, y, degrees)
     if (value >= firstNeighbor && value >= secondNeighbor) destination[index] = value
 }
@@ -152,7 +202,11 @@ private fun gradientNeighbors(
         else -> magnitude[(y - 1) * width + x - 1] to magnitude[(y + 1) * width + x + 1]
     }
 
-private fun connectWeakEdges(thinned: FloatArray, width: Int, height: Int): BooleanArray {
+private fun connectWeakEdges(
+    thinned: FloatArray,
+    width: Int,
+    height: Int,
+): BooleanArray {
     val maximum = thinned.max().coerceAtLeast(1f)
     val highThreshold = maximum * 0.20f
     val lowThreshold = maximum * 0.05f
@@ -168,7 +222,12 @@ private fun connectWeakEdges(thinned: FloatArray, width: Int, height: Int): Bool
     return edges
 }
 
-private fun hasAdjacentEdge(edges: BooleanArray, width: Int, x: Int, y: Int): Boolean =
+private fun hasAdjacentEdge(
+    edges: BooleanArray,
+    width: Int,
+    x: Int,
+    y: Int,
+): Boolean =
     (-1..1).any { deltaY ->
         (-1..1).any { deltaX -> edges[(y + deltaY) * width + x + deltaX] }
     }

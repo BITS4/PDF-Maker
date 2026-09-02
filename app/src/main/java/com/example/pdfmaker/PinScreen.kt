@@ -32,13 +32,13 @@ import kotlinx.coroutines.launch
 @Composable
 fun PinScreen(onUnlocked: () -> Unit) {
     val context = LocalContext.current
-    val scope   = rememberCoroutineScope()
+    val scope = rememberCoroutineScope()
 
-    var entered  by remember { mutableStateOf("") }
-    var shaking  by remember { mutableStateOf(false) }
+    var entered by remember { mutableStateOf("") }
+    var shaking by remember { mutableStateOf(false) }
     var attempts by remember { mutableIntStateOf(SettingsManager.failedPinAttempts(context)) }
     var lockSecs by remember { mutableIntStateOf(SettingsManager.remainingPinLockoutSeconds(context)) }
-    var locked   by remember { mutableStateOf(lockSecs > 0) }
+    var locked by remember { mutableStateOf(lockSecs > 0) }
     val pinLength = remember { SettingsManager.getPinLength(context) }
 
     // Countdown when locked out
@@ -54,43 +54,57 @@ fun PinScreen(onUnlocked: () -> Unit) {
     }
 
     val shakeOffset by animateFloatAsState(
-        targetValue    = 0f,
-        animationSpec  = if (shaking) keyframes {
-            durationMillis = 400
-            0f  at 0
-            -18f at 50
-            18f  at 100
-            -14f at 150
-            14f  at 200
-            -8f  at 280
-            8f   at 320
-            0f   at 400
-        } else keyframes { durationMillis = 1; 0f at 0 },
-        label = "shake"
+        targetValue = 0f,
+        animationSpec =
+            if (shaking) {
+                keyframes {
+                    durationMillis = 400
+                    0f at 0
+                    -18f at 50
+                    18f at 100
+                    -14f at 150
+                    14f at 200
+                    -8f at 280
+                    8f at 320
+                    0f at 400
+                }
+            } else {
+                keyframes {
+                    durationMillis = 1
+                    0f at 0
+                }
+            },
+        label = "shake",
     )
 
     Box(
         Modifier.fillMaxSize().background(Color(0xFF0D0D16)),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) {
         Column(
             Modifier.fillMaxWidth().padding(32.dp).offset(x = shakeOffset.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             // Lock icon
-            Box(Modifier.size(80.dp).clip(CircleShape).background(Color(0xFF1A2340)),
-                contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.size(80.dp).clip(CircleShape).background(Color(0xFF1A2340)),
+                contentAlignment = Alignment.Center,
+            ) {
                 Icon(Icons.Default.Lock, null, tint = AccentBlue, modifier = Modifier.size(42.dp))
             }
             Spacer(Modifier.height(24.dp))
             Text("Enter PIN", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(6.dp))
             Text(
-                if (locked) "Too many attempts. Wait ${lockSecs}s"
-                else if (attempts > 0) "Wrong PIN (${attempts}/5)"
-                else "Enter your PIN to continue",
+                if (locked) {
+                    "Too many attempts. Wait ${lockSecs}s"
+                } else if (attempts > 0) {
+                    "Wrong PIN ($attempts/5)"
+                } else {
+                    "Enter your PIN to continue"
+                },
                 color = if (locked || attempts > 0) BadgeRed else Color(0xFF8888AA),
-                fontSize = 13.sp
+                fontSize = 13.sp,
             )
             Spacer(Modifier.height(32.dp))
 
@@ -98,8 +112,7 @@ fun PinScreen(onUnlocked: () -> Unit) {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 repeat(pinLength) { i ->
                     val filled = i < entered.length
-                    val col by animateColorAsState(
-                        if (filled) AccentBlue else Color(0xFF252535), label = "dot")
+                    val col by animateColorAsState(if (filled) AccentBlue else Color(0xFF252535), label = "dot")
                     Box(Modifier.size(16.dp).clip(CircleShape).background(col))
                 }
             }
@@ -151,8 +164,11 @@ private fun PinKeyboard(
         ) {
             row.forEach { key ->
                 when (key) {
-                    "" -> Spacer(Modifier.size(72.dp))
-                    "⌫" ->
+                    "" -> {
+                        Spacer(Modifier.size(72.dp))
+                    }
+
+                    "⌫" -> {
                         PinKey(
                             content = {
                                 Icon(
@@ -165,7 +181,9 @@ private fun PinKeyboard(
                             enabled = enabled,
                             onClick = onBackspace,
                         )
-                    else ->
+                    }
+
+                    else -> {
                         PinKey(
                             content = {
                                 Text(
@@ -178,6 +196,7 @@ private fun PinKeyboard(
                             enabled = enabled && canEnterDigit,
                             onClick = { onDigit(key) },
                         )
+                    }
                 }
             }
         }
@@ -186,15 +205,16 @@ private fun PinKeyboard(
 
 @Composable
 private fun PinKey(
-    content : @Composable () -> Unit,
-    enabled : Boolean = true,
-    onClick : () -> Unit
+    content: @Composable () -> Unit,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
 ) {
     Box(
-        Modifier.size(72.dp)
+        Modifier
+            .size(72.dp)
             .clip(CircleShape)
             .background(if (enabled) Color(0xFF1E1E30) else Color(0xFF14141F))
             .clickable(enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) { content() }
 }

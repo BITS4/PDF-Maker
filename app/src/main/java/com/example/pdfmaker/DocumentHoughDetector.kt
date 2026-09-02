@@ -98,7 +98,11 @@ private fun extractHoughPeaks(
     return peaks
 }
 
-private fun Int.toHoughLine(accumulator: IntArray, diagonal: Int, thetaCount: Int): HoughLine =
+private fun Int.toHoughLine(
+    accumulator: IntArray,
+    diagonal: Int,
+    thetaCount: Int,
+): HoughLine =
     HoughLine(
         rho = this / thetaCount - diagonal,
         theta = this % thetaCount * HOUGH_STEP_DEGREES,
@@ -127,7 +131,10 @@ private fun suppressHoughNeighborhood(
     }
 }
 
-private fun selectBoundaryLines(peaks: List<HoughLine>, height: Int): BoundaryLines? {
+private fun selectBoundaryLines(
+    peaks: List<HoughLine>,
+    height: Int,
+): BoundaryLines? {
     val horizontal = peaks.filter { it.theta in 60..120 }.sortedBy(HoughLine::rho)
     val vertical =
         peaks
@@ -140,13 +147,20 @@ private fun selectBoundaryLines(peaks: List<HoughLine>, height: Int): BoundaryLi
     }
 }
 
-private fun verticalPosition(line: HoughLine, height: Int): Double {
+private fun verticalPosition(
+    line: HoughLine,
+    height: Int,
+): Double {
     val cosine = cos(line.radians)
     val sine = sin(line.radians)
     return if (abs(cosine) > 0.05) (line.rho - height / 2.0 * sine) / cosine else line.rho.toDouble()
 }
 
-private fun intersectBoundaryLines(lines: BoundaryLines, width: Int, height: Int): Quad? {
+private fun intersectBoundaryLines(
+    lines: BoundaryLines,
+    width: Int,
+    height: Int,
+): Quad? {
     val corners =
         listOf(
             intersect(lines.top, lines.left),
@@ -160,7 +174,10 @@ private fun intersectBoundaryLines(lines: BoundaryLines, width: Int, height: Int
     return quad.takeIf(::isPlausibleDocumentQuad)
 }
 
-private fun intersect(first: HoughLine, second: HoughLine): PointF? {
+private fun intersect(
+    first: HoughLine,
+    second: HoughLine,
+): PointF? {
     val firstCosine = cos(first.radians)
     val firstSine = sin(first.radians)
     val secondCosine = cos(second.radians)
@@ -176,8 +193,10 @@ private fun intersect(first: HoughLine, second: HoughLine): PointF? {
     }
 }
 
-private fun PointF.normalized(width: Int, height: Int): PointF =
-    PointF((x / width).coerceIn(0f, 1f), (y / height).coerceIn(0f, 1f))
+private fun PointF.normalized(
+    width: Int,
+    height: Int,
+): PointF = PointF((x / width).coerceIn(0f, 1f), (y / height).coerceIn(0f, 1f))
 
 private fun isPlausibleDocumentQuad(quad: Quad): Boolean {
     val horizontalSpan = (quad.tr.x - quad.tl.x + quad.br.x - quad.bl.x) / 2f

@@ -127,27 +127,28 @@ internal fun rememberViewerArtifactBitmap(
     LaunchedEffect(path, maxDimension) {
         var pending: Bitmap? = null
         try {
-            pending = try {
-                withContext(Dispatchers.IO) {
-                    if (
-                        !ViewerPageArtifactPolicy.acceptsArtifact(
-                            artifact.width,
-                            artifact.height,
-                            artifact.file.length(),
-                        )
-                    ) {
-                        null
-                    } else {
-                        artifact.file.inputStream().use { input ->
-                            ThumbnailInput.decodeImage(input, maxDimension.coerceIn(1, 2_048))
+            pending =
+                try {
+                    withContext(Dispatchers.IO) {
+                        if (
+                            !ViewerPageArtifactPolicy.acceptsArtifact(
+                                artifact.width,
+                                artifact.height,
+                                artifact.file.length(),
+                            )
+                        ) {
+                            null
+                        } else {
+                            artifact.file.inputStream().use { input ->
+                                ThumbnailInput.decodeImage(input, maxDimension.coerceIn(1, 2_048))
+                            }
                         }
                     }
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (ignoredError: Exception) {
+                    null
                 }
-            } catch (cancellation: CancellationException) {
-                throw cancellation
-            } catch (ignoredError: Exception) {
-                null
-            }
             currentCoroutineContext().ensureActive()
             bitmap = pending
             pending = null

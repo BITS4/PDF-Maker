@@ -6,8 +6,6 @@ import android.net.Uri
 import androidx.core.content.FileProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import java.io.File
-import java.util.concurrent.CancellationException
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -18,6 +16,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.File
+import java.util.concurrent.CancellationException
 
 @RunWith(AndroidJUnit4::class)
 class SafeDocumentImporterInstrumentedTest {
@@ -71,12 +71,18 @@ class SafeDocumentImporterInstrumentedTest {
 
     @Test
     fun cancellationDuringProviderCopyRemovesThePartialSnapshot() {
-        val source = sourceFile(
-            "cancel-copy",
-            "%PDF-1.7\n".toByteArray() + ByteArray(DEFAULT_BUFFER_SIZE * 3),
-        )
+        val source =
+            sourceFile(
+                "cancel-copy",
+                "%PDF-1.7\n".toByteArray() + ByteArray(DEFAULT_BUFFER_SIZE * 3),
+            )
         val staging = IncomingImportStoragePolicy.temporaryDirectory(context.cacheDir).apply { mkdirs() }
-        val before = staging.listFiles().orEmpty().map(File::getName).toSet()
+        val before =
+            staging
+                .listFiles()
+                .orEmpty()
+                .map(File::getName)
+                .toSet()
         var checks = 0
 
         assertThrows(CancellationException::class.java) {
@@ -91,7 +97,14 @@ class SafeDocumentImporterInstrumentedTest {
             )
         }
 
-        assertEquals(before, staging.listFiles().orEmpty().map(File::getName).toSet())
+        assertEquals(
+            before,
+            staging
+                .listFiles()
+                .orEmpty()
+                .map(File::getName)
+                .toSet(),
+        )
     }
 
     @Test
@@ -130,17 +143,22 @@ class SafeDocumentImporterInstrumentedTest {
         assertTrue(result is IncomingImportResult.Rejected)
     }
 
-    private fun import(source: File, retention: IncomingImportRetention): IncomingImportResult =
+    private fun import(
+        source: File,
+        retention: IncomingImportRetention,
+    ): IncomingImportResult =
         SafeDocumentImporter.import(
             context = context,
             request = request(source),
             retention = retention,
         )
 
-    private fun request(source: File): IncomingDocumentRequest =
-        IncomingDocumentRequest(ownedUri(source), "application/pdf")
+    private fun request(source: File): IncomingDocumentRequest = IncomingDocumentRequest(ownedUri(source), "application/pdf")
 
-    private fun sourceFile(label: String, bytes: ByteArray): File {
+    private fun sourceFile(
+        label: String,
+        bytes: ByteArray,
+    ): File {
         val directory = File(context.cacheDir, "pdfmaker").apply { mkdirs() }
         return File(directory, "$label-${System.nanoTime()}.pdf").apply {
             writeBytes(bytes)
@@ -148,9 +166,10 @@ class SafeDocumentImporterInstrumentedTest {
         }
     }
 
-    private fun ownedUri(file: File): Uri =
-        FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+    private fun ownedUri(file: File): Uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
 
-    private fun matchingOutputs(directory: File, baseName: String): List<File> =
-        directory.listFiles().orEmpty().filter { file -> file.name.startsWith(baseName) }
+    private fun matchingOutputs(
+        directory: File,
+        baseName: String,
+    ): List<File> = directory.listFiles().orEmpty().filter { file -> file.name.startsWith(baseName) }
 }

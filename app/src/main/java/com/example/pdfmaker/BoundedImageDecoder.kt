@@ -15,14 +15,20 @@ import java.util.UUID
 /** Decodes a stable, bounded snapshot of an image supplied by a content provider or app cache. */
 object BoundedImageDecoder {
     @Suppress("TooGenericExceptionCaught") // Provider/codec failures are deliberately returned through Result.
-    fun decode(context: Context, uri: Uri): Result<Bitmap> =
+    fun decode(
+        context: Context,
+        uri: Uri,
+    ): Result<Bitmap> =
         try {
             Result.success(decodeOrThrow(context, uri))
         } catch (error: Exception) {
             Result.failure(error)
         }
 
-    private fun decodeOrThrow(context: Context, uri: Uri): Bitmap {
+    private fun decodeOrThrow(
+        context: Context,
+        uri: Uri,
+    ): Bitmap {
         val staged = stage(context, uri)
         try {
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -30,27 +36,30 @@ object BoundedImageDecoder {
             require(ImageInputPolicy.isSupportedMimeType(bounds.outMimeType)) {
                 "The selected content is not a supported image"
             }
-            val plan = requireNotNull(ImageInputPolicy.decodePlan(bounds.outWidth, bounds.outHeight)) {
-                "The selected image has invalid dimensions"
-            }
+            val plan =
+                requireNotNull(ImageInputPolicy.decodePlan(bounds.outWidth, bounds.outHeight)) {
+                    "The selected image has invalid dimensions"
+                }
             val orientation = readExifOrientation(staged, bounds.outMimeType)
 
             var owned: Bitmap? = null
             try {
-                owned = requireNotNull(
-                    BitmapFactory.decodeFile(
-                        staged.absolutePath,
-                        BitmapFactory.Options().apply {
-                            inSampleSize = plan.sampleSize
-                            inPreferredConfig = Bitmap.Config.ARGB_8888
-                            inScaled = false
-                        },
-                    ),
-                ) { "The selected image could not be decoded" }
+                owned =
+                    requireNotNull(
+                        BitmapFactory.decodeFile(
+                            staged.absolutePath,
+                            BitmapFactory.Options().apply {
+                                inSampleSize = plan.sampleSize
+                                inPreferredConfig = Bitmap.Config.ARGB_8888
+                                inScaled = false
+                            },
+                        ),
+                    ) { "The selected image could not be decoded" }
 
-                val fitted = requireNotNull(
-                    ImageInputPolicy.fitWithinLimits(owned.width, owned.height),
-                ) { "The decoded image has invalid dimensions" }
+                val fitted =
+                    requireNotNull(
+                        ImageInputPolicy.fitWithinLimits(owned.width, owned.height),
+                    ) { "The decoded image has invalid dimensions" }
                 if (fitted.width != owned.width || fitted.height != owned.height) {
                     val scaled = Bitmap.createScaledBitmap(owned, fitted.width, fitted.height, true)
                     if (scaled !== owned) owned.recycle()
@@ -69,7 +78,10 @@ object BoundedImageDecoder {
         }
     }
 
-    private fun stage(context: Context, uri: Uri): File {
+    private fun stage(
+        context: Context,
+        uri: Uri,
+    ): File {
         val directory = File(context.cacheDir, "image-inputs")
         check((directory.exists() && directory.isDirectory) || directory.mkdirs()) {
             "Could not create the image staging directory"
@@ -92,7 +104,10 @@ object BoundedImageDecoder {
         }
     }
 
-    private fun openAllowedStream(context: Context, uri: Uri): InputStream =
+    private fun openAllowedStream(
+        context: Context,
+        uri: Uri,
+    ): InputStream =
         when (uri.scheme?.lowercase(Locale.ROOT)) {
             "content" -> {
                 require(!uri.authority.isNullOrBlank()) { "The image provider is invalid" }
@@ -110,33 +125,58 @@ object BoundedImageDecoder {
                 source.inputStream()
             }
 
-            else -> throw IllegalArgumentException("Only content-provider or app-cached images can be opened")
+            else -> {
+                throw IllegalArgumentException("Only content-provider or app-cached images can be opened")
+            }
         }
 
-    private fun applyExifOrientation(source: Bitmap, orientation: Int): Bitmap {
+    private fun applyExifOrientation(
+        source: Bitmap,
+        orientation: Int,
+    ): Bitmap {
         val matrix = Matrix()
         when (orientation) {
-            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.setScale(-1f, 1f)
-            ExifInterface.ORIENTATION_ROTATE_180 -> matrix.setRotate(180f)
-            ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.setScale(1f, -1f)
+            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> {
+                matrix.setScale(-1f, 1f)
+            }
+
+            ExifInterface.ORIENTATION_ROTATE_180 -> {
+                matrix.setRotate(180f)
+            }
+
+            ExifInterface.ORIENTATION_FLIP_VERTICAL -> {
+                matrix.setScale(1f, -1f)
+            }
+
             ExifInterface.ORIENTATION_TRANSPOSE -> {
                 matrix.setRotate(90f)
                 matrix.postScale(-1f, 1f)
             }
 
-            ExifInterface.ORIENTATION_ROTATE_90 -> matrix.setRotate(90f)
+            ExifInterface.ORIENTATION_ROTATE_90 -> {
+                matrix.setRotate(90f)
+            }
+
             ExifInterface.ORIENTATION_TRANSVERSE -> {
                 matrix.setRotate(-90f)
                 matrix.postScale(-1f, 1f)
             }
 
-            ExifInterface.ORIENTATION_ROTATE_270 -> matrix.setRotate(-90f)
-            else -> return source
+            ExifInterface.ORIENTATION_ROTATE_270 -> {
+                matrix.setRotate(-90f)
+            }
+
+            else -> {
+                return source
+            }
         }
         return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
     }
 
-    private fun readExifOrientation(source: File, mimeType: String?): Int {
+    private fun readExifOrientation(
+        source: File,
+        mimeType: String?,
+    ): Int {
         if (mimeType !in setOf("image/jpeg", "image/png", "image/webp", "image/heic", "image/heif")) {
             return ExifInterface.ORIENTATION_NORMAL
         }

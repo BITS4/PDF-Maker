@@ -1,10 +1,5 @@
 package com.example.pdfmaker
 
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
-import java.util.concurrent.CancellationException
-import java.util.zip.ZipEntry
-import java.util.zip.ZipOutputStream
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
@@ -12,6 +7,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.util.concurrent.CancellationException
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 class SafeDocxInputTest {
     @get:Rule
@@ -38,7 +38,12 @@ class SafeDocxInputTest {
                 SafeDocxInput.stage(ByteArrayInputStream(docxBytes()), temporaryFolder.root, maximumBytes = 8)
             }.isFailure,
         )
-        assertTrue(temporaryFolder.root.listFiles().orEmpty().isEmpty())
+        assertTrue(
+            temporaryFolder.root
+                .listFiles()
+                .orEmpty()
+                .isEmpty(),
+        )
     }
 
     @Test
@@ -79,7 +84,12 @@ class SafeDocxInputTest {
 
         assertTrue(input.closed)
         assertTrue(checks >= 2)
-        assertTrue(temporaryFolder.root.listFiles().orEmpty().isEmpty())
+        assertTrue(
+            temporaryFolder.root
+                .listFiles()
+                .orEmpty()
+                .isEmpty(),
+        )
     }
 
     @Test
@@ -96,18 +106,22 @@ class SafeDocxInputTest {
         assertTrue(checks >= 2)
     }
 
-    private fun docxBytes(): ByteArray = ByteArrayOutputStream().also { bytes ->
-        ZipOutputStream(bytes).use { zip ->
-            zip.putNextEntry(ZipEntry("[Content_Types].xml"))
-            zip.write("<Types/>".toByteArray())
-            zip.closeEntry()
-            zip.putNextEntry(ZipEntry("word/document.xml"))
-            zip.write("<document>safe</document>".toByteArray())
-            zip.closeEntry()
-        }
-    }.toByteArray()
+    private fun docxBytes(): ByteArray =
+        ByteArrayOutputStream()
+            .also { bytes ->
+                ZipOutputStream(bytes).use { zip ->
+                    zip.putNextEntry(ZipEntry("[Content_Types].xml"))
+                    zip.write("<Types/>".toByteArray())
+                    zip.closeEntry()
+                    zip.putNextEntry(ZipEntry("word/document.xml"))
+                    zip.write("<document>safe</document>".toByteArray())
+                    zip.closeEntry()
+                }
+            }.toByteArray()
 
-    private class CloseTrackingInput(bytes: ByteArray) : ByteArrayInputStream(bytes) {
+    private class CloseTrackingInput(
+        bytes: ByteArray,
+    ) : ByteArrayInputStream(bytes) {
         var closed = false
             private set
 

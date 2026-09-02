@@ -23,19 +23,22 @@ import androidx.compose.ui.unit.sp
 
 @Composable
 fun SearchScreen(
-    allFiles   : List<PdfFile>,
+    allFiles: List<PdfFile>,
     onFileClick: (PdfFile) -> Unit,
-    onBack     : () -> Unit
+    onBack: () -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
 
-    val results = remember(query, allFiles) {
-        if (query.isBlank()) emptyList()
-        else allFiles.filter { it.name.contains(query, ignoreCase = true) }
-    }
+    val results =
+        remember(query, allFiles) {
+            if (query.isBlank()) {
+                emptyList()
+            } else {
+                allFiles.filter { it.name.contains(query, ignoreCase = true) }
+            }
+        }
 
     Column(Modifier.fillMaxSize().background(currentBg)) {
-
         // Search bar
         Row(
             Modifier
@@ -43,7 +46,7 @@ fun SearchScreen(
                 .background(currentCard)
                 .statusBarsPadding()
                 .padding(horizontal = 4.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = currentText)
@@ -55,25 +58,26 @@ fun SearchScreen(
                     .clip(RoundedCornerShape(20.dp))
                     .background(currentBg)
                     .padding(horizontal = 14.dp),
-                contentAlignment = Alignment.CenterStart
+                contentAlignment = Alignment.CenterStart,
             ) {
                 if (query.isEmpty()) {
                     Text("Search files…", color = currentTextSecond, fontSize = 14.sp)
                 }
                 BasicTextField(
-                    value         = query,
+                    value = query,
                     onValueChange = { query = it },
-                    singleLine    = true,
-                    textStyle     = TextStyle(color = currentText, fontSize = 14.sp),
-                    cursorBrush   = SolidColor(AccentBlue),
-                    modifier      = Modifier.fillMaxWidth(),
-                    decorationBox = { inner -> inner() }
+                    singleLine = true,
+                    textStyle = TextStyle(color = currentText, fontSize = 14.sp),
+                    cursorBrush = SolidColor(AccentBlue),
+                    modifier = Modifier.fillMaxWidth(),
+                    decorationBox = { inner -> inner() },
                 )
             }
             Icon(
-                Icons.Default.Search, null,
-                tint     = currentTextSecond,
-                modifier = Modifier.padding(end = 12.dp).size(20.dp)
+                Icons.Default.Search,
+                null,
+                tint = currentTextSecond,
+                modifier = Modifier.padding(end = 12.dp).size(20.dp),
             )
         }
 
@@ -84,19 +88,21 @@ fun SearchScreen(
                     Text("Type to search files…", color = currentTextSecond, fontSize = 15.sp)
                 }
             }
+
             results.isEmpty() -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     EmptyState(kind = EmptyKind.SEARCH, query = query)
                 }
             }
+
             else -> {
                 LazyColumn(Modifier.fillMaxSize()) {
                     items(results, key = { it.filePath }) { file ->
                         FileItemWithThumb(
-                            file         = file,
-                            onItemClick  = { onFileClick(file) },
+                            file = file,
+                            onItemClick = { onFileClick(file) },
                             onShareClick = {},
-                            onMoreClick  = {}
+                            onMoreClick = {},
                         )
                     }
                 }

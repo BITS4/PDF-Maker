@@ -13,14 +13,15 @@ class FileFilteringTest {
 
     @Test
     fun `filters every supported document family`() {
-        val files = listOf(
-            pdf("report", "/docs/report.PDF"),
-            pdf("letter", "/docs/letter.docx"),
-            pdf("budget", "/docs/budget.XLSX"),
-            pdf("deck", "/docs/deck.pptx"),
-            pdf("notes", "/docs/notes.md"),
-            pdf("photo", "/docs/photo.webp"),
-        )
+        val files =
+            listOf(
+                pdf("report", "/docs/report.PDF"),
+                pdf("letter", "/docs/letter.docx"),
+                pdf("budget", "/docs/budget.XLSX"),
+                pdf("deck", "/docs/deck.pptx"),
+                pdf("notes", "/docs/notes.md"),
+                pdf("photo", "/docs/photo.webp"),
+            )
 
         assertEquals(listOf("report"), files.filteredBy(FileTypeFilter.PDF).map { it.name })
         assertEquals(listOf("letter"), files.filteredBy(FileTypeFilter.DOCS).map { it.name })
@@ -36,5 +37,8 @@ class FileFilteringTest {
         assertSame(files, files.filteredBy(FileTypeFilter.ALL))
     }
 
-    private fun pdf(name: String, path: String) = PdfFile(name, path, "1 KB", "today")
+    private fun pdf(
+        name: String,
+        path: String,
+    ) = PdfFile(name, path, "1 KB", "today")
 }

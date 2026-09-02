@@ -31,22 +31,25 @@ internal inline fun <T> withFailureCleanup(
 object SafeFileName {
     private const val MAX_BASE_LENGTH = 80
 
-    fun baseName(raw: String?, fallback: String = "document"): String {
+    fun baseName(
+        raw: String?,
+        fallback: String = "document",
+    ): String {
         val normalized = Normalizer.normalize(raw.orEmpty(), Normalizer.Form.NFKC)
-        val cleaned = buildString(normalized.length.coerceAtMost(MAX_BASE_LENGTH)) {
-            normalized.forEach { character ->
-                when {
-                    character.isLetterOrDigit() -> append(character)
-                    character == ' ' || character == '-' || character == '_' || character == '.' -> append(character)
-                    character == '/' || character == '\\' -> append('_')
-                    !Character.isISOControl(character) && character !in unsafeDirectionalControls -> append('_')
+        val cleaned =
+            buildString(normalized.length.coerceAtMost(MAX_BASE_LENGTH)) {
+                normalized.forEach { character ->
+                    when {
+                        character.isLetterOrDigit() -> append(character)
+                        character == ' ' || character == '-' || character == '_' || character == '.' -> append(character)
+                        character == '/' || character == '\\' -> append('_')
+                        !Character.isISOControl(character) && character !in unsafeDirectionalControls -> append('_')
+                    }
                 }
-            }
-        }
-            .trim()
-            .trim('.', ' ', '_')
-            .take(MAX_BASE_LENGTH)
-            .trimEnd('.', ' ')
+            }.trim()
+                .trim('.', ' ', '_')
+                .take(MAX_BASE_LENGTH)
+                .trimEnd('.', ' ')
 
         return cleaned.takeUnless { it.isBlank() || it == "." || it == ".." }
             ?: fallbackValidated(fallback)
@@ -65,17 +68,18 @@ object SafeFileName {
         return cleaned.ifBlank { "document" }
     }
 
-    private val unsafeDirectionalControls = setOf(
-        '\u202A', // left-to-right embedding
-        '\u202B', // right-to-left embedding
-        '\u202C', // pop directional formatting
-        '\u202D', // left-to-right override
-        '\u202E', // right-to-left override
-        '\u2066', // left-to-right isolate
-        '\u2067', // right-to-left isolate
-        '\u2068', // first-strong isolate
-        '\u2069', // pop directional isolate
-    )
+    private val unsafeDirectionalControls =
+        setOf(
+            '\u202A', // left-to-right embedding
+            '\u202B', // right-to-left embedding
+            '\u202C', // pop directional formatting
+            '\u202D', // left-to-right override
+            '\u202E', // right-to-left override
+            '\u2066', // left-to-right isolate
+            '\u2067', // right-to-left isolate
+            '\u2068', // first-strong isolate
+            '\u2069', // pop directional isolate
+        )
 }
 
 /** Creates and replaces files without escaping the supplied application-owned directory. */
@@ -120,7 +124,10 @@ object OutputStore {
     }
 
     @Synchronized
-    fun replaceAtomically(target: File, bytes: ByteArray) {
+    fun replaceAtomically(
+        target: File,
+        bytes: ByteArray,
+    ) {
         val parent = target.canonicalFile.parentFile ?: error("File has no parent directory")
         requireDirectory(parent)
         requireContained(parent, target)
@@ -136,21 +143,29 @@ object OutputStore {
     }
 
     @Synchronized
-    fun renameWithinParent(original: File, requestedBaseName: String?): Result<File> = runCatching {
-        val source = original.canonicalFile
-        require(source.isFile) { "Source file does not exist" }
-        val parent = source.parentFile ?: error("Source file has no parent")
-        val safeBase = SafeFileName.baseName(requestedBaseName, source.nameWithoutExtension)
-        val safeExtension = source.extension.takeIf { it.isNotBlank() }?.let(SafeFileName::extension)
-        val newName = if (safeExtension == null) safeBase else "$safeBase.$safeExtension"
-        val target = containedChild(parent, newName)
-        if (target == source) return@runCatching source
-        require(!target.exists()) { "A file with that name already exists" }
-        moveWithoutReplacing(source, target)
-        target
-    }
+    fun renameWithinParent(
+        original: File,
+        requestedBaseName: String?,
+    ): Result<File> =
+        runCatching {
+            val source = original.canonicalFile
+            require(source.isFile) { "Source file does not exist" }
+            val parent = source.parentFile ?: error("Source file has no parent")
+            val safeBase = SafeFileName.baseName(requestedBaseName, source.nameWithoutExtension)
+            val safeExtension = source.extension.takeIf { it.isNotBlank() }?.let(SafeFileName::extension)
+            val newName = if (safeExtension == null) safeBase else "$safeBase.$safeExtension"
+            val target = containedChild(parent, newName)
+            if (target == source) return@runCatching source
+            require(!target.exists()) { "A file with that name already exists" }
+            moveWithoutReplacing(source, target)
+            target
+        }
 
-    fun nextAvailableFile(directory: File, requestedBaseName: String?, extension: String): File {
+    fun nextAvailableFile(
+        directory: File,
+        requestedBaseName: String?,
+        extension: String,
+    ): File {
         val dir = requireDirectory(directory)
         val base = SafeFileName.baseName(requestedBaseName)
         val ext = SafeFileName.extension(extension)
@@ -170,15 +185,23 @@ object OutputStore {
         return canonical
     }
 
-    private fun containedChild(directory: File, childName: String): File =
-        File(directory, childName).canonicalFile.also { requireContained(directory, it) }
+    private fun containedChild(
+        directory: File,
+        childName: String,
+    ): File = File(directory, childName).canonicalFile.also { requireContained(directory, it) }
 
-    private fun requireContained(directory: File, candidate: File) {
+    private fun requireContained(
+        directory: File,
+        candidate: File,
+    ) {
         val root = directory.canonicalFile.toPath()
         require(candidate.canonicalFile.toPath().parent == root) { "Output path escaped its directory" }
     }
 
-    private fun moveWithoutReplacing(source: File, target: File) {
+    private fun moveWithoutReplacing(
+        source: File,
+        target: File,
+    ) {
         try {
             Files.move(source.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE)
         } catch (_: AtomicMoveNotSupportedException) {
@@ -186,7 +209,10 @@ object OutputStore {
         }
     }
 
-    private fun moveReplacing(source: File, target: File) {
+    private fun moveReplacing(
+        source: File,
+        target: File,
+    ) {
         try {
             Files.move(
                 source.toPath(),

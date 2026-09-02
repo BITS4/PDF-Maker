@@ -36,43 +36,43 @@ import java.io.File
 import java.io.IOException
 
 enum class JpgQuality(
-    val label      : String,
-    val sub        : String,
+    val label: String,
+    val sub: String,
     val jpegQuality: Int,
-    val maxDimPx   : Int,
-    val color      : Color
+    val maxDimPx: Int,
+    val color: Color,
 ) {
     LOW(
-        label       = "Low",
-        sub         = "72 DPI · small file",
+        label = "Low",
+        sub = "72 DPI · small file",
         jpegQuality = 60,
-        maxDimPx    = 800,
-        color       = Color(0xFF9E9E9E)
+        maxDimPx = 800,
+        color = Color(0xFF9E9E9E),
     ),
     MEDIUM(
-        label       = "Medium",
-        sub         = "150 DPI · balanced",
+        label = "Medium",
+        sub = "150 DPI · balanced",
         jpegQuality = 82,
-        maxDimPx    = 1600,
-        color       = Color(0xFF2196F3)
+        maxDimPx = 1600,
+        color = Color(0xFF2196F3),
     ),
     HIGH(
-        label       = "High",
-        sub         = "300 DPI · best quality",
+        label = "High",
+        sub = "300 DPI · best quality",
         jpegQuality = 95,
-        maxDimPx    = 3000,
-        color       = Color(0xFF4CAF50)
-    )
+        maxDimPx = 3000,
+        color = Color(0xFF4CAF50),
+    ),
 }
 // ── Small helper composables ──────────────────────────────────────────────────
 
 @Composable
 internal fun PageRangeTab(
-    label    : String,
-    selected : Boolean,
-    accent   : Color,
-    modifier : Modifier = Modifier,
-    onClick  : () -> Unit
+    label: String,
+    selected: Boolean,
+    accent: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
 ) {
     Box(
         modifier
@@ -80,62 +80,99 @@ internal fun PageRangeTab(
             .background(if (selected) accent else Color.Transparent)
             .clickable(onClick = onClick)
             .padding(vertical = 10.dp),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = if (selected) Color.White else Color(0xFF9999BB),
-            fontSize = 13.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
+        Text(
+            label,
+            color = if (selected) Color.White else Color(0xFF9999BB),
+            fontSize = 13.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+        )
     }
 }
 
 @Composable
 internal fun PageNumberField(
-    label   : String,
-    value   : Int,
-    range   : IntRange,
-    cardBg  : Color,
-    textPri : Color,
-    textSec : Color,
-    accent  : Color,
-    onValue : (Int) -> Unit
+    label: String,
+    value: Int,
+    range: IntRange,
+    cardBg: Color,
+    textPri: Color,
+    textSec: Color,
+    accent: Color,
+    onValue: (Int) -> Unit,
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label, color = textSec, fontSize = 11.sp)
         Spacer(Modifier.height(4.dp))
         Row(
-            Modifier.clip(RoundedCornerShape(10.dp)).background(cardBg)
+            Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .background(cardBg)
                 .padding(horizontal = 4.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(
-                onClick  = { if (value > range.first) onValue(value - 1) },
-                modifier = Modifier.size(32.dp)
-            ) { Icon(Icons.Default.Remove, null, tint = if (value > range.first) accent else textSec,
-                    modifier = Modifier.size(16.dp)) }
-            Text("$value", color = textPri,
-                fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.widthIn(min = 28.dp), textAlign = TextAlign.Center)
+                onClick = { if (value > range.first) onValue(value - 1) },
+                modifier = Modifier.size(32.dp),
+            ) {
+                Icon(
+                    Icons.Default.Remove,
+                    null,
+                    tint = if (value > range.first) accent else textSec,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+            Text(
+                "$value",
+                color = textPri,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.widthIn(min = 28.dp),
+                textAlign = TextAlign.Center,
+            )
             IconButton(
-                onClick  = { if (value < range.last) onValue(value + 1) },
-                modifier = Modifier.size(32.dp)
-            ) { Icon(Icons.Default.Add, null, tint = if (value < range.last) accent else textSec,
-                    modifier = Modifier.size(16.dp)) }
+                onClick = { if (value < range.last) onValue(value + 1) },
+                modifier = Modifier.size(32.dp),
+            ) {
+                Icon(
+                    Icons.Default.Add,
+                    null,
+                    tint = if (value < range.last) accent else textSec,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
         }
     }
 }
 
 @Composable
-internal fun JpgSpinner(progress: Int, color: Color) {
+internal fun JpgSpinner(
+    progress: Int,
+    color: Color,
+) {
     val inf = rememberInfiniteTransition(label = "spin")
     val angle by inf.animateFloat(
-        initialValue  = 0f, targetValue = 360f,
+        initialValue = 0f,
+        targetValue = 360f,
         animationSpec = infiniteRepeatable(tween(1200, easing = LinearEasing)),
-        label         = "angle"
+        label = "angle",
     )
     Canvas(Modifier.size(110.dp)) {
-        drawArc(Color(0xFF2A2A40), 0f, 360f, false,
-            style = Stroke(10.dp.toPx(), cap = StrokeCap.Round))
-        drawArc(color, angle - 90f, (progress * 3.6f).coerceAtLeast(10f), false,
-            style = Stroke(10.dp.toPx(), cap = StrokeCap.Round))
+        drawArc(
+            Color(0xFF2A2A40),
+            0f,
+            360f,
+            false,
+            style = Stroke(10.dp.toPx(), cap = StrokeCap.Round),
+        )
+        drawArc(
+            color,
+            angle - 90f,
+            (progress * 3.6f).coerceAtLeast(10f),
+            false,
+            style = Stroke(10.dp.toPx(), cap = StrokeCap.Round),
+        )
     }
 }
 
@@ -188,13 +225,15 @@ internal suspend fun convertPdfToJpg(
                     "Converting page $pageNumber of ${renderer.pageCount}…",
                 )
                 renderer.openPage(pageIndex).use { page ->
-                    val target = PdfToJpgPolicy.renderSize(page.width, page.height, quality.maxDimPx)
-                        ?: error("PDF page has invalid dimensions")
-                    val bitmap = Bitmap.createBitmap(
-                        target.width,
-                        target.height,
-                        Bitmap.Config.ARGB_8888,
-                    )
+                    val target =
+                        PdfToJpgPolicy.renderSize(page.width, page.height, quality.maxDimPx)
+                            ?: error("PDF page has invalid dimensions")
+                    val bitmap =
+                        Bitmap.createBitmap(
+                            target.width,
+                            target.height,
+                            Bitmap.Config.ARGB_8888,
+                        )
                     try {
                         android.graphics.Canvas(bitmap).drawColor(android.graphics.Color.WHITE)
                         val scale =
@@ -203,15 +242,16 @@ internal suspend fun convertPdfToJpg(
                         val transform = android.graphics.Matrix()
                         transform.setScale(scale.scaleX, scale.scaleY)
                         page.render(bitmap, null, transform, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                        val outputFile = OutputStore.writeUnique(
-                            directory = outputDirectory,
-                            requestedBaseName = "${baseName}_page$pageNumber",
-                            extension = "jpg",
-                        ) { output ->
-                            check(bitmap.compress(Bitmap.CompressFormat.JPEG, quality.jpegQuality, output)) {
-                                "Could not encode page as JPEG"
+                        val outputFile =
+                            OutputStore.writeUnique(
+                                directory = outputDirectory,
+                                requestedBaseName = "${baseName}_page$pageNumber",
+                                extension = "jpg",
+                            ) { output ->
+                                check(bitmap.compress(Bitmap.CompressFormat.JPEG, quality.jpegQuality, output)) {
+                                    "Could not encode page as JPEG"
+                                }
                             }
-                        }
                         outputFiles += outputFile
                         totalBytes = PdfToJpgPolicy.recordExportedFile(totalBytes, outputFile.length())
                     } finally {
@@ -231,9 +271,10 @@ private inline fun <T> withStagedPdfRenderer(
     block: (PdfRenderer) -> T,
 ): T {
     val descriptor = source.openDescriptor()
-    val renderer = withFailureCleanup(cleanup = descriptor::close) {
-        PdfRenderer(descriptor)
-    }
+    val renderer =
+        withFailureCleanup(cleanup = descriptor::close) {
+            PdfRenderer(descriptor)
+        }
     return renderer.use(block)
 }
 
@@ -241,71 +282,78 @@ private fun renderRendererPage(
     renderer: PdfRenderer,
     pageIndex: Int,
     maximumEdge: Int,
-): Bitmap = renderer.openPage(pageIndex).use { page ->
-    val target = PdfToJpgPolicy.renderSize(page.width, page.height, maximumEdge)
-        ?: error("PDF page has invalid dimensions")
-    val bitmap = Bitmap.createBitmap(target.width, target.height, Bitmap.Config.ARGB_8888)
-    withFailureCleanup(cleanup = bitmap::recycle) {
-        android.graphics.Canvas(bitmap).drawColor(android.graphics.Color.WHITE)
-        val scale =
-            RenderSizing.scaleTo(page.width, page.height, target)
+): Bitmap =
+    renderer.openPage(pageIndex).use { page ->
+        val target =
+            PdfToJpgPolicy.renderSize(page.width, page.height, maximumEdge)
                 ?: error("PDF page has invalid dimensions")
-        val transform = android.graphics.Matrix()
-        transform.setScale(scale.scaleX, scale.scaleY)
-        page.render(bitmap, null, transform, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-        bitmap
-    }
-}
-
-internal fun decodeJpgResultThumbnail(file: File): Result<Bitmap> = runCatching {
-    require(file.isFile && file.length() in 1..PdfToJpgPolicy.MAX_JPEG_BYTES) {
-        "Converted image is missing or exceeds its size limit"
-    }
-    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    BitmapFactory.decodeFile(file.absolutePath, bounds)
-    require(bounds.outMimeType == "image/jpeg") { "Converted image is not a JPEG" }
-    val plan = requireNotNull(PdfToJpgPolicy.resultThumbnailPlan(bounds.outWidth, bounds.outHeight)) {
-        "Converted image has invalid dimensions"
-    }
-    var owned: Bitmap? = null
-    try {
-        owned = requireNotNull(
-            BitmapFactory.decodeFile(
-                file.absolutePath,
-                BitmapFactory.Options().apply {
-                    inSampleSize = plan.sampleSize
-                    inPreferredConfig = Bitmap.Config.ARGB_8888
-                    inScaled = false
-                },
-            ),
-        ) { "Converted image could not be decoded" }
-        val fitted = requireNotNull(
-            ImageInputPolicy.fitWithinLimits(
-                owned.width,
-                owned.height,
-                PdfToJpgPolicy.RESULT_THUMBNAIL_EDGE,
-                PdfToJpgPolicy.RESULT_THUMBNAIL_PIXELS,
-            ),
-        ) { "Converted image has invalid dimensions" }
-        if (fitted.width != owned.width || fitted.height != owned.height) {
-            val scaled = Bitmap.createScaledBitmap(owned, fitted.width, fitted.height, true)
-            if (scaled !== owned) owned.recycle()
-            owned = scaled
+        val bitmap = Bitmap.createBitmap(target.width, target.height, Bitmap.Config.ARGB_8888)
+        withFailureCleanup(cleanup = bitmap::recycle) {
+            android.graphics.Canvas(bitmap).drawColor(android.graphics.Color.WHITE)
+            val scale =
+                RenderSizing.scaleTo(page.width, page.height, target)
+                    ?: error("PDF page has invalid dimensions")
+            val transform = android.graphics.Matrix()
+            transform.setScale(scale.scaleX, scale.scaleY)
+            page.render(bitmap, null, transform, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+            bitmap
         }
-        checkNotNull(owned).also { owned = null }
-    } finally {
-        owned?.takeUnless(Bitmap::isRecycled)?.recycle()
     }
-}
+
+internal fun decodeJpgResultThumbnail(file: File): Result<Bitmap> =
+    runCatching {
+        require(file.isFile && file.length() in 1..PdfToJpgPolicy.MAX_JPEG_BYTES) {
+            "Converted image is missing or exceeds its size limit"
+        }
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.absolutePath, bounds)
+        require(bounds.outMimeType == "image/jpeg") { "Converted image is not a JPEG" }
+        val plan =
+            requireNotNull(PdfToJpgPolicy.resultThumbnailPlan(bounds.outWidth, bounds.outHeight)) {
+                "Converted image has invalid dimensions"
+            }
+        var owned: Bitmap? = null
+        try {
+            owned =
+                requireNotNull(
+                    BitmapFactory.decodeFile(
+                        file.absolutePath,
+                        BitmapFactory.Options().apply {
+                            inSampleSize = plan.sampleSize
+                            inPreferredConfig = Bitmap.Config.ARGB_8888
+                            inScaled = false
+                        },
+                    ),
+                ) { "Converted image could not be decoded" }
+            val fitted =
+                requireNotNull(
+                    ImageInputPolicy.fitWithinLimits(
+                        owned.width,
+                        owned.height,
+                        PdfToJpgPolicy.RESULT_THUMBNAIL_EDGE,
+                        PdfToJpgPolicy.RESULT_THUMBNAIL_PIXELS,
+                    ),
+                ) { "Converted image has invalid dimensions" }
+            if (fitted.width != owned.width || fitted.height != owned.height) {
+                val scaled = Bitmap.createScaledBitmap(owned, fitted.width, fitted.height, true)
+                if (scaled !== owned) owned.recycle()
+                owned = scaled
+            }
+            checkNotNull(owned).also { owned = null }
+        } finally {
+            owned?.takeUnless(Bitmap::isRecycled)?.recycle()
+        }
+    }
 
 // ── Validate JPGs before sharing ───────────────────────────────────────────────
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-internal fun jpgFormatSize(kb: Long): String = when {
-    kb >= 1024 -> "%.1f MB".format(kb / 1024f)
-    else       -> "$kb KB"
-}
+internal fun jpgFormatSize(kb: Long): String =
+    when {
+        kb >= 1024 -> "%.1f MB".format(kb / 1024f)
+        else -> "$kb KB"
+    }
 
 // ── Save JPGs to device gallery (Pictures/PDFMaker) ───────────────────────────
 
@@ -329,12 +377,13 @@ internal fun saveJpgsToGallery(context: Context, files: List<File>): GallerySave
             require(file.isFile && file.length() in 1..PdfToJpgPolicy.MAX_JPEG_BYTES) {
                 "A converted image is missing or exceeds the 50 MB image limit"
             }
-            val values = ContentValues().apply {
-                put(MediaStore.Images.Media.DISPLAY_NAME, "${SafeFileName.baseName(file.nameWithoutExtension)}.jpg")
-                put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-                put(MediaStore.Images.Media.RELATIVE_PATH, "${android.os.Environment.DIRECTORY_PICTURES}/PDFMaker")
-                put(MediaStore.Images.Media.IS_PENDING, 1)
-            }
+            val values =
+                ContentValues().apply {
+                    put(MediaStore.Images.Media.DISPLAY_NAME, "${SafeFileName.baseName(file.nameWithoutExtension)}.jpg")
+                    put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                    put(MediaStore.Images.Media.RELATIVE_PATH, "${android.os.Environment.DIRECTORY_PICTURES}/PDFMaker")
+                    put(MediaStore.Images.Media.IS_PENDING, 1)
+                }
             val galleryUri =
                 resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
                     ?: error("Gallery storage rejected the image")

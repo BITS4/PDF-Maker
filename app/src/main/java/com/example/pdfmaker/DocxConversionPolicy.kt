@@ -17,13 +17,22 @@ internal object DocxConversionPolicy {
     const val MAX_PAGES = 500
     const val MAX_OUTPUT_BYTES = 512L * 1024L * 1024L
 
-    fun requireCanAdd(currentCount: Int, maximum: Int, label: String) {
+    fun requireCanAdd(
+        currentCount: Int,
+        maximum: Int,
+        label: String,
+    ) {
         require(maximum > 0 && currentCount in 0 until maximum) {
             "DOCX contains too many $label"
         }
     }
 
-    fun requireCanAppend(currentLength: Int, addedLength: Int, maximum: Int, label: String) {
+    fun requireCanAppend(
+        currentLength: Int,
+        addedLength: Int,
+        maximum: Int,
+        label: String,
+    ) {
         require(maximum > 0 && currentLength >= 0 && addedLength >= 0) {
             "DOCX $label budget is invalid"
         }

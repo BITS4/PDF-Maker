@@ -26,19 +26,21 @@ class SecurityConfigurationInstrumentedTest {
     @Test
     fun manifestDoesNotRequestBroadStorageAccess() {
         @Suppress("DEPRECATION")
-        val permissions = context.packageManager
-            .getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
-            .requestedPermissions
-            .orEmpty()
-            .toSet()
-        val prohibited = setOf(
-            Manifest.permission.MANAGE_EXTERNAL_STORAGE,
-            Manifest.permission.READ_EXTERNAL_STORAGE,
-            Manifest.permission.WRITE_EXTERNAL_STORAGE,
-            Manifest.permission.READ_MEDIA_IMAGES,
-            Manifest.permission.READ_MEDIA_VIDEO,
-            Manifest.permission.READ_MEDIA_AUDIO,
-        )
+        val permissions =
+            context.packageManager
+                .getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
+                .requestedPermissions
+                .orEmpty()
+                .toSet()
+        val prohibited =
+            setOf(
+                Manifest.permission.MANAGE_EXTERNAL_STORAGE,
+                Manifest.permission.READ_EXTERNAL_STORAGE,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                Manifest.permission.READ_MEDIA_IMAGES,
+                Manifest.permission.READ_MEDIA_VIDEO,
+                Manifest.permission.READ_MEDIA_AUDIO,
+            )
 
         assertTrue("Broad storage permissions must not be packaged", permissions.intersect(prohibited).isEmpty())
     }
@@ -46,8 +48,9 @@ class SecurityConfigurationInstrumentedTest {
     @Test
     fun manifestIncludesCameraAndDisablesApplicationBackup() {
         @Suppress("DEPRECATION")
-        val packageInfo = context.packageManager
-            .getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
+        val packageInfo =
+            context.packageManager
+                .getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
         val permissions = packageInfo.requestedPermissions.orEmpty().toSet()
 
         assertTrue(Manifest.permission.CAMERA in permissions)
@@ -103,10 +106,11 @@ class SecurityConfigurationInstrumentedTest {
     @Test
     fun sentryCannotInitializeBeforeThePrivacyPolicy() {
         @Suppress("DEPRECATION")
-        val applicationInfo = context.packageManager.getApplicationInfo(
-            context.packageName,
-            PackageManager.GET_META_DATA,
-        )
+        val applicationInfo =
+            context.packageManager.getApplicationInfo(
+                context.packageName,
+                PackageManager.GET_META_DATA,
+            )
 
         assertEquals(PdfMakerApplication::class.java.name, applicationInfo.className)
         assertFalse(applicationInfo.metaData.getBoolean("io.sentry.auto-init", true))
@@ -114,9 +118,10 @@ class SecurityConfigurationInstrumentedTest {
 
     @Test
     fun fileProviderExposesGeneratedDocuments() {
-        val output = OutputStore.writeUnique(getPdfMakerDir(context), "provider-contract", "pdf") {
-            it.write("%PDF-1.7".toByteArray())
-        }
+        val output =
+            OutputStore.writeUnique(getPdfMakerDir(context), "provider-contract", "pdf") {
+                it.write("%PDF-1.7".toByteArray())
+            }
         try {
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", output)
 
@@ -131,9 +136,10 @@ class SecurityConfigurationInstrumentedTest {
     fun fileProviderRejectsFilesOutsideApprovedRoots() {
         val outside = File(context.cacheDir, "outside-provider-root.txt").apply { writeText("private") }
         try {
-            val exposed = runCatching {
-                FileProvider.getUriForFile(context, "${context.packageName}.provider", outside)
-            }.isSuccess
+            val exposed =
+                runCatching {
+                    FileProvider.getUriForFile(context, "${context.packageName}.provider", outside)
+                }.isSuccess
 
             assertFalse("The cache root must not be broadly exposed", exposed)
         } finally {

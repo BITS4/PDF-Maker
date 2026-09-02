@@ -55,20 +55,22 @@ internal fun PdfEditorBottomBar(
         editMode == PdfEditMode.DOODLE -> {
             DoodleToolbar(
                 background = background,
-                state = DoodleToolbarState(
-                    size = doodleSize,
-                    color = doodleColor,
-                    canUndo = canUndo,
-                    canRedo = canRedo,
-                ),
-                actions = DoodleToolbarActions(
-                    onSize = onDoodleSize,
-                    onColor = onDoodleColor,
-                    onCancel = onCancelDoodle,
-                    onUndo = onUndo,
-                    onRedo = onRedo,
-                    onCommit = onCommitDoodle,
-                ),
+                state =
+                    DoodleToolbarState(
+                        size = doodleSize,
+                        color = doodleColor,
+                        canUndo = canUndo,
+                        canRedo = canRedo,
+                    ),
+                actions =
+                    DoodleToolbarActions(
+                        onSize = onDoodleSize,
+                        onColor = onDoodleColor,
+                        onCancel = onCancelDoodle,
+                        onUndo = onUndo,
+                        onRedo = onRedo,
+                        onCommit = onCommitDoodle,
+                    ),
             )
         }
 

@@ -6,7 +6,10 @@ internal object ThumbnailCachePolicy {
     const val MAX_ENTRIES = 48
     const val MAX_PIXEL_WEIGHT = 24L * 1024L * 1024L
 
-    fun key(filePath: String, sizePx: Int): ThumbnailCacheKey {
+    fun key(
+        filePath: String,
+        sizePx: Int,
+    ): ThumbnailCacheKey {
         val file = File(filePath)
         return ThumbnailCacheKey(
             canonicalPath = runCatching { file.canonicalPath }.getOrElse { file.absolutePath },
@@ -16,7 +19,10 @@ internal object ThumbnailCachePolicy {
         )
     }
 
-    fun pixelWeight(width: Int, height: Int): Long {
+    fun pixelWeight(
+        width: Int,
+        height: Int,
+    ): Long {
         require(width > 0 && height > 0) { "Thumbnail dimensions must be positive" }
         return Math.multiplyExact(width.toLong(), height.toLong())
     }

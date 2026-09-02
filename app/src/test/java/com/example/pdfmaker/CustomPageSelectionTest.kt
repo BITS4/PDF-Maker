@@ -7,10 +7,11 @@ import org.junit.Test
 class CustomPageSelectionTest {
     @Test
     fun `custom pages are bounded deduplicated and sorted`() {
-        val result = PageSelectionPolicy.resolve(
-            totalPages = 6,
-            selection = PageSelection.Custom(listOf(6, 2, 2, 0, 9, 4)),
-        )
+        val result =
+            PageSelectionPolicy.resolve(
+                totalPages = 6,
+                selection = PageSelection.Custom(listOf(6, 2, 2, 0, 9, 4)),
+            )
         assertEquals(listOf(2, 4, 6), result)
     }
 

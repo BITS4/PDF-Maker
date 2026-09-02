@@ -68,12 +68,15 @@ import androidx.compose.ui.unit.sp
 // ── Data ───────────────────────────────────────────────────────────────────────
 
 data class MergeItem(
-    val id        : String = java.util.UUID.randomUUID().toString(),
-    val uri       : Uri,
-    val name      : String,
-    val sizeKb    : Long,
-    val pageCount : Int,
-    val thumb     : Bitmap?   // first-page thumbnail
+    val id: String =
+        java.util.UUID
+            .randomUUID()
+            .toString(),
+    val uri: Uri,
+    val name: String,
+    val sizeKb: Long,
+    val pageCount: Int,
+    val thumb: Bitmap?, // first-page thumbnail
 )
 
 internal enum class MergeState { EMPTY, READY, MERGING, DONE, ERROR }
@@ -85,20 +88,20 @@ internal enum class MergeState { EMPTY, READY, MERGING, DONE, ERROR }
 // stateless and make every reorder/delete event observable by that owner.
 @Suppress("LongParameterList")
 internal fun MergeItemCard(
-    item       : MergeItem,
-    index      : Int,
-    total      : Int,
-    isDragging : Boolean,
-    cardBg     : Color,
-    textPri    : Color,
-    textSec    : Color,
-    accent     : Color,
-    onDelete   : () -> Unit,
-    onMoveUp   : () -> Unit,
-    onMoveDown : () -> Unit
+    item: MergeItem,
+    index: Int,
+    total: Int,
+    isDragging: Boolean,
+    cardBg: Color,
+    textPri: Color,
+    textSec: Color,
+    accent: Color,
+    onDelete: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
 ) {
     val elevation by animateDpAsState(if (isDragging) 12.dp else 0.dp, label = "elev")
-    val scale     by animateFloatAsState(if (isDragging) 1.03f else 1f, label = "scale")
+    val scale by animateFloatAsState(if (isDragging) 1.03f else 1f, label = "scale")
 
     Row(
         Modifier
@@ -108,33 +111,48 @@ internal fun MergeItemCard(
             .clip(RoundedCornerShape(14.dp))
             .background(if (isDragging) Color(0xFF1E2035) else cardBg)
             .padding(10.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         // Order number + thumbnail
         Box(contentAlignment = Alignment.TopStart) {
             Box(
-                Modifier.size(width = 52.dp, height = 68.dp)
+                Modifier
+                    .size(width = 52.dp, height = 68.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .background(Color(0xFF1E1E2E)),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
                 if (item.thumb != null) {
-                    Image(item.thumb.asImageBitmap(), null,
-                        modifier     = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Fit)
+                    Image(
+                        item.thumb.asImageBitmap(),
+                        null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit,
+                    )
                 } else {
-                    Icon(Icons.Default.PictureAsPdf, null,
-                        tint = Color(0xFFE53935), modifier = Modifier.size(26.dp))
+                    Icon(
+                        Icons.Default.PictureAsPdf,
+                        null,
+                        tint = Color(0xFFE53935),
+                        modifier = Modifier.size(26.dp),
+                    )
                 }
             }
             // Index badge
             Box(
-                Modifier.offset(x = (-4).dp, y = (-4).dp)
-                    .size(20.dp).clip(CircleShape).background(accent),
-                contentAlignment = Alignment.Center
+                Modifier
+                    .offset(x = (-4).dp, y = (-4).dp)
+                    .size(20.dp)
+                    .clip(CircleShape)
+                    .background(accent),
+                contentAlignment = Alignment.Center,
             ) {
-                Text("${index + 1}", color = Color.White,
-                    fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    "${index + 1}",
+                    color = Color.White,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                )
             }
         }
 
@@ -142,41 +160,59 @@ internal fun MergeItemCard(
 
         // File info
         Column(Modifier.weight(1f)) {
-            Text("${item.name}.pdf", color = textPri,
-                fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                "${item.name}.pdf",
+                color = textPri,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             Spacer(Modifier.height(3.dp))
-            Text("${item.pageCount} pages · ${mergeFormatSize(item.sizeKb)}",
-                color = textSec, fontSize = 11.sp)
+            Text(
+                "${item.pageCount} pages · ${mergeFormatSize(item.sizeKb)}",
+                color = textSec,
+                fontSize = 11.sp,
+            )
         }
 
         // Up / Down / Delete
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(0.dp)
+            verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
             IconButton(
-                onClick  = onMoveUp,
+                onClick = onMoveUp,
                 modifier = Modifier.size(32.dp),
-                enabled  = index > 0
+                enabled = index > 0,
             ) {
-                Icon(Icons.Default.KeyboardArrowUp, null,
+                Icon(
+                    Icons.Default.KeyboardArrowUp,
+                    null,
                     tint = if (index > 0) accent else textSec.copy(alpha = 0.3f),
-                    modifier = Modifier.size(20.dp))
+                    modifier = Modifier.size(20.dp),
+                )
             }
             IconButton(
-                onClick  = onMoveDown,
+                onClick = onMoveDown,
                 modifier = Modifier.size(32.dp),
-                enabled  = index < total - 1
+                enabled = index < total - 1,
             ) {
-                Icon(Icons.Default.KeyboardArrowDown, null,
+                Icon(
+                    Icons.Default.KeyboardArrowDown,
+                    null,
                     tint = if (index < total - 1) accent else textSec.copy(alpha = 0.3f),
-                    modifier = Modifier.size(20.dp))
+                    modifier = Modifier.size(20.dp),
+                )
             }
         }
         IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
-            Icon(Icons.Default.DeleteOutline, null,
-                tint = Color(0xFFEF5350), modifier = Modifier.size(20.dp))
+            Icon(
+                Icons.Default.DeleteOutline,
+                null,
+                tint = Color(0xFFEF5350),
+                modifier = Modifier.size(20.dp),
+            )
         }
     }
 }
@@ -184,17 +220,28 @@ internal fun MergeItemCard(
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
 @Composable
-internal fun InfoChip(text: String, bg: Color, textColor: Color) {
+internal fun InfoChip(
+    text: String,
+    bg: Color,
+    textColor: Color,
+) {
     Box(
-        Modifier.clip(RoundedCornerShape(20.dp)).background(bg)
-            .padding(horizontal = 10.dp, vertical = 4.dp)
+        Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(bg)
+            .padding(horizontal = 10.dp, vertical = 4.dp),
     ) {
         Text(text, color = textColor, fontSize = 12.sp)
     }
 }
 
 @Composable
-internal fun StatColumn(label: String, value: String, labelColor: Color, valueColor: Color) {
+internal fun StatColumn(
+    label: String,
+    value: String,
+    labelColor: Color,
+    valueColor: Color,
+) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label, color = labelColor, fontSize = 11.sp)
         Spacer(Modifier.height(4.dp))
@@ -203,18 +250,32 @@ internal fun StatColumn(label: String, value: String, labelColor: Color, valueCo
 }
 
 @Composable
-internal fun MergeSpinner(progress: Int, color: Color) {
+internal fun MergeSpinner(
+    progress: Int,
+    color: Color,
+) {
     val inf = rememberInfiniteTransition(label = "spin")
     val angle by inf.animateFloat(
-        initialValue  = 0f, targetValue = 360f,
+        initialValue = 0f,
+        targetValue = 360f,
         animationSpec = infiniteRepeatable(tween(1200, easing = LinearEasing)),
-        label         = "angle"
+        label = "angle",
     )
     Canvas(Modifier.size(110.dp)) {
-        drawArc(Color(0xFF2A2A40), 0f, 360f, false,
-            style = Stroke(10.dp.toPx(), cap = StrokeCap.Round))
-        drawArc(color, angle - 90f, (progress * 3.6f).coerceAtLeast(10f), false,
-            style = Stroke(10.dp.toPx(), cap = StrokeCap.Round))
+        drawArc(
+            Color(0xFF2A2A40),
+            0f,
+            360f,
+            false,
+            style = Stroke(10.dp.toPx(), cap = StrokeCap.Round),
+        )
+        drawArc(
+            color,
+            angle - 90f,
+            (progress * 3.6f).coerceAtLeast(10f),
+            false,
+            style = Stroke(10.dp.toPx(), cap = StrokeCap.Round),
+        )
     }
 }
 
@@ -241,13 +302,14 @@ internal fun MergeRenameDialog(
                 onValueChange = { draft = it },
                 singleLine = true,
                 placeholder = { Text("merged_document", color = Color(0xFF9999BB)) },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = AccentBlue,
-                    unfocusedBorderColor = Color(0xFF444455),
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    cursorColor = AccentBlue,
-                ),
+                colors =
+                    OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = AccentBlue,
+                        unfocusedBorderColor = Color(0xFF444455),
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        cursorColor = AccentBlue,
+                    ),
                 suffix = { Text(".pdf", color = Color(0xFF9999BB)) },
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -301,13 +363,14 @@ internal fun MergePreflightDialog(
                     onValueChange = { draft = it },
                     singleLine = true,
                     placeholder = { Text("merged_document", color = Color(0xFF9999BB)) },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AccentBlue,
-                        unfocusedBorderColor = Color(0xFF444455),
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        cursorColor = AccentBlue,
-                    ),
+                    colors =
+                        OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = AccentBlue,
+                            unfocusedBorderColor = Color(0xFF444455),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            cursorColor = AccentBlue,
+                        ),
                     suffix = { Text(".pdf", color = Color(0xFF9999BB)) },
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -344,11 +407,12 @@ internal fun MergeEmptyPanel(onSelectFiles: () -> Unit) {
         verticalArrangement = Arrangement.Center,
     ) {
         Box(
-            modifier = Modifier
-                .size(100.dp)
-                .clip(CircleShape)
-                .background(Color(0xFF1E1E30))
-                .border(2.dp, orange.copy(alpha = 0.4f), CircleShape),
+            modifier =
+                Modifier
+                    .size(100.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF1E1E30))
+                    .border(2.dp, orange.copy(alpha = 0.4f), CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Icon(

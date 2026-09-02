@@ -37,7 +37,10 @@ object PinCredential {
         ).joinToString("$")
     }
 
-    fun verify(pin: String, encoded: String): Boolean {
+    fun verify(
+        pin: String,
+        encoded: String,
+    ): Boolean {
         if (!isValidPin(pin)) return false
         val parsed = parse(encoded) ?: return false
         if (pin.length != parsed.pinLength) return false
@@ -48,7 +51,11 @@ object PinCredential {
 
     fun isCredential(encoded: String): Boolean = parse(encoded) != null
 
-    private fun derive(pin: String, salt: ByteArray, iterations: Int): ByteArray {
+    private fun derive(
+        pin: String,
+        salt: ByteArray,
+        iterations: Int,
+    ): ByteArray {
         val spec = PBEKeySpec(pin.toCharArray(), salt, iterations, HASH_BITS)
         return try {
             SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
@@ -105,7 +112,10 @@ object PinLockoutPolicy {
     const val MAX_ATTEMPTS = 5
     const val LOCKOUT_MILLIS = 30_000L
 
-    fun recordFailure(state: PinAttemptState, nowEpochMillis: Long): PinAttemptState {
+    fun recordFailure(
+        state: PinAttemptState,
+        nowEpochMillis: Long,
+    ): PinAttemptState {
         val current = afterExpiry(state, nowEpochMillis)
         if (current.lockedUntilEpochMillis > nowEpochMillis) return current
         val failures = current.failedAttempts + 1
@@ -116,9 +126,13 @@ object PinLockoutPolicy {
         }
     }
 
-    fun afterExpiry(state: PinAttemptState, nowEpochMillis: Long): PinAttemptState =
-        if (state.lockedUntilEpochMillis in 1..nowEpochMillis) PinAttemptState() else state
+    fun afterExpiry(
+        state: PinAttemptState,
+        nowEpochMillis: Long,
+    ): PinAttemptState = if (state.lockedUntilEpochMillis in 1..nowEpochMillis) PinAttemptState() else state
 
-    fun remainingMillis(state: PinAttemptState, nowEpochMillis: Long): Long =
-        (state.lockedUntilEpochMillis - nowEpochMillis).coerceAtLeast(0)
+    fun remainingMillis(
+        state: PinAttemptState,
+        nowEpochMillis: Long,
+    ): Long = (state.lockedUntilEpochMillis - nowEpochMillis).coerceAtLeast(0)
 }

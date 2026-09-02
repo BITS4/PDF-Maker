@@ -10,23 +10,25 @@ object ImagePdfExport {
         requestedName: String?,
         password: String?,
         pdfWriter: (OutputStream) -> Unit,
-    ): Result<File> = runCatching {
-        if (password != null) {
-            require(password.length in 4..128) { "Password must contain 4 to 128 characters" }
-        }
-        val output = OutputStore.writeUnique(
-            directory = directory,
-            requestedBaseName = requestedName,
-            extension = "pdf",
-            writer = pdfWriter,
-        )
-        withFailureCleanup(cleanup = output::delete) {
+    ): Result<File> =
+        runCatching {
             if (password != null) {
-                check(SecureDocumentStore.lockInPlace(output, password) == null) {
-                    "The PDF could not be password-protected"
-                }
+                require(password.length in 4..128) { "Password must contain 4 to 128 characters" }
             }
-            output
+            val output =
+                OutputStore.writeUnique(
+                    directory = directory,
+                    requestedBaseName = requestedName,
+                    extension = "pdf",
+                    writer = pdfWriter,
+                )
+            withFailureCleanup(cleanup = output::delete) {
+                if (password != null) {
+                    check(SecureDocumentStore.lockInPlace(output, password) == null) {
+                        "The PDF could not be password-protected"
+                    }
+                }
+                output
+            }
         }
-    }
 }

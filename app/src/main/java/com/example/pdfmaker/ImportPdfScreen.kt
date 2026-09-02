@@ -38,46 +38,55 @@ import kotlinx.coroutines.withContext
 
 private suspend fun scanDevicePdfs(context: Context): List<DevicePdf> =
     withContext(Dispatchers.IO) {
-        val list   = mutableListOf<DevicePdf>()
-        val volume = if (Build.VERSION.SDK_INT >= 29)
-            MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
-        else
-            MediaStore.Files.getContentUri("external")
+        val list = mutableListOf<DevicePdf>()
+        val volume =
+            if (Build.VERSION.SDK_INT >= 29) {
+                MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
+            } else {
+                MediaStore.Files.getContentUri("external")
+            }
 
-        val projection = arrayOf(
-            MediaStore.Files.FileColumns._ID,
-            MediaStore.Files.FileColumns.DISPLAY_NAME,
-            MediaStore.Files.FileColumns.SIZE,
-            MediaStore.Files.FileColumns.DATE_MODIFIED
-        )
+        val projection =
+            arrayOf(
+                MediaStore.Files.FileColumns._ID,
+                MediaStore.Files.FileColumns.DISPLAY_NAME,
+                MediaStore.Files.FileColumns.SIZE,
+                MediaStore.Files.FileColumns.DATE_MODIFIED,
+            )
         val selection = "${MediaStore.Files.FileColumns.MIME_TYPE} = ?"
-        val selArgs   = arrayOf("application/pdf")
+        val selArgs = arrayOf("application/pdf")
         val sortOrder = "${MediaStore.Files.FileColumns.DATE_MODIFIED} DESC"
 
-        context.contentResolver.query(volume, projection, selection, selArgs, sortOrder)
+        context.contentResolver
+            .query(volume, projection, selection, selArgs, sortOrder)
             ?.use { cursor ->
-                val idCol   = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
+                val idCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
                 val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME)
                 val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.SIZE)
                 val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATE_MODIFIED)
                 while (cursor.moveToNext()) {
-                    val id       = cursor.getLong(idCol)
-                    val rawName  = cursor.getString(nameCol) ?: continue
-                    val name     = rawName.removeSuffix(".pdf")
-                    val sizeB    = cursor.getLong(sizeCol)
-                    val sizeStr  = when {
-                        sizeB >= 1_048_576 -> "%.1f MB".format(sizeB / 1_048_576.0)
-                        sizeB >= 1024      -> "${sizeB / 1024} kB"
-                        else               -> "$sizeB B"
-                    }
-                    val modMs    = cursor.getLong(dateCol) * 1000L
-                    val cal      = java.util.Calendar.getInstance().also { it.timeInMillis = modMs }
-                    val dateFmt  = "%02d/%02d %02d:%02d".format(
-                        cal.get(java.util.Calendar.MONTH) + 1,
-                        cal.get(java.util.Calendar.DAY_OF_MONTH),
-                        cal.get(java.util.Calendar.HOUR_OF_DAY),
-                        cal.get(java.util.Calendar.MINUTE)
-                    )
+                    val id = cursor.getLong(idCol)
+                    val rawName = cursor.getString(nameCol) ?: continue
+                    val name = rawName.removeSuffix(".pdf")
+                    val sizeB = cursor.getLong(sizeCol)
+                    val sizeStr =
+                        when {
+                            sizeB >= 1_048_576 -> "%.1f MB".format(sizeB / 1_048_576.0)
+                            sizeB >= 1024 -> "${sizeB / 1024} kB"
+                            else -> "$sizeB B"
+                        }
+                    val modMs = cursor.getLong(dateCol) * 1000L
+                    val cal =
+                        java.util.Calendar
+                            .getInstance()
+                            .also { it.timeInMillis = modMs }
+                    val dateFmt =
+                        "%02d/%02d %02d:%02d".format(
+                            cal.get(java.util.Calendar.MONTH) + 1,
+                            cal.get(java.util.Calendar.DAY_OF_MONTH),
+                            cal.get(java.util.Calendar.HOUR_OF_DAY),
+                            cal.get(java.util.Calendar.MINUTE),
+                        )
                     val contentUri = ContentUris.withAppendedId(volume, id)
                     list += DevicePdf(contentUri, name, sizeStr, dateFmt, modMs)
                 }
@@ -87,39 +96,49 @@ private suspend fun scanDevicePdfs(context: Context): List<DevicePdf> =
 
 // ── Cloud source items ────────────────────────────────────────────────────────
 
-private data class CloudSource(val label: String, val bg: Color, val iconTint: Color = Color.White)
-
-private val cloudSources = listOf(
-    CloudSource("File Manager",  Color(0xFF1565C0)),
-    CloudSource("OneDrive",      Color(0xFF0078D4)),
-    CloudSource("Drive",         Color.White,      Color(0xFF4285F4)),
-    CloudSource("My Files",      Color(0xFFF9A825)),
-    CloudSource("Files",         Color(0xFF1A73E8))
+private data class CloudSource(
+    val label: String,
+    val bg: Color,
+    val iconTint: Color = Color.White,
 )
+
+private val cloudSources =
+    listOf(
+        CloudSource("File Manager", Color(0xFF1565C0)),
+        CloudSource("OneDrive", Color(0xFF0078D4)),
+        CloudSource("Drive", Color.White, Color(0xFF4285F4)),
+        CloudSource("My Files", Color(0xFFF9A825)),
+        CloudSource("Files", Color(0xFF1A73E8)),
+    )
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 @Composable
 fun ImportPdfScreen(
-    onBack     : () -> Unit,
-    onPdfPicked: (Uri) -> Unit
+    onBack: () -> Unit,
+    onPdfPicked: (Uri) -> Unit,
 ) {
-    val context      = LocalContext.current
-    var devicePdfs   by remember { mutableStateOf<List<DevicePdf>>(emptyList()) }
-    var searchQuery  by remember { mutableStateOf("") }
-    var isSearching  by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    var devicePdfs by remember { mutableStateOf<List<DevicePdf>>(emptyList()) }
+    var searchQuery by remember { mutableStateOf("") }
+    var isSearching by remember { mutableStateOf(false) }
 
     // Standard Android document picker — routes to whichever storage the user chooses
-    val filePicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri -> uri?.let { onPdfPicked(it) } }
+    val filePicker =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.OpenDocument(),
+        ) { uri -> uri?.let { onPdfPicked(it) } }
 
     LaunchedEffect(Unit) { devicePdfs = scanDevicePdfs(context) }
 
-    val filtered = remember(devicePdfs, searchQuery) {
-        if (searchQuery.isBlank()) devicePdfs
-        else devicePdfs.filter { it.name.contains(searchQuery, ignoreCase = true) }
-    }
+    val filtered =
+        remember(devicePdfs, searchQuery) {
+            if (searchQuery.isBlank()) {
+                devicePdfs
+            } else {
+                devicePdfs.filter { it.name.contains(searchQuery, ignoreCase = true) }
+            }
+        }
 
     val cardBg = Color(0xFF1A1A2A)
     val surface = Color(0xFF0D0D16)
@@ -130,22 +149,24 @@ fun ImportPdfScreen(
         Modifier
             .fillMaxSize()
             .background(surface)
-            .statusBarsPadding()
+            .statusBarsPadding(),
     ) {
         // ── Top bar ───────────────────────────────────────────────────────────
         Row(
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 4.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = textPri)
             }
             Text(
-                "Import PDF", color = textPri,
-                fontSize = 20.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(1f).padding(start = 4.dp)
+                "Import PDF",
+                color = textPri,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f).padding(start = 4.dp),
             )
         }
 
@@ -154,7 +175,7 @@ fun ImportPdfScreen(
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             cloudSources.take(4).forEach { src ->
                 CloudSourceItem(src, textSec) { filePicker.launch(arrayOf("application/pdf")) }
@@ -165,7 +186,7 @@ fun ImportPdfScreen(
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
-                .padding(bottom = 8.dp)
+                .padding(bottom = 8.dp),
         ) {
             CloudSourceItem(cloudSources[4], textSec) { filePicker.launch(arrayOf("application/pdf")) }
         }
@@ -175,7 +196,7 @@ fun ImportPdfScreen(
             Modifier
                 .fillMaxSize()
                 .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
-                .background(cardBg)
+                .background(cardBg),
         ) {
             Column(Modifier.fillMaxSize()) {
                 // Header
@@ -183,7 +204,7 @@ fun ImportPdfScreen(
                     Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (isSearching) {
                         Box(
@@ -193,7 +214,7 @@ fun ImportPdfScreen(
                                 .clip(RoundedCornerShape(20.dp))
                                 .background(Color(0xFF2A2A3A))
                                 .padding(horizontal = 14.dp),
-                            contentAlignment = Alignment.CenterStart
+                            contentAlignment = Alignment.CenterStart,
                         ) {
                             if (searchQuery.isEmpty()) {
                                 Text("Search PDFs…", color = Color(0xFF666680), fontSize = 14.sp)
@@ -202,21 +223,28 @@ fun ImportPdfScreen(
                                 value = searchQuery,
                                 onValueChange = { searchQuery = it },
                                 singleLine = true,
-                                textStyle = androidx.compose.ui.text.TextStyle(
-                                    color = textPri, fontSize = 14.sp
-                                ),
+                                textStyle =
+                                    androidx.compose.ui.text.TextStyle(
+                                        color = textPri,
+                                        fontSize = 14.sp,
+                                    ),
                                 cursorBrush = SolidColor(AccentBlue),
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth(),
                             )
                         }
-                        IconButton(onClick = { isSearching = false; searchQuery = "" }) {
+                        IconButton(onClick = {
+                            isSearching = false
+                            searchQuery = ""
+                        }) {
                             Icon(Icons.Default.Close, null, tint = textSec)
                         }
                     } else {
                         Text(
-                            "From Device", color = textPri,
-                            fontSize = 18.sp, fontWeight = FontWeight.Bold,
-                            modifier = Modifier.weight(1f)
+                            "From Device",
+                            color = textPri,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f),
                         )
                         IconButton(onClick = { isSearching = true }) {
                             Icon(Icons.Default.Search, null, tint = textSec)
@@ -250,26 +278,27 @@ fun ImportPdfScreen(
 
 @Composable
 private fun RowScope.CloudSourceItem(
-    src     : CloudSource,
-    textSec : Color,
-    onClick : () -> Unit
+    src: CloudSource,
+    textSec: Color,
+    onClick: () -> Unit,
 ) {
     Column(
-        modifier            = Modifier.clickable(onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally
+        modifier = Modifier.clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
-            modifier = Modifier
-                .size(60.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(src.bg),
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier
+                    .size(60.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(src.bg),
+            contentAlignment = Alignment.Center,
         ) {
             Icon(
-                imageVector  = Icons.Default.Folder,
+                imageVector = Icons.Default.Folder,
                 contentDescription = null,
-                tint         = src.iconTint,
-                modifier     = Modifier.size(30.dp)
+                tint = src.iconTint,
+                modifier = Modifier.size(30.dp),
             )
         }
         Spacer(Modifier.height(6.dp))
@@ -279,47 +308,54 @@ private fun RowScope.CloudSourceItem(
 
 @Composable
 private fun DevicePdfRow(
-    pdf     : DevicePdf,
-    textPri : Color,
-    textSec : Color,
-    onClick : () -> Unit
+    pdf: DevicePdf,
+    textPri: Color,
+    textSec: Color,
+    onClick: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         // PDF icon
         Box(
-            modifier = Modifier
-                .size(72.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFF252535)),
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier
+                    .size(72.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF252535)),
+            contentAlignment = Alignment.Center,
         ) {
             Box(
                 Modifier
                     .size(46.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .background(Color(0xFFE53935)),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
                 Text("PDF", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(pdf.name, color = textPri, fontSize = 15.sp,
-                fontWeight = FontWeight.Medium, maxLines = 1)
+            Text(
+                pdf.name,
+                color = textPri,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+            )
             Spacer(Modifier.height(3.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier
                         .size(18.dp)
                         .background(Color(0xFF2A2A3A), CircleShape),
-                    contentAlignment = Alignment.Center
+                    contentAlignment = Alignment.Center,
                 ) {
                     Text("1", color = textSec, fontSize = 9.sp)
                 }

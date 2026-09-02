@@ -30,16 +30,19 @@ internal fun IncomingDocumentEffect(
                 importIncomingDocument(activity, activeRequest, pendingArtifact)
             if (!activity.claimIncomingDocument(activeRequest.requestId)) return@LaunchedEffect
             when (result) {
-                is IncomingImportResult.Imported ->
+                is IncomingImportResult.Imported -> {
                     handleImportedDocument(
                         activity = activity,
                         navigation = navigation,
                         artifact = result.artifact,
                     )
-                is IncomingImportResult.Rejected ->
+                }
+
+                is IncomingImportResult.Rejected -> {
                     Toast
                         .makeText(activity, result.message, Toast.LENGTH_LONG)
                         .show()
+                }
             }
         } finally {
             withContext(NonCancellable + Dispatchers.IO) {
@@ -98,6 +101,7 @@ private fun handleImportedDocument(
             FileCache.prependFile(pdfFile)
             navigation.openFile(pdfFile)
         }
+
         IncomingDocumentKind.DOCX -> {
             val uri = activity.ownedContentUri(artifact.file)
             if (uri != null) {
@@ -107,6 +111,7 @@ private fun handleImportedDocument(
                 navigation.navigate(Screen.DOCX_TO_PDF)
             }
         }
+
         IncomingDocumentKind.JPEG,
         IncomingDocumentKind.PNG,
         IncomingDocumentKind.GIF,

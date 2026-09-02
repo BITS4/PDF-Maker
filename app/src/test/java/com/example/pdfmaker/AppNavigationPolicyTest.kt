@@ -145,17 +145,19 @@ class AppNavigationPolicyTest {
     fun `image back policy honors add more then scan then selection priority`() {
         assertEquals(
             Screen.IMAGE_REVIEW,
-            AppNavigationPolicy.systemBack(
-                Screen.IMAGE_EDIT,
-                NavigationContext(addingMoreImages = true, fromSmartScan = true),
-            ).destination,
+            AppNavigationPolicy
+                .systemBack(
+                    Screen.IMAGE_EDIT,
+                    NavigationContext(addingMoreImages = true, fromSmartScan = true),
+                ).destination,
         )
         assertEquals(
             Screen.SMART_SCAN,
-            AppNavigationPolicy.systemBack(
-                Screen.IMAGE_EDIT,
-                NavigationContext(fromSmartScan = true),
-            ).destination,
+            AppNavigationPolicy
+                .systemBack(
+                    Screen.IMAGE_EDIT,
+                    NavigationContext(fromSmartScan = true),
+                ).destination,
         )
         assertEquals(
             Screen.IMAGE_SELECTION,

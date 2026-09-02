@@ -11,7 +11,7 @@ internal fun AppCoreRoute(
     screen: Screen,
 ) {
     when (screen) {
-        Screen.HOME ->
+        Screen.HOME -> {
             HomeScreen(
                 onToolClick = { toolId ->
                     val launch = AppNavigationPolicy.homeTool(toolId)
@@ -26,7 +26,9 @@ internal fun AppCoreRoute(
                 onNavigateToFiles = { navigation.navigate(Screen.FILES) },
                 onNavigateToSettings = { navigation.navigate(Screen.SETTINGS) },
             )
-        Screen.FILES ->
+        }
+
+        Screen.FILES -> {
             FilesScreen(
                 activity = activity,
                 onFileClick = { file -> navigation.openFile(file, fromFilesList = true) },
@@ -41,6 +43,8 @@ internal fun AppCoreRoute(
                     )
                 },
             )
+        }
+
         Screen.VIEWER -> {
             val file = navigation.selectedFile
             if (file == null) {
@@ -53,11 +57,14 @@ internal fun AppCoreRoute(
                 onShare = { sharePdf(activity, file) },
             )
         }
-        Screen.SETTINGS ->
+
+        Screen.SETTINGS -> {
             SettingsScreen(
                 onBack = { navigation.navigate(Screen.HOME) },
             )
-        Screen.MORE_TOOLS ->
+        }
+
+        Screen.MORE_TOOLS -> {
             MoreToolsScreen(
                 onBack = { navigation.navigate(Screen.HOME) },
                 onToolClick = { toolId ->
@@ -66,7 +73,11 @@ internal fun AppCoreRoute(
                     }
                 },
             )
-        else -> error("Screen $screen is not a core route")
+        }
+
+        else -> {
+            error("Screen $screen is not a core route")
+        }
     }
 }
 

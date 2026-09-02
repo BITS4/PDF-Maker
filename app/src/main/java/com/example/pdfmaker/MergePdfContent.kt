@@ -65,8 +65,11 @@ internal fun MergePdfContent(
                 onSelectFiles = callbacks.onSelectFiles,
             )
             when (state.phase) {
-                MergeState.EMPTY -> MergeEmptyPanel(onSelectFiles = callbacks.onSelectFiles)
-                MergeState.READY ->
+                MergeState.EMPTY -> {
+                    MergeEmptyPanel(onSelectFiles = callbacks.onSelectFiles)
+                }
+
+                MergeState.READY -> {
                     MergePdfReadyContent(
                         items = state.items,
                         outputName = state.outputName,
@@ -74,13 +77,17 @@ internal fun MergePdfContent(
                         colors = colors,
                         callbacks = callbacks,
                     )
-                MergeState.MERGING ->
+                }
+
+                MergeState.MERGING -> {
                     MergePdfProgressContent(
                         progress = state.progress,
                         progressText = state.progressText,
                         colors = colors,
                     )
-                MergeState.DONE ->
+                }
+
+                MergeState.DONE -> {
                     MergePdfDoneContent(
                         file = state.resultFile,
                         shareMessage = state.shareMessage,
@@ -88,12 +95,15 @@ internal fun MergePdfContent(
                         colors = colors,
                         callbacks = callbacks,
                     )
-                MergeState.ERROR ->
+                }
+
+                MergeState.ERROR -> {
                     MergePdfErrorContent(
                         message = state.errorMessage,
                         colors = colors,
                         onRetry = callbacks.onRetry,
                     )
+                }
             }
         }
     }

@@ -11,18 +11,40 @@ internal fun AppDocumentRoute(
     screen: Screen,
 ) {
     when (screen) {
-        Screen.COMPRESS -> CompressScreen(onBack = navigation::navigateBackToOrigin)
-        Screen.PDF_TO_JPG -> PdfToJpgScreen(onBack = navigation::navigateBackToOrigin)
-        Screen.MERGE_PDF ->
+        Screen.COMPRESS -> {
+            CompressScreen(onBack = navigation::navigateBackToOrigin)
+        }
+
+        Screen.PDF_TO_JPG -> {
+            PdfToJpgScreen(onBack = navigation::navigateBackToOrigin)
+        }
+
+        Screen.MERGE_PDF -> {
             MergePdfScreen(
                 onBack = navigation::navigateBackToOrigin,
                 onOpenFile = navigation::openFile,
             )
-        Screen.DOCX_TO_PDF -> docxToPdfRoute(navigation)
-        Screen.IMPORT_PDF -> importPdfRoute(navigation)
-        Screen.IMPORTED_PDF_VIEWER -> importedPdfViewerRoute(activity, navigation)
-        Screen.SIGNATURE_PAD -> navigation.navigate(Screen.IMPORTED_PDF_VIEWER)
-        else -> supportingDocumentRoute(navigation, screen)
+        }
+
+        Screen.DOCX_TO_PDF -> {
+            docxToPdfRoute(navigation)
+        }
+
+        Screen.IMPORT_PDF -> {
+            importPdfRoute(navigation)
+        }
+
+        Screen.IMPORTED_PDF_VIEWER -> {
+            importedPdfViewerRoute(activity, navigation)
+        }
+
+        Screen.SIGNATURE_PAD -> {
+            navigation.navigate(Screen.IMPORTED_PDF_VIEWER)
+        }
+
+        else -> {
+            supportingDocumentRoute(navigation, screen)
+        }
     }
 }
 
@@ -32,27 +54,49 @@ private fun supportingDocumentRoute(
     screen: Screen,
 ) {
     when (screen) {
-        Screen.SPLIT_PDF ->
+        Screen.SPLIT_PDF -> {
             SplitPdfScreen(
                 onBack = navigation::navigateBackToOrigin,
                 onOpenFile = navigation::openFile,
             )
-        Screen.PAGE_MANAGER ->
+        }
+
+        Screen.PAGE_MANAGER -> {
             PageManagerScreen(
                 onBack = navigation::navigateBackToOrigin,
                 onOpenFile = navigation::openFile,
             )
-        Screen.LOCK_PDF -> LockPdfScreen(onBack = navigation::navigateBackToOrigin)
-        Screen.UNLOCK_PDF -> UnlockPdfScreen(onBack = navigation::navigateBackToOrigin)
-        Screen.OCR -> OcrScreen(onBack = navigation::navigateBackToOrigin)
-        Screen.PRINT_PDF -> PrintPdfScreen(onBack = navigation::navigateBackToOrigin)
-        Screen.CAMERA_DENIED ->
+        }
+
+        Screen.LOCK_PDF -> {
+            LockPdfScreen(onBack = navigation::navigateBackToOrigin)
+        }
+
+        Screen.UNLOCK_PDF -> {
+            UnlockPdfScreen(onBack = navigation::navigateBackToOrigin)
+        }
+
+        Screen.OCR -> {
+            OcrScreen(onBack = navigation::navigateBackToOrigin)
+        }
+
+        Screen.PRINT_PDF -> {
+            PrintPdfScreen(onBack = navigation::navigateBackToOrigin)
+        }
+
+        Screen.CAMERA_DENIED -> {
             CameraPermissionDeniedScreen(onBack = navigation::navigateBackToOrigin)
-        Screen.ONBOARDING ->
+        }
+
+        Screen.ONBOARDING -> {
             OnboardingScreen(
                 onDone = { navigation.navigate(Screen.HOME) },
             )
-        else -> error("Screen $screen is not a document route")
+        }
+
+        else -> {
+            error("Screen $screen is not a document route")
+        }
     }
 }
 

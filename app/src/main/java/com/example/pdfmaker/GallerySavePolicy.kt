@@ -14,12 +14,13 @@ internal data class GallerySaveReport(
     val isComplete: Boolean = requestedCount > 0 && savedCount == requestedCount && errors.isEmpty()
 
     val userMessage: String
-        get() = when {
-            isComplete -> "$savedCount image(s) saved to the gallery"
-            requestedCount == 0 -> "There are no images to save"
-            savedCount > 0 -> "$savedCount of $requestedCount images saved. ${errors.firstOrNull().orEmpty()}".trim()
-            else -> errors.firstOrNull() ?: "No images could be saved"
-        }
+        get() =
+            when {
+                isComplete -> "$savedCount image(s) saved to the gallery"
+                requestedCount == 0 -> "There are no images to save"
+                savedCount > 0 -> "$savedCount of $requestedCount images saved. ${errors.firstOrNull().orEmpty()}".trim()
+                else -> errors.firstOrNull() ?: "No images could be saved"
+            }
 }
 
 internal object GallerySavePolicy {
@@ -27,8 +28,11 @@ internal object GallerySavePolicy {
 
     fun supportsGalleryWrite(sdkInt: Int): Boolean = sdkInt >= MIN_MEDIA_STORE_SDK
 
-    fun report(requestedCount: Int, savedCount: Int, errors: List<String>): GallerySaveReport =
-        GallerySaveReport(requestedCount, savedCount, errors.distinct())
+    fun report(
+        requestedCount: Int,
+        savedCount: Int,
+        errors: List<String>,
+    ): GallerySaveReport = GallerySaveReport(requestedCount, savedCount, errors.distinct())
 
     fun failureMessage(error: Exception): String =
         when (error) {

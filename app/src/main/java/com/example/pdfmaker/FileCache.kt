@@ -5,8 +5,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -16,10 +16,9 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 
 object FileCache {
-
-    var files     by mutableStateOf<List<PdfFile>>(emptyList())
+    var files by mutableStateOf<List<PdfFile>>(emptyList())
     var isLoading by mutableStateOf(false)
-    var version   by mutableIntStateOf(0)   // incremented on invalidate — screens use as LaunchedEffect key
+    var version by mutableIntStateOf(0) // incremented on invalidate — screens use as LaunchedEffect key
     private var loaded = false
     private var loadJob: Job? = null
 
@@ -29,7 +28,10 @@ object FileCache {
      * Load files once. Subsequent calls are no-ops unless [forceRefresh] = true.
      * Uses a background dispatcher so the UI is never blocked.
      */
-    fun load(context: Context, forceRefresh: Boolean = false) {
+    fun load(
+        context: Context,
+        forceRefresh: Boolean = false,
+    ) {
         val applicationContext = context.applicationContext
         scope.launch {
             if (loaded && !forceRefresh) return@launch
@@ -40,9 +42,10 @@ object FileCache {
             loadJob = currentLoad
             isLoading = true
             try {
-                val result = withContext(Dispatchers.IO) {
-                    FileRepository.loadPdfFiles(applicationContext)
-                }
+                val result =
+                    withContext(Dispatchers.IO) {
+                        FileRepository.loadPdfFiles(applicationContext)
+                    }
                 if (loadJob === currentLoad) {
                     files = result
                     loaded = true
@@ -77,7 +80,11 @@ object FileCache {
     }
 
     /** Update file path and name in cache after a rename. */
-    fun renameFile(oldPath: String, newPath: String, newName: String) {
+    fun renameFile(
+        oldPath: String,
+        newPath: String,
+        newName: String,
+    ) {
         files = files.map { if (it.filePath == oldPath) it.copy(filePath = newPath, name = newName) else it }
     }
 

@@ -137,7 +137,7 @@ private fun Modifier.editorGestures(
     onTextTap: (Offset) -> Unit,
 ): Modifier =
     when (editMode) {
-        PdfEditMode.DOODLE ->
+        PdfEditMode.DOODLE -> {
             pointerInput(Unit) {
                 detectDragGestures(
                     onDragStart = onDoodleStart,
@@ -149,8 +149,15 @@ private fun Modifier.editorGestures(
                     onDragCancel = onDoodleEnd,
                 )
             }
-        PdfEditMode.TEXT -> pointerInput(Unit) { detectTapGestures(onTap = onTextTap) }
-        else -> this
+        }
+
+        PdfEditMode.TEXT -> {
+            pointerInput(Unit) { detectTapGestures(onTap = onTextTap) }
+        }
+
+        else -> {
+            this
+        }
     }
 
 internal fun DrawScope.drawEditorStroke(stroke: DrawStroke) {

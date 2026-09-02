@@ -7,7 +7,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -17,8 +16,11 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
-internal class PdfEditorOperationController(private val scope: CoroutineScope) {
+internal class PdfEditorOperationController(
+    private val scope: CoroutineScope,
+) {
     var target by mutableStateOf(ConvertTarget.NONE)
         private set
 
@@ -45,33 +47,35 @@ internal class PdfEditorOperationController(private val scope: CoroutineScope) {
         errorMessage = null
 
         lateinit var launchedJob: Job
-        launchedJob = scope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
-            try {
-                val file = producer { nextProgress ->
-                    scope.launch(Dispatchers.Main) {
-                        if (activeJob === launchedJob) progress = nextProgress.coerceIn(0, 100)
+        launchedJob =
+            scope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
+                try {
+                    val file =
+                        producer { nextProgress ->
+                            scope.launch(Dispatchers.Main) {
+                                if (activeJob === launchedJob) progress = nextProgress.coerceIn(0, 100)
+                            }
+                        }
+                    withContext(Dispatchers.Main) { consumer(file) }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    withContext(Dispatchers.Main) {
+                        errorMessage =
+                            UserVisibleFailureReporter.message(
+                                UserFailureStage.PDF_EDITOR_OPERATION,
+                                error,
+                            )
                     }
-                }
-                withContext(Dispatchers.Main) { consumer(file) }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (error: Exception) {
-                withContext(Dispatchers.Main) {
-                    errorMessage =
-                        UserVisibleFailureReporter.message(
-                            UserFailureStage.PDF_EDITOR_OPERATION,
-                            error,
-                        )
-                }
-            } finally {
-                withContext(NonCancellable + Dispatchers.Main) {
-                    if (activeJob === launchedJob) {
-                        activeJob = null
-                        this@PdfEditorOperationController.target = ConvertTarget.NONE
+                } finally {
+                    withContext(NonCancellable + Dispatchers.Main) {
+                        if (activeJob === launchedJob) {
+                            activeJob = null
+                            this@PdfEditorOperationController.target = ConvertTarget.NONE
+                        }
                     }
                 }
             }
-        }
         activeJob = launchedJob
         launchedJob.start()
     }

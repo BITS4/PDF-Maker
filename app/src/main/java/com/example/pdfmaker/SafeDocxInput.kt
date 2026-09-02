@@ -52,7 +52,10 @@ object SafeDocxInput {
         return output.toByteArray()
     }
 
-    fun decodeXml(bytes: ByteArray, maximumBytes: Long = MAX_XML_BYTES): String {
+    fun decodeXml(
+        bytes: ByteArray,
+        maximumBytes: Long = MAX_XML_BYTES,
+    ): String {
         require(bytes.size.toLong() <= maximumBytes) { "XML part exceeds its size limit" }
         val xml = bytes.toString(Charsets.UTF_8)
         require(!xml.contains("<!DOCTYPE", ignoreCase = true)) { "DOCTYPE is not allowed" }
