@@ -2,6 +2,7 @@ package com.example.pdfmaker
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class ViewerDelimitedTextTest {
@@ -34,5 +35,22 @@ class ViewerDelimitedTextTest {
         assertEquals('\t', delimiterForFileName("DATA.TSV"))
         assertEquals(',', delimiterForFileName("data.csv"))
         assertTrue(parseDelimitedRows("", ',').isEmpty())
+    }
+
+    @Test
+    fun `bounds rows columns and cell lengths`() {
+        assertEquals(
+            listOf(listOf("abc", "123"), listOf("row", "456")),
+            parseDelimitedRows(
+                "abcdef,123,discard\nrow,456,discard\nignored,789",
+                ',',
+                maximumRows = 2,
+                maximumColumns = 2,
+                maximumCellCharacters = 3,
+            ),
+        )
+        assertThrows(IllegalArgumentException::class.java) {
+            parseDelimitedRows("a".repeat(MAX_VIEWER_TEXT_BYTES + 1), ',')
+        }
     }
 }

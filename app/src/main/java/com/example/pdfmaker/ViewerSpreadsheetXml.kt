@@ -4,21 +4,28 @@ import android.util.Log
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
 
-internal fun parseViewerSharedStrings(xml: String): List<String> {
+internal fun parseViewerSharedStrings(
+    xml: String,
+    maximumStrings: Int = MAX_VIEWER_TABLE_ROWS * MAX_VIEWER_TABLE_COLUMNS,
+    maximumCellCharacters: Int = MAX_VIEWER_CELL_CHARACTERS,
+): List<String> {
+    require(maximumStrings > 0 && maximumCellCharacters > 0) { "Spreadsheet preview limits must be positive" }
     val strings = mutableListOf<String>()
     return try {
         val parser = XmlPullParserFactory.newInstance().newPullParser().also { it.setInput(xml.reader()) }
         val text = StringBuilder()
         var inText = false
         var event = parser.eventType
-        while (event != XmlPullParser.END_DOCUMENT) {
+        while (event != XmlPullParser.END_DOCUMENT && strings.size < maximumStrings) {
             when (event) {
                 XmlPullParser.START_TAG ->
                     if (parser.name == "t") {
                         inText = true
                         text.clear()
                     }
-                XmlPullParser.TEXT -> if (inText) text.append(parser.text)
+                XmlPullParser.TEXT -> if (inText && text.length < maximumCellCharacters) {
+                    text.append(parser.text.take(maximumCellCharacters - text.length))
+                }
                 XmlPullParser.END_TAG ->
                     if (parser.name == "t") {
                         strings += text.toString()
@@ -37,7 +44,13 @@ internal fun parseViewerSharedStrings(xml: String): List<String> {
 internal fun parseViewerSheet(
     xml: String,
     sharedStrings: List<String>,
+    maximumRows: Int = MAX_VIEWER_TABLE_ROWS,
+    maximumColumns: Int = MAX_VIEWER_TABLE_COLUMNS,
+    maximumCellCharacters: Int = MAX_VIEWER_CELL_CHARACTERS,
 ): List<List<String>> {
+    require(maximumRows > 0 && maximumColumns > 0 && maximumCellCharacters > 0) {
+        "Spreadsheet preview limits must be positive"
+    }
     val rows = mutableListOf<List<String>>()
     return try {
         val parser = XmlPullParserFactory.newInstance().newPullParser().also { it.setInput(xml.reader()) }
@@ -47,7 +60,7 @@ internal fun parseViewerSheet(
         var inValue = false
         var event = parser.eventType
 
-        while (event != XmlPullParser.END_DOCUMENT) {
+        while (event != XmlPullParser.END_DOCUMENT && rows.size < maximumRows) {
             when (event) {
                 XmlPullParser.START_TAG ->
                     when (parser.name) {
@@ -61,17 +74,21 @@ internal fun parseViewerSheet(
                             value.clear()
                         }
                     }
-                XmlPullParser.TEXT -> if (inValue) value.append(parser.text)
+                XmlPullParser.TEXT -> if (inValue && value.length < maximumCellCharacters) {
+                    value.append(parser.text.take(maximumCellCharacters - value.length))
+                }
                 XmlPullParser.END_TAG ->
                     when (parser.name) {
                         "v", "t" -> {
                             val raw = value.toString()
-                            row +=
-                                if (cellType == "s") {
-                                    sharedStrings.getOrElse(raw.toIntOrNull() ?: -1) { raw }
-                                } else {
-                                    raw
-                                }
+                            if (row.size < maximumColumns) {
+                                row +=
+                                    if (cellType == "s") {
+                                        sharedStrings.getOrElse(raw.toIntOrNull() ?: -1) { raw }
+                                    } else {
+                                        raw
+                                    }
+                            }
                             inValue = false
                         }
                         "row" -> if (row.isNotEmpty()) rows += row.toList()

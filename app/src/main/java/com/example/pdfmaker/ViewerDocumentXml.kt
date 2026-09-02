@@ -9,7 +9,7 @@ internal fun parseViewerRelationships(xml: String): Map<String, String> {
     return try {
         val parser = XmlPullParserFactory.newInstance().newPullParser().also { it.setInput(xml.reader()) }
         var event = parser.eventType
-        while (event != XmlPullParser.END_DOCUMENT) {
+        while (event != XmlPullParser.END_DOCUMENT && relationships.size < MAX_VIEWER_RELATIONSHIPS) {
             if (event == XmlPullParser.START_TAG && parser.name == "Relationship") {
                 val id = parser.getAttributeValue(null, "Id").orEmpty()
                 val target = parser.getAttributeValue(null, "Target").orEmpty()
@@ -45,9 +45,15 @@ internal fun parseViewerDocument(
         var paragraphRuns = mutableListOf<DocRun>()
         val runText = StringBuilder()
 
+        fun addBlock(block: DocBlock) {
+            if (blocks.size < MAX_VIEWER_DOCUMENT_BLOCKS) blocks += block
+        }
+
         fun flushRun() {
             val text = runText.toString()
-            if (text.isNotEmpty()) paragraphRuns += DocRun(text, bold, italic, fontSize)
+            if (text.isNotEmpty() && paragraphRuns.size < MAX_VIEWER_RUNS_PER_PARAGRAPH) {
+                paragraphRuns += DocRun(text, bold, italic, fontSize)
+            }
             runText.clear()
         }
 
@@ -60,13 +66,13 @@ internal fun parseViewerDocument(
                     paragraphStyle.equals("Title", ignoreCase = true) -> 1
                     else -> 0
                 }
-            blocks += DocBlock.Paragraph(paragraphRuns.toList(), heading)
+            addBlock(DocBlock.Paragraph(paragraphRuns.toList(), heading))
             paragraphRuns = mutableListOf()
             paragraphStyle = ""
         }
 
         var event = parser.eventType
-        while (event != XmlPullParser.END_DOCUMENT) {
+        while (event != XmlPullParser.END_DOCUMENT && blocks.size < MAX_VIEWER_DOCUMENT_BLOCKS) {
             val name = parser.name.orEmpty()
             when (event) {
                 XmlPullParser.START_TAG ->
@@ -93,20 +99,24 @@ internal fun parseViewerDocument(
                             if (parser.attributeByLocalName("type") == "page") {
                                 flushRun()
                                 flushParagraph()
-                                blocks += DocBlock.PageBreak
+                                addBlock(DocBlock.PageBreak)
                             } else {
-                                runText.append('\n')
+                                if (runText.length < MAX_VIEWER_CELL_CHARACTERS) runText.append('\n')
                             }
                         }
                         "blip" ->
                             parser.relationshipId()?.let(relationships::get)?.let { imageName ->
                                 flushRun()
-                                if (paragraphRuns.isNotEmpty()) blocks += DocBlock.Paragraph(paragraphRuns.toList())
+                                if (paragraphRuns.isNotEmpty()) addBlock(DocBlock.Paragraph(paragraphRuns.toList()))
                                 paragraphRuns = mutableListOf()
-                                blocks += DocBlock.ImageBlock(imageName)
+                                addBlock(DocBlock.ImageBlock(imageName))
                             }
                     }
-                XmlPullParser.TEXT -> if (inRun && inParagraph && !inRunProperties) runText.append(parser.text)
+                XmlPullParser.TEXT -> if (
+                    inRun && inParagraph && !inRunProperties && runText.length < MAX_VIEWER_CELL_CHARACTERS
+                ) {
+                    runText.append(parser.text.take(MAX_VIEWER_CELL_CHARACTERS - runText.length))
+                }
                 XmlPullParser.END_TAG ->
                     when (name) {
                         "rPr" -> inRunProperties = false
