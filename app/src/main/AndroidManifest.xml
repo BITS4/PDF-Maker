@@ -7,7 +7,6 @@
     <!-- Camera & flash (required for Smart Scan) -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.FLASHLIGHT" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Declare camera hardware as optional so non-camera devices can still install -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />

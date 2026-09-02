@@ -1,7 +1,5 @@
 package com.example.pdfmaker
 
-import android.Manifest
-import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -34,7 +32,6 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 
 @Composable
@@ -43,12 +40,18 @@ fun SmartScanScreen(
     onIdCardDone: (frontUri: Uri, backUri: Uri?) -> Unit,
     onBack: () -> Unit,
 ) {
-    val context = LocalContext.current
-    if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-        CameraPermissionDeniedScreen(onBack = onBack)
+    val permissionState = rememberSmartScanPermissionState()
+    if (!SmartScanPermissionPolicy.canBindCamera(permissionState.status)) {
+        CameraPermissionDeniedScreen(
+            status = permissionState.status,
+            onRequestPermission = permissionState.requestPermission,
+            onOpenSettings = permissionState.openSettings,
+            onBack = onBack,
+        )
         return
     }
 
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
     val latestHaptic = rememberUpdatedState(haptic)

@@ -3,6 +3,7 @@ package com.example.pdfmaker
 import android.Manifest
 import android.content.Intent
 import android.content.pm.ApplicationInfo
+import android.content.pm.FeatureInfo
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.security.NetworkSecurityPolicy
@@ -43,15 +44,34 @@ class SecurityConfigurationInstrumentedTest {
     }
 
     @Test
-    fun manifestDeclaresNotificationsWithoutAllowingApplicationBackup() {
+    fun manifestIncludesCameraAndDisablesApplicationBackup() {
         @Suppress("DEPRECATION")
         val packageInfo = context.packageManager
             .getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
         val permissions = packageInfo.requestedPermissions.orEmpty().toSet()
 
-        assertTrue(Manifest.permission.POST_NOTIFICATIONS in permissions)
+        assertTrue(Manifest.permission.CAMERA in permissions)
         val applicationInfo = requireNotNull(packageInfo.applicationInfo)
         assertEquals(0, applicationInfo.flags and ApplicationInfo.FLAG_ALLOW_BACKUP)
+    }
+
+    @Test
+    fun cameraHardwareRemainsOptionalForNonScanningDevices() {
+        @Suppress("DEPRECATION")
+        val requestedFeatures =
+            context.packageManager
+                .getPackageInfo(context.packageName, PackageManager.GET_CONFIGURATIONS)
+                .reqFeatures
+                .orEmpty()
+                .associateBy { feature -> feature.name }
+
+        listOf(
+            PackageManager.FEATURE_CAMERA,
+            PackageManager.FEATURE_CAMERA_AUTOFOCUS,
+        ).forEach { featureName ->
+            val feature = requireNotNull(requestedFeatures[featureName])
+            assertEquals(0, feature.flags and FeatureInfo.FLAG_REQUIRED)
+        }
     }
 
     @Test
