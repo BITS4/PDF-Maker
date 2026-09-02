@@ -1,19 +1,6 @@
 package com.example.pdfmaker
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ZoomOut
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -24,13 +11,9 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 
 @Composable
@@ -132,76 +115,35 @@ fun PdfViewerScreen(
         }
     }
 
-    Box(Modifier.fillMaxSize().background(Color(0xFF1A1A1A))) {
-        when {
-            shouldOpenExternally(kind) ->
-                ViewerExternalOpenView(
-                    file = file,
-                    kind = kind,
-                    modifier = Modifier.align(Alignment.Center),
-                )
-            kind == ViewerFileKind.UNSUPPORTED ->
-                ViewerUnsupportedView(
-                    file = file,
-                    modifier = Modifier.align(Alignment.Center),
-                )
-            errorMessage != null ->
-                ViewerErrorView(
-                    message = errorMessage.orEmpty(),
-                    onBack = onBack,
-                    modifier = Modifier.align(Alignment.Center),
-                )
-            else ->
-                ViewerPageList(
-                    pages = pages,
-                    isLoading = isLoading,
-                    listState = listState,
-                    scale = scale,
-                    offset = offset,
-                    onTransform = { pan, zoom ->
-                        scale = (scale * zoom).coerceIn(0.5f, 4f)
-                        offset = if (scale > 1f) offset + pan else Offset.Zero
-                    },
-                    onToggleBars = { showBars = !showBars },
-                )
-        }
-
-        ViewerTopBar(
-            visible = showBars || isLoading || errorMessage != null,
-            fileName = file.name,
-            kind = kind,
-            loadedCount = loadedCount,
-            isLoading = isLoading,
-            onBack = onBack,
-            onShare = onShare,
-        )
-        ViewerBottomBar(
-            visible = showBars && pages.isNotEmpty(),
-            pages = pages,
-            currentPage = currentPage,
-            totalPages = loadedCount,
-            isLoading = isLoading,
-            listState = listState,
-        )
-
-        AnimatedVisibility(
-            visible = scale > 1.1f,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 80.dp),
-        ) {
-            FloatingActionButton(
-                onClick = {
+    ViewerPresentation(
+        state =
+            ViewerPresentationState(
+                file = file,
+                kind = kind,
+                pages = pages,
+                isLoading = isLoading,
+                errorMessage = errorMessage,
+                showBars = showBars,
+                scale = scale,
+                offset = offset,
+                loadedCount = loadedCount,
+                currentPage = currentPage,
+            ),
+        listState = listState,
+        actions =
+            ViewerPresentationActions(
+                onBack = onBack,
+                onShare = onShare,
+                onTransform = { pan, zoom ->
+                    val nextScale = (scale * zoom).coerceIn(0.5f, 4f)
+                    scale = nextScale
+                    offset = if (nextScale > 1f) offset + pan else Offset.Zero
+                },
+                onToggleBars = { showBars = !showBars },
+                onResetZoom = {
                     scale = 1f
                     offset = Offset.Zero
                 },
-                containerColor = BgToolIcon,
-                contentColor = Color.White,
-                modifier = Modifier.size(42.dp),
-                shape = CircleShape,
-            ) {
-                Icon(Icons.Default.ZoomOut, null, modifier = Modifier.size(20.dp))
-            }
-        }
-    }
+            ),
+    )
 }
