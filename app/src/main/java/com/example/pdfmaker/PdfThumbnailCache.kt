@@ -20,21 +20,25 @@ import kotlinx.coroutines.withContext
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
 import java.io.File
-import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.ZipInputStream
 
 // ── Universal Thumbnail Cache ─────────────────────────────────────────────────
 
 object PdfThumbnailCache {
 
-    private val cache = ConcurrentHashMap<String, Bitmap>()
+    private val cache = WeightedLruCache<ThumbnailCacheKey, Bitmap>(
+        maximumEntries = ThumbnailCachePolicy.MAX_ENTRIES,
+        maximumWeight = ThumbnailCachePolicy.MAX_PIXEL_WEIGHT,
+        weightOf = { bitmap -> ThumbnailCachePolicy.pixelWeight(bitmap.width, bitmap.height) },
+    )
 
     suspend fun getThumbnail(context: Context, filePath: String, sizePx: Int = 200): Bitmap? {
-        cache[filePath]?.let { return it }
         return withContext(Dispatchers.IO) {
+            val key = ThumbnailCachePolicy.key(filePath, sizePx)
+            cache[key]?.takeUnless(Bitmap::isRecycled)?.let { return@withContext it }
             try {
                 val bmp = generateThumbnail(filePath, sizePx) ?: return@withContext null
-                cache[filePath] = bmp
+                cache.put(key, bmp)
                 bmp
             } catch (_: Exception) { null }
         }
@@ -189,12 +193,12 @@ object PdfThumbnailCache {
         val canvas = Canvas(bmp)
         canvas.drawColor(android.graphics.Color.parseColor("#1A1A2E"))
 
-        if (firstImg != null) {
-            val scale  = w.toFloat() / firstImg!!.width.coerceAtLeast(1)
-            val dH     = (firstImg!!.height * scale).toInt()
-            canvas.drawBitmap(firstImg!!, null,
+        firstImg?.let { image ->
+            val scale  = w.toFloat() / image.width.coerceAtLeast(1)
+            val dH     = (image.height * scale).toInt()
+            canvas.drawBitmap(image, null,
                 android.graphics.RectF(0f, 0f, w.toFloat(), dH.toFloat()), null)
-            firstImg!!.recycle()
+            image.recycle()
             // darken overlay
             val ov = Paint().apply { color = android.graphics.Color.argb(100, 0, 0, 0) }
             canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), ov)
@@ -453,8 +457,14 @@ object PdfThumbnailCache {
 
     // ── Public API ────────────────────────────────────────────────────────────
 
-    fun invalidate(filePath: String) = cache.remove(filePath)
-    fun clear() = cache.clear()
+    fun invalidate(filePath: String) {
+        val canonicalPath = ThumbnailCachePolicy.key(filePath, 1).canonicalPath
+        cache.removeWhere { key -> key.canonicalPath == canonicalPath }
+    }
+
+    fun clear() {
+        cache.clear()
+    }
 }
 
 // ── Composable helper ─────────────────────────────────────────────────────────
