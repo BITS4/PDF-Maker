@@ -7,7 +7,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -423,111 +422,5 @@ fun ImageEditScreen(
                 onAdjustmentChange = { requestRender(currentState, debounceMillis = 120L) },
             )
         }
-    }
-}
-
-// ── Adjust panel ──────────────────────────────────────────────────────────────
-
-@Composable
-fun BoxScope.AdjustPanel(
-    editState: ImageEditState,
-    activeTab: Int,
-    onTabChange: (Int) -> Unit,
-    onApply: () -> Unit,
-    onCancel: () -> Unit,
-    onAdjustmentChange: () -> Unit,
-) {
-    val tabs =
-        listOf(
-            Triple("Contrast", Icons.Default.Contrast, 0),
-            Triple("Brightness", Icons.Default.WbSunny, 1),
-            Triple("Details", Icons.Default.AutoAwesome, 2),
-        )
-    var sliderVal by remember(activeTab) {
-        mutableFloatStateOf(
-            when (activeTab) {
-                0 -> editState.contrast
-                1 -> editState.brightness
-                else -> editState.details
-            },
-        )
-    }
-
-    Column(
-        modifier =
-            Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .background(Color(0xFF111122), RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                .navigationBarsPadding()
-                .padding(16.dp),
-    ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            tabs.forEach { (label, icon, idx) ->
-                Column(Modifier.clickable { onTabChange(idx) }, horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(
-                        Modifier
-                            .size(50.dp)
-                            .clip(CircleShape)
-                            .background(if (idx == activeTab) AccentBlue else Color(0xFF252535)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(icon, null, tint = Color.White, modifier = Modifier.size(24.dp))
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Text(label, color = if (idx == activeTab) AccentBlue else TextSecond, fontSize = 12.sp)
-                }
-            }
-        }
-        Spacer(Modifier.height(16.dp))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Slider(
-                value = sliderVal,
-                onValueChange = { v ->
-                    sliderVal = v
-                    when (activeTab) {
-                        0 -> editState.contrast = v
-                        1 -> editState.brightness = v
-                        2 -> editState.details = v
-                    }
-                    onAdjustmentChange()
-                },
-                valueRange = if (activeTab == 2) 0f..100f else -100f..100f,
-                modifier = Modifier.weight(1f),
-                colors = SliderDefaults.colors(thumbColor = AccentBlue, activeTrackColor = AccentBlue),
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(
-                sliderVal.toInt().toString(),
-                color = Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.width(40.dp),
-            )
-        }
-        Spacer(Modifier.height(8.dp))
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onCancel) { Icon(Icons.Default.Close, null, tint = Color.White) }
-            Text("Adjust", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-            IconButton(onClick = onApply) { Icon(Icons.Default.Check, null, tint = AccentBlue) }
-        }
-    }
-}
-
-@Composable
-fun EditControlBtn(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    tint: Color = Color.White,
-    onClick: () -> Unit,
-) {
-    Column(Modifier.clickable { onClick() }, horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(icon, null, tint = tint, modifier = Modifier.size(26.dp))
-        Spacer(Modifier.height(3.dp))
-        Text(label, color = tint, fontSize = 11.sp)
     }
 }

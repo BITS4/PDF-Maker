@@ -2,7 +2,6 @@ package com.example.pdfmaker
 
 import android.content.ClipData
 import android.net.Uri
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -19,7 +18,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -38,10 +36,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 private enum class OcrState { PICK, RUNNING, DONE, ERROR }
 
@@ -95,72 +91,18 @@ fun OcrScreen(onBack: () -> Unit) {
 
     Box(Modifier.fillMaxSize().background(currentBg)) {
         Column(Modifier.fillMaxSize()) {
-            // ── Top bar ───────────────────────────────────────────────────────
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .background(currentCard)
-                    .statusBarsPadding()
-                    .padding(horizontal = 8.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = currentText)
-                }
-                Text(
-                    "OCR – Extract Text",
-                    color = currentText,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f),
-                )
-                if (ocrState == OcrState.DONE) {
-                    // Copy all button
-                    IconButton(onClick = {
-                        scope.copyOcrText(clipboard, OcrTextFormatter.format(pageTexts)) {
-                            showCopied = it
-                        }
-                    }) {
-                        Icon(Icons.Default.ContentCopy, null, tint = AccentBlue)
+            OcrTopBar(
+                showActions = ocrState == OcrState.DONE,
+                onBack = onBack,
+                onCopyAll = {
+                    scope.copyOcrText(clipboard, OcrTextFormatter.format(pageTexts)) {
+                        showCopied = it
                     }
-                    // Save as .txt
-                    IconButton(onClick = {
-                        val txt = OcrTextFormatter.format(pageTexts)
-                        scope.launch(Dispatchers.IO) {
-                            val result =
-                                runCatching {
-                                    OutputStore.writeUnique(
-                                        getPdfMakerDir(context),
-                                        "${SafeFileName.baseName(pickedName)}_ocr",
-                                        "txt",
-                                    ) { it.write(txt.toByteArray(Charsets.UTF_8)) }
-                                }
-                            withContext(Dispatchers.Main) {
-                                result.fold(
-                                    onSuccess = { file ->
-                                        FileCache.prependFile(
-                                            PdfFile(
-                                                file.nameWithoutExtension,
-                                                file.absolutePath,
-                                                FileRepository.formatSize(file.length()),
-                                                FileRepository.formatDate(file.lastModified()),
-                                                0,
-                                                file.lastModified(),
-                                            ),
-                                        )
-                                        Toast.makeText(context, "Text saved", Toast.LENGTH_SHORT).show()
-                                    },
-                                    onFailure = {
-                                        Toast.makeText(context, "Could not save text", Toast.LENGTH_SHORT).show()
-                                    },
-                                )
-                            }
-                        }
-                    }) {
-                        Icon(Icons.Default.Save, null, tint = AccentBlue)
-                    }
-                }
-            }
+                },
+                onSave = {
+                    scope.saveOcrText(context, pickedName, OcrTextFormatter.format(pageTexts))
+                },
+            )
 
             // ── Content ───────────────────────────────────────────────────────
             when (ocrState) {

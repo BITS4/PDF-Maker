@@ -320,63 +320,14 @@ fun PdfToJpgScreen(onBack: () -> Unit) {
                             }
                         }
 
-                        // Quality selection
-                        Text(
-                            "Quality",
-                            color = textPri,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
+                        JpgQualitySelector(
+                            selected = quality,
+                            cardBackground = cardBg,
+                            primaryText = textPri,
+                            secondaryText = textSec,
+                            accent = accent,
+                            onSelected = { quality = it },
                         )
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            JpgQuality.entries.forEach { q ->
-                                val sel = q == quality
-                                Column(
-                                    Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(if (sel) Color(0xFF1B2340) else cardBg)
-                                        .border(
-                                            if (sel) 1.5.dp else 0.dp,
-                                            if (sel) accent else Color.Transparent,
-                                            RoundedCornerShape(12.dp),
-                                        ).clickable { quality = q }
-                                        .padding(12.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                ) {
-                                    Box(
-                                        Modifier
-                                            .size(36.dp)
-                                            .clip(CircleShape)
-                                            .background(q.color.copy(alpha = 0.15f)),
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Image,
-                                            null,
-                                            tint = q.color,
-                                            modifier = Modifier.size(18.dp),
-                                        )
-                                    }
-                                    Spacer(Modifier.height(6.dp))
-                                    Text(
-                                        q.label,
-                                        color = if (sel) textPri else textSec,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                    )
-                                    Text(
-                                        q.sub,
-                                        color = textSec,
-                                        fontSize = 10.sp,
-                                        textAlign = TextAlign.Center,
-                                        lineHeight = 12.sp,
-                                    )
-                                }
-                            }
-                        }
 
                         Spacer(Modifier.weight(1f))
 
