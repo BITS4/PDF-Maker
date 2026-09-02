@@ -20,7 +20,6 @@ updates:
         patterns:
           - "androidx.*"
       quality-tooling:
-        dependency-type: development
         patterns:
           - "io.gitlab.arturbosch.detekt*"
           - "org.jetbrains.kotlinx.kover*"
