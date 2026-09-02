@@ -55,14 +55,18 @@ internal fun PdfEditorCanvas(
     Box(
         Modifier.fillMaxSize().background(Color(0xFFCCCCCC)).then(
             when (editMode) {
-                PdfEditMode.DOODLE -> Modifier.pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragStart = onDoodleStart,
-                        onDrag = { change, _ -> change.consume(); onDoodlePoint(change.position) },
-                        onDragEnd = onDoodleEnd,
-                        onDragCancel = onDoodleEnd,
-                    )
-                }
+                PdfEditMode.DOODLE ->
+                    Modifier.pointerInput(Unit) {
+                        detectDragGestures(
+                            onDragStart = onDoodleStart,
+                            onDrag = { change, _ ->
+                                change.consume()
+                                onDoodlePoint(change.position)
+                            },
+                            onDragEnd = onDoodleEnd,
+                            onDragCancel = onDoodleEnd,
+                        )
+                    }
                 PdfEditMode.TEXT -> Modifier.pointerInput(Unit) { detectTapGestures(onTap = onTextTap) }
                 else -> Modifier
             },
@@ -76,9 +80,10 @@ internal fun PdfEditorCanvas(
             Image(
                 bitmap.asImageBitmap(),
                 null,
-                modifier = Modifier.fillMaxSize().onGloballyPositioned {
-                    onPageSize(it.size.width, it.size.height)
-                },
+                modifier =
+                    Modifier.fillMaxSize().onGloballyPositioned {
+                        onPageSize(it.size.width, it.size.height)
+                    },
             )
             Canvas(Modifier.fillMaxSize()) {
                 annotations?.strokes?.forEach { drawEditorStroke(it) }
@@ -88,7 +93,9 @@ internal fun PdfEditorCanvas(
                     drawImage(
                         image = signature.bitmap.asImageBitmap(),
                         dstOffset = IntOffset((signature.x * size.width).toInt(), (signature.y * size.height).toInt()),
-                        dstSize = androidx.compose.ui.unit.IntSize(width, height),
+                        dstSize =
+                            androidx.compose.ui.unit
+                                .IntSize(width, height),
                     )
                 }
                 if (editMode == PdfEditMode.DOODLE) {
@@ -121,7 +128,9 @@ internal fun PdfEditorCanvas(
         }
         if (pageCount > 1) {
             Box(
-                Modifier.align(Alignment.TopEnd).padding(10.dp)
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(10.dp)
                     .background(Color(0xCC000000), RoundedCornerShape(20.dp))
                     .padding(horizontal = 14.dp, vertical = 5.dp),
             ) {
@@ -133,10 +142,11 @@ internal fun PdfEditorCanvas(
 
 internal fun DrawScope.drawEditorStroke(stroke: DrawStroke) {
     if (stroke.points.size < 2) return
-    val path = Path().apply {
-        moveTo(stroke.points.first().x, stroke.points.first().y)
-        stroke.points.drop(1).forEach { lineTo(it.x, it.y) }
-    }
+    val path =
+        Path().apply {
+            moveTo(stroke.points.first().x, stroke.points.first().y)
+            stroke.points.drop(1).forEach { lineTo(it.x, it.y) }
+        }
     drawPath(
         path,
         stroke.color,

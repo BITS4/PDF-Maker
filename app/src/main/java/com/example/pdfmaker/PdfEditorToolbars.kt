@@ -49,39 +49,63 @@ internal fun PdfEditorBottomBar(
     val background = Color(0xFF1A1A2A)
     val secondary = Color(0xFF9999BB)
     when {
-        editMode == PdfEditMode.DOODLE -> DoodleToolbar(
-            background, doodleSize, doodleColor, canUndo, canRedo,
-            onDoodleSize, onDoodleColor, onCancelDoodle, onUndo, onRedo, onCommitDoodle,
-        )
+        editMode == PdfEditMode.DOODLE ->
+            DoodleToolbar(
+                background,
+                doodleSize,
+                doodleColor,
+                canUndo,
+                canRedo,
+                onDoodleSize,
+                onDoodleColor,
+                onCancelDoodle,
+                onUndo,
+                onRedo,
+                onCommitDoodle,
+            )
         editMode == PdfEditMode.TEXT -> TextToolbar(background, onCancelText, onAddText, onCommitText)
-        editMode == PdfEditMode.EDIT_PICKER -> Row(
-            Modifier.fillMaxWidth().background(background).navigationBarsPadding().padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            CloseButton { onMode(PdfEditMode.NONE) }
-            EditorBarItem(Icons.Default.Brush, "Doodle", secondary) { onMode(PdfEditMode.DOODLE) }
-            EditorBarItem(Icons.Default.TextFields, "Text", secondary) { onMode(PdfEditMode.TEXT) }
-            EditorBarItem(Icons.Default.Draw, "Signature", secondary) { onMode(PdfEditMode.SIGNATURE) }
-        }
-        showConvert -> Row(
-            Modifier.fillMaxWidth().background(background).navigationBarsPadding()
-                .padding(vertical = 10.dp, horizontal = 16.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            CloseButton { onShowConvert(false) }
-            ConvertBarItem(Icons.Default.Description, "To Word", Color(0xFF1565C0), null, onConvertWord)
-            ConvertBarItem(Icons.Default.Slideshow, "To PPT", Color(0xFFB71C1C), Color.Red, onConvertPpt)
-        }
-        else -> Row(
-            Modifier.fillMaxWidth().background(background).navigationBarsPadding().padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-        ) {
-            EditorBarItem(Icons.Default.Edit, "Edit", secondary) { onMode(PdfEditMode.EDIT_PICKER) }
-            EditorBarItem(Icons.Default.SwapHoriz, "Convert", secondary) { onShowConvert(true) }
-            EditorBarItem(Icons.Default.Share, "Share", secondary, onShare)
-        }
+        editMode == PdfEditMode.EDIT_PICKER ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .background(background)
+                    .navigationBarsPadding()
+                    .padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                CloseButton { onMode(PdfEditMode.NONE) }
+                EditorBarItem(Icons.Default.Brush, "Doodle", secondary) { onMode(PdfEditMode.DOODLE) }
+                EditorBarItem(Icons.Default.TextFields, "Text", secondary) { onMode(PdfEditMode.TEXT) }
+                EditorBarItem(Icons.Default.Draw, "Signature", secondary) { onMode(PdfEditMode.SIGNATURE) }
+            }
+        showConvert ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .background(background)
+                    .navigationBarsPadding()
+                    .padding(vertical = 10.dp, horizontal = 16.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                CloseButton { onShowConvert(false) }
+                ConvertBarItem(Icons.Default.Description, "To Word", Color(0xFF1565C0), null, onConvertWord)
+                ConvertBarItem(Icons.Default.Slideshow, "To PPT", Color(0xFFB71C1C), Color.Red, onConvertPpt)
+            }
+        else ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .background(background)
+                    .navigationBarsPadding()
+                    .padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                EditorBarItem(Icons.Default.Edit, "Edit", secondary) { onMode(PdfEditMode.EDIT_PICKER) }
+                EditorBarItem(Icons.Default.SwapHoriz, "Convert", secondary) { onShowConvert(true) }
+                EditorBarItem(Icons.Default.Share, "Share", secondary, onShare)
+            }
     }
 }
 
@@ -100,7 +124,10 @@ private fun DoodleToolbar(
     onCommit: () -> Unit,
 ) {
     Column(
-        Modifier.fillMaxWidth().background(background).navigationBarsPadding()
+        Modifier
+            .fillMaxWidth()
+            .background(background)
+            .navigationBarsPadding()
             .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -125,10 +152,15 @@ private fun DoodleToolbar(
             itemsIndexed(penPalette) { _, option ->
                 val selected = option == color
                 Box(
-                    Modifier.size(36.dp).clip(CircleShape)
+                    Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
                         .background(if (selected) Color(0xFFFFD700) else Color.Transparent)
-                        .padding(if (selected) 3.dp else 0.dp).clip(CircleShape).background(option)
-                        .border(1.dp, Color(0xFF333344), CircleShape).clickable { onColor(option) },
+                        .padding(if (selected) 3.dp else 0.dp)
+                        .clip(CircleShape)
+                        .background(option)
+                        .border(1.dp, Color(0xFF333344), CircleShape)
+                        .clickable { onColor(option) },
                 )
             }
         }
@@ -160,15 +192,21 @@ private fun TextToolbar(
     onCommit: () -> Unit,
 ) {
     Row(
-        Modifier.fillMaxWidth().background(background).navigationBarsPadding()
+        Modifier
+            .fillMaxWidth()
+            .background(background)
+            .navigationBarsPadding()
             .padding(horizontal = 16.dp, vertical = 16.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onCancel) { Icon(Icons.Default.Close, null, tint = Color.White) }
         Box(
-            Modifier.clip(RoundedCornerShape(24.dp)).background(Color(0xFF2A2A3A))
-                .border(1.dp, Color(0xFF444455), RoundedCornerShape(24.dp)).clickable(onClick = onAdd)
+            Modifier
+                .clip(RoundedCornerShape(24.dp))
+                .background(Color(0xFF2A2A3A))
+                .border(1.dp, Color(0xFF444455), RoundedCornerShape(24.dp))
+                .clickable(onClick = onAdd)
                 .padding(horizontal = 28.dp, vertical = 10.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {

@@ -34,7 +34,9 @@ internal fun PdfEditorTopBar(
     onResetText: () -> Unit,
 ) {
     Row(
-        Modifier.fillMaxWidth().background(Color(0xFF0D0D16).copy(alpha = 0.92f))
+        Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF0D0D16).copy(alpha = 0.92f))
             .padding(horizontal = 4.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -65,7 +67,9 @@ internal fun PdfEditorTopBar(
 internal fun TextEditHint() {
     Box(Modifier.fillMaxWidth().padding(top = 60.dp, start = 16.dp, end = 16.dp)) {
         Box(
-            Modifier.clip(RoundedCornerShape(8.dp)).background(Color(0xCC333344))
+            Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color(0xCC333344))
                 .padding(horizontal = 16.dp, vertical = 10.dp),
         ) { Text("Tap anywhere to add text", color = Color.White, fontSize = 14.sp) }
     }
@@ -85,7 +89,10 @@ internal fun AddTextDialog(
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Column(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color(0xFF1E1E2E))
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .background(Color(0xFF1E1E2E))
                 .padding(20.dp),
         ) {
             Text("Add Text", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
@@ -94,12 +101,15 @@ internal fun AddTextDialog(
                 value = text,
                 onValueChange = onText,
                 label = { Text("Type here…", color = Color(0xFF9999BB)) },
-                textStyle = androidx.compose.ui.text.TextStyle(color = Color.White),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = AccentBlue,
-                    unfocusedBorderColor = Color(0xFF444455),
-                    cursorColor = AccentBlue,
-                ),
+                textStyle =
+                    androidx.compose.ui.text
+                        .TextStyle(color = Color.White),
+                colors =
+                    OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = AccentBlue,
+                        unfocusedBorderColor = Color(0xFF444455),
+                        cursorColor = AccentBlue,
+                    ),
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(10.dp))
@@ -118,10 +128,15 @@ internal fun AddTextDialog(
                 itemsIndexed(penPalette) { _, option ->
                     val selected = option == color
                     Box(
-                        Modifier.size(30.dp).clip(CircleShape)
+                        Modifier
+                            .size(30.dp)
+                            .clip(CircleShape)
                             .background(if (selected) Color(0xFFFFD700) else Color.Transparent)
-                            .padding(if (selected) 3.dp else 0.dp).clip(CircleShape).background(option)
-                            .border(1.dp, Color(0xFF333344), CircleShape).clickable { onColor(option) },
+                            .padding(if (selected) 3.dp else 0.dp)
+                            .clip(CircleShape)
+                            .background(option)
+                            .border(1.dp, Color(0xFF333344), CircleShape)
+                            .clickable { onColor(option) },
                     )
                 }
             }

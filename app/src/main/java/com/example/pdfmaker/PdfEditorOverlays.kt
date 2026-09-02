@@ -27,14 +27,21 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 
 @Composable
-fun ConvertingOverlay(target: ConvertTarget, progress: Int, onCancel: () -> Unit) {
+fun ConvertingOverlay(
+    target: ConvertTarget,
+    progress: Int,
+    onCancel: () -> Unit,
+) {
     Box(
         Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)),
         contentAlignment = Alignment.Center,
     ) {
         Box(
-            Modifier.fillMaxWidth(0.85f).clip(RoundedCornerShape(20.dp))
-                .background(Color(0xF0E0E0E8)).padding(top = 6.dp, bottom = 24.dp),
+            Modifier
+                .fillMaxWidth(0.85f)
+                .clip(RoundedCornerShape(20.dp))
+                .background(Color(0xF0E0E0E8))
+                .padding(top = 6.dp, bottom = 24.dp),
         ) {
             IconButton(onClick = onCancel, modifier = Modifier.align(Alignment.TopEnd).size(40.dp)) {
                 Icon(Icons.Default.Close, null, tint = Color(0xFF666677))
@@ -64,7 +71,12 @@ fun ConvertingOverlay(target: ConvertTarget, progress: Int, onCancel: () -> Unit
 }
 
 @Composable
-internal fun EditorBarItem(icon: ImageVector, label: String, tint: Color, onClick: () -> Unit) {
+internal fun EditorBarItem(
+    icon: ImageVector,
+    label: String,
+    tint: Color,
+    onClick: () -> Unit,
+) {
     Column(
         modifier = Modifier.clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -85,8 +97,12 @@ internal fun ConvertBarItem(
 ) {
     Box {
         Column(
-            modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(Color(0xFF252535))
-                .clickable(onClick = onClick).padding(horizontal = 28.dp, vertical = 12.dp),
+            modifier =
+                Modifier
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xFF252535))
+                    .clickable(onClick = onClick)
+                    .padding(horizontal = 28.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Box(
@@ -98,7 +114,10 @@ internal fun ConvertBarItem(
         }
         if (badge != null) {
             Box(
-                Modifier.align(Alignment.TopEnd).offset(x = (-4).dp, y = 4.dp).size(10.dp)
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = (-4).dp, y = 4.dp)
+                    .size(10.dp)
                     .background(badge, CircleShape),
             )
         }
@@ -116,7 +135,8 @@ fun LiveTextOverlay(
     var currentY by remember(item.id) { mutableFloatStateOf(item.y) }
     var currentSize by remember(item.id) { mutableFloatStateOf(item.sizeSp) }
     Box(
-        Modifier.absoluteOffset { IntOffset(currentX.roundToInt(), currentY.roundToInt()) }
+        Modifier
+            .absoluteOffset { IntOffset(currentX.roundToInt(), currentY.roundToInt()) }
             .pointerInput(item.id) {
                 detectTransformGestures { _, pan, zoom, _ ->
                     currentX += pan.x
@@ -124,13 +144,14 @@ fun LiveTextOverlay(
                     currentSize = (currentSize * zoom).coerceIn(8f, 120f)
                     onUpdate(currentX, currentY, currentSize)
                 }
-            }
-            .clickable(onClick = onSelect)
+            }.clickable(onClick = onSelect)
             .then(
-                if (selected) Modifier.border(1.5.dp, AccentBlue.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
-                else Modifier,
-            )
-            .padding(6.dp),
+                if (selected) {
+                    Modifier.border(1.5.dp, AccentBlue.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
+                } else {
+                    Modifier
+                },
+            ).padding(6.dp),
     ) {
         Text(item.text, color = item.color, fontSize = currentSize.sp)
         if (selected) ResizeHandle()
@@ -151,23 +172,25 @@ fun LiveSignatureOverlay(
     var currentScale by remember(item.id) { mutableFloatStateOf(item.scaleFactor) }
     val density = LocalDensity.current
     Box(
-        Modifier.absoluteOffset { IntOffset(currentX.roundToInt(), currentY.roundToInt()) }
+        Modifier
+            .absoluteOffset { IntOffset(currentX.roundToInt(), currentY.roundToInt()) }
             .size(
                 width = with(density) { dispW.toDp() },
                 height = with(density) { dispH.toDp() },
-            )
-            .pointerInput(item.id) {
+            ).pointerInput(item.id) {
                 detectTransformGestures { _, pan, zoom, _ ->
                     currentX += pan.x
                     currentY += pan.y
                     currentScale = (currentScale * zoom).coerceIn(0.05f, 6f)
                     onUpdate(currentX, currentY, currentScale)
                 }
-            }
-            .clickable(onClick = onSelect)
+            }.clickable(onClick = onSelect)
             .then(
-                if (selected) Modifier.border(1.5.dp, AccentBlue.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
-                else Modifier,
+                if (selected) {
+                    Modifier.border(1.5.dp, AccentBlue.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
+                } else {
+                    Modifier
+                },
             ),
     ) {
         Image(item.bitmap.asImageBitmap(), null, modifier = Modifier.fillMaxSize())
@@ -178,8 +201,12 @@ fun LiveSignatureOverlay(
 @Composable
 private fun BoxScope.ResizeHandle() {
     Box(
-        Modifier.align(Alignment.BottomEnd).offset(x = 8.dp, y = 8.dp).size(18.dp)
-            .background(AccentBlue, CircleShape).border(2.dp, Color.White, CircleShape),
+        Modifier
+            .align(Alignment.BottomEnd)
+            .offset(x = 8.dp, y = 8.dp)
+            .size(18.dp)
+            .background(AccentBlue, CircleShape)
+            .border(2.dp, Color.White, CircleShape),
         contentAlignment = Alignment.Center,
     ) { Icon(Icons.Default.OpenWith, null, tint = Color.White, modifier = Modifier.size(10.dp)) }
 }
@@ -190,8 +217,10 @@ fun CommittedTextOverlay(annotation: TextAnnotation) {
         text = annotation.text,
         color = annotation.color,
         fontSize = annotation.sizeSp.sp,
-        modifier = Modifier.absoluteOffset {
-            IntOffset(annotation.x.roundToInt(), annotation.y.roundToInt())
-        }.padding(6.dp),
+        modifier =
+            Modifier
+                .absoluteOffset {
+                    IntOffset(annotation.x.roundToInt(), annotation.y.roundToInt())
+                }.padding(6.dp),
     )
 }

@@ -61,17 +61,28 @@ fun SignaturePadScreen(
                 modifier = Modifier.weight(1f).padding(start = 4.dp),
             )
             TextButton(
-                onClick = { strokes = emptyList(); redoStack = emptyList() },
+                onClick = {
+                    strokes = emptyList()
+                    redoStack = emptyList()
+                },
                 enabled = hasContent,
             ) { Text("Reset", color = if (hasContent) Color.White else Color(0xFF555566)) }
         }
 
         Box(
-            Modifier.fillMaxWidth().weight(1f).background(Color.White)
-                .onGloballyPositioned { canvasW = it.size.width; canvasH = it.size.height }
-                .pointerInput(Unit) {
+            Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .background(Color.White)
+                .onGloballyPositioned {
+                    canvasW = it.size.width
+                    canvasH = it.size.height
+                }.pointerInput(Unit) {
                     detectDragGestures(
-                        onDragStart = { activePath = listOf(it); redoStack = emptyList() },
+                        onDragStart = {
+                            activePath = listOf(it)
+                            redoStack = emptyList()
+                        },
                         onDrag = { change, _ ->
                             change.consume()
                             activePath = activePath + change.position
@@ -100,8 +111,11 @@ fun SignaturePadScreen(
         }
 
         Column(
-            Modifier.fillMaxWidth().background(Color(0xFF1A1A2A))
-                .navigationBarsPadding().padding(horizontal = 16.dp, vertical = 10.dp),
+            Modifier
+                .fillMaxWidth()
+                .background(Color(0xFF1A1A2A))
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Size", color = Color.White, fontSize = 13.sp, modifier = Modifier.width(42.dp))
@@ -125,9 +139,13 @@ fun SignaturePadScreen(
                 itemsIndexed(penPalette) { _, color ->
                     val selected = color == penColor
                     Box(
-                        Modifier.size(38.dp).clip(CircleShape)
+                        Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
                             .background(if (selected) Color(0xFFFFD700) else Color.Transparent)
-                            .padding(if (selected) 3.dp else 0.dp).clip(CircleShape).background(color)
+                            .padding(if (selected) 3.dp else 0.dp)
+                            .clip(CircleShape)
+                            .background(color)
                             .border(1.dp, Color(0xFF333344), CircleShape)
                             .clickable { penColor = color },
                     )
@@ -184,15 +202,20 @@ fun SignaturePadScreen(
     }
 }
 
-private fun renderSignatureBitmap(strokes: List<DrawStroke>, width: Int, height: Int): Bitmap {
+private fun renderSignatureBitmap(
+    strokes: List<DrawStroke>,
+    width: Int,
+    height: Int,
+): Bitmap {
     val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
     val canvas = android.graphics.Canvas(bitmap)
     canvas.drawColor(android.graphics.Color.WHITE)
-    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-        style = android.graphics.Paint.Style.STROKE
-        strokeCap = android.graphics.Paint.Cap.ROUND
-        strokeJoin = android.graphics.Paint.Join.ROUND
-    }
+    val paint =
+        android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            style = android.graphics.Paint.Style.STROKE
+            strokeCap = android.graphics.Paint.Cap.ROUND
+            strokeJoin = android.graphics.Paint.Join.ROUND
+        }
     strokes.forEach { stroke ->
         paint.color = stroke.color.toArgb()
         paint.strokeWidth = stroke.strokeWidth

@@ -28,7 +28,9 @@ fun ImportedPdfViewerScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val density = LocalDensity.current.density
+    val localDensity = LocalDensity.current
+    val density = localDensity.density
+    val scaledDensity = density * localDensity.fontScale
     val displayWidth = context.resources.displayMetrics.widthPixels
 
     var pageCount by remember { mutableIntStateOf(0) }
@@ -74,12 +76,15 @@ fun ImportedPdfViewerScreen(
     }
 
     LaunchedEffect(pdfUri) {
-        val (count, title) = withContext(Dispatchers.IO) {
-            pdfPageCount(context, pdfUri) to (
-                pdfUri.lastPathSegment?.removeSuffix(".pdf")
-                    ?.substringAfterLast("/")?.substringAfterLast("%2F") ?: "Document"
+        val (count, title) =
+            withContext(Dispatchers.IO) {
+                pdfPageCount(context, pdfUri) to (
+                    pdfUri.lastPathSegment
+                        ?.removeSuffix(".pdf")
+                        ?.substringAfterLast("/")
+                        ?.substringAfterLast("%2F") ?: "Document"
                 )
-        }
+            }
         pageCount = count
         pdfTitle = title
         annotations.clear()
@@ -107,11 +112,16 @@ fun ImportedPdfViewerScreen(
     fun commitTextAndSignatures() {
         val pageAnnotations = annotations.getOrNull(currentPage) ?: return
         pageAnnotations.texts += liveTexts.map { TextAnnotation(it.x, it.y, it.text, it.color, it.sizeSp) }
-        pageAnnotations.signatures += liveSignatures.mapNotNull { signature ->
-            normalizeSignaturePlacement(
-                signature.x, signature.y, signature.scaleFactor, pageBoxWidth, pageBoxHeight,
-            )?.let { SignatureOverlay(it.x, it.y, it.width, signature.bitmap) }
-        }
+        pageAnnotations.signatures +=
+            liveSignatures.mapNotNull { signature ->
+                normalizeSignaturePlacement(
+                    signature.x,
+                    signature.y,
+                    signature.scaleFactor,
+                    pageBoxWidth,
+                    pageBoxHeight,
+                )?.let { SignatureOverlay(it.x, it.y, it.width, signature.bitmap) }
+            }
         liveTexts = emptyList()
         liveSignatures = emptyList()
         selectedItemId = null
@@ -123,15 +133,18 @@ fun ImportedPdfViewerScreen(
         convertProgress = 0
         val timestamp = System.currentTimeMillis()
         scope.launch(Dispatchers.IO) {
-            val file = when (target) {
-                ConvertTarget.WORD -> pdfToDocx(context, pdfUri, "doc_$timestamp.docx") { progress ->
-                    scope.launch(Dispatchers.Main) { convertProgress = progress }
+            val file =
+                when (target) {
+                    ConvertTarget.WORD ->
+                        pdfToDocx(context, pdfUri, "doc_$timestamp.docx") { progress ->
+                            scope.launch(Dispatchers.Main) { convertProgress = progress }
+                        }
+                    ConvertTarget.PPT ->
+                        pdfToPptx(context, pdfUri, "ppt_$timestamp.pptx") { progress ->
+                            scope.launch(Dispatchers.Main) { convertProgress = progress }
+                        }
+                    ConvertTarget.NONE -> null
                 }
-                ConvertTarget.PPT -> pdfToPptx(context, pdfUri, "ppt_$timestamp.pptx") { progress ->
-                    scope.launch(Dispatchers.Main) { convertProgress = progress }
-                }
-                ConvertTarget.NONE -> null
-            }
             withContext(Dispatchers.Main) {
                 convertTarget = ConvertTarget.NONE
                 file?.let(onShareFile)
@@ -141,17 +154,24 @@ fun ImportedPdfViewerScreen(
 
     fun shareAnnotatedPdf() {
         scope.launch(Dispatchers.IO) {
-            val file = buildAnnotatedPdf(
-                context, pdfUri, annotations, density,
-                context.resources.displayMetrics.scaledDensity,
-                pageBoxWidth, pageBoxHeight, "shared_${System.currentTimeMillis()}.pdf",
-            ) ?: return@launch
+            val file =
+                buildAnnotatedPdf(
+                    context,
+                    pdfUri,
+                    annotations,
+                    density,
+                    scaledDensity,
+                    pageBoxWidth,
+                    pageBoxHeight,
+                    "shared_${System.currentTimeMillis()}.pdf",
+                ) ?: return@launch
             val shareUri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-            val intent = Intent(Intent.ACTION_SEND).apply {
-                type = "application/pdf"
-                putExtra(Intent.EXTRA_STREAM, shareUri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
+            val intent =
+                Intent(Intent.ACTION_SEND).apply {
+                    type = "application/pdf"
+                    putExtra(Intent.EXTRA_STREAM, shareUri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
             withContext(Dispatchers.Main) {
                 context.startActivity(Intent.createChooser(intent, "Share PDF"))
             }
@@ -164,11 +184,12 @@ fun ImportedPdfViewerScreen(
                 if (bitmap == null) {
                     editMode = PdfEditMode.EDIT_PICKER
                 } else {
-                    liveSignatures += LiveSignature(
-                        bitmap = bitmap,
-                        x = (pageBoxWidth * 0.3f).coerceAtLeast(40f),
-                        y = (pageBoxHeight * 0.5f).coerceAtLeast(40f),
-                    )
+                    liveSignatures +=
+                        LiveSignature(
+                            bitmap = bitmap,
+                            x = (pageBoxWidth * 0.3f).coerceAtLeast(40f),
+                            y = (pageBoxHeight * 0.5f).coerceAtLeast(40f),
+                        )
                     editMode = PdfEditMode.TEXT
                 }
             },
@@ -192,30 +213,48 @@ fun ImportedPdfViewerScreen(
             liveSignatures = liveSignatures,
             selectedItemId = selectedItemId,
             pageBoxWidth = pageBoxWidth,
-            onPageSize = { width, height -> pageBoxWidth = width; pageBoxHeight = height },
-            onDoodleStart = { activePath = listOf(it); doodleRedo = emptyList() },
+            onPageSize = { width, height ->
+                pageBoxWidth = width
+                pageBoxHeight = height
+            },
+            onDoodleStart = {
+                activePath = listOf(it)
+                doodleRedo = emptyList()
+            },
             onDoodlePoint = { activePath = activePath + it },
             onDoodleEnd = {
                 if (activePath.size >= 2) doodleStrokes += DrawStroke(activePath, doodleColor, doodleSize)
                 activePath = emptyList()
             },
-            onTextTap = { tapPosition = it; textInput = ""; showTextDialog = true },
+            onTextTap = {
+                tapPosition = it
+                textInput = ""
+                showTextDialog = true
+            },
             onSelect = { selectedItemId = it },
             onTextUpdate = { id, x, y, size ->
                 liveTexts = liveTexts.map { if (it.id == id) it.copy(x = x, y = y, sizeSp = size) else it }
             },
             onSignatureUpdate = { id, x, y, scale ->
-                liveSignatures = liveSignatures.map {
-                    if (it.id == id) it.copy(x = x, y = y, scaleFactor = scale) else it
-                }
+                liveSignatures =
+                    liveSignatures.map {
+                        if (it.id == id) it.copy(x = x, y = y, scaleFactor = scale) else it
+                    }
             },
         )
         PdfEditorTopBar(
             title = pdfTitle,
             editMode = editMode,
             onBack = onBack,
-            onResetDoodle = { doodleStrokes = emptyList(); doodleRedo = emptyList() },
-            onResetText = { liveTexts = emptyList(); liveSignatures = emptyList(); selectedItemId = null },
+            onResetDoodle = {
+                doodleStrokes = emptyList()
+                doodleRedo = emptyList()
+            },
+            onResetText = {
+                liveTexts = emptyList()
+                liveSignatures = emptyList()
+                selectedItemId = null
+            },
         )
         if (editMode == PdfEditMode.TEXT) Box(Modifier.align(Alignment.TopStart)) { TextEditHint() }
         Box(Modifier.align(Alignment.BottomStart).fillMaxWidth()) {
@@ -229,25 +268,41 @@ fun ImportedPdfViewerScreen(
                 onDoodleSize = { doodleSize = it },
                 onDoodleColor = { doodleColor = it },
                 onCancelDoodle = {
-                    doodleStrokes = emptyList(); doodleRedo = emptyList(); editMode = PdfEditMode.EDIT_PICKER
+                    doodleStrokes = emptyList()
+                    doodleRedo = emptyList()
+                    editMode = PdfEditMode.EDIT_PICKER
                 },
                 onUndo = {
                     if (doodleStrokes.isNotEmpty()) {
-                        doodleRedo += doodleStrokes.last(); doodleStrokes = doodleStrokes.dropLast(1)
+                        doodleRedo += doodleStrokes.last()
+                        doodleStrokes = doodleStrokes.dropLast(1)
                     }
                 },
                 onRedo = {
                     if (doodleRedo.isNotEmpty()) {
-                        doodleStrokes += doodleRedo.last(); doodleRedo = doodleRedo.dropLast(1)
+                        doodleStrokes += doodleRedo.last()
+                        doodleRedo = doodleRedo.dropLast(1)
                     }
                 },
-                onCommitDoodle = { commitDoodle(); editMode = PdfEditMode.NONE },
+                onCommitDoodle = {
+                    commitDoodle()
+                    editMode = PdfEditMode.NONE
+                },
                 onCancelText = {
-                    liveTexts = emptyList(); liveSignatures = emptyList(); selectedItemId = null
+                    liveTexts = emptyList()
+                    liveSignatures = emptyList()
+                    selectedItemId = null
                     editMode = PdfEditMode.EDIT_PICKER
                 },
-                onAddText = { tapPosition = Offset(100f, 200f); textInput = ""; showTextDialog = true },
-                onCommitText = { commitTextAndSignatures(); editMode = PdfEditMode.NONE },
+                onAddText = {
+                    tapPosition = Offset(100f, 200f)
+                    textInput = ""
+                    showTextDialog = true
+                },
+                onCommitText = {
+                    commitTextAndSignatures()
+                    editMode = PdfEditMode.NONE
+                },
                 onMode = { editMode = it },
                 onShowConvert = { showConvert = it },
                 onConvertWord = { startOfficeConversion(ConvertTarget.WORD) },
@@ -262,7 +317,10 @@ fun ImportedPdfViewerScreen(
 
     if (showTextDialog) {
         AddTextDialog(
-            textInput, textColor, textSize, tapPosition,
+            textInput,
+            textColor,
+            textSize,
+            tapPosition,
             onText = { textInput = it },
             onColor = { textColor = it },
             onSize = { textSize = it },

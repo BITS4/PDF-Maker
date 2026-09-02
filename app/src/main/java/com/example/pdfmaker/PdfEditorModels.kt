@@ -29,7 +29,10 @@ data class SignatureOverlay(
 )
 
 data class LiveText(
-    val id: String = java.util.UUID.randomUUID().toString(),
+    val id: String =
+        java.util.UUID
+            .randomUUID()
+            .toString(),
     val text: String,
     val color: Color,
     val sizeSp: Float,
@@ -38,7 +41,10 @@ data class LiveText(
 )
 
 data class LiveSignature(
-    val id: String = java.util.UUID.randomUUID().toString(),
+    val id: String =
+        java.util.UUID
+            .randomUUID()
+            .toString(),
     val bitmap: Bitmap,
     val x: Float,
     val y: Float,
@@ -55,13 +61,14 @@ enum class PdfEditMode { NONE, EDIT_PICKER, DOODLE, TEXT, SIGNATURE }
 
 enum class ConvertTarget { NONE, WORD, PPT }
 
-internal val penPalette = listOf(
-    Color.Black,
-    Color(0xFF555555),
-    Color(0xFFAAAAAA),
-    Color(0xFFDDDDDD),
-    Color.Red,
-    Color(0xFF00C853),
-    Color(0xFF2196F3),
-    Color(0xFFFF00FF),
-)
+internal val penPalette =
+    listOf(
+        Color.Black,
+        Color(0xFF555555),
+        Color(0xFFAAAAAA),
+        Color(0xFFDDDDDD),
+        Color.Red,
+        Color(0xFF00C853),
+        Color(0xFF2196F3),
+        Color(0xFFFF00FF),
+    )
