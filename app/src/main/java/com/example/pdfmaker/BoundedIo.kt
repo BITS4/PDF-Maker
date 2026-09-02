@@ -1,5 +1,6 @@
 package com.example.pdfmaker
 
+import java.io.FilterOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -40,5 +41,43 @@ object BoundedIo {
             offset += read
         }
         return result.copyOf(offset)
+    }
+
+    /** Wraps an output and rejects writes once the configured byte budget is exhausted. */
+    fun limit(output: OutputStream, maximumBytes: Long): OutputStream {
+        require(maximumBytes > 0) { "Maximum byte count must be positive" }
+        return LimitedOutputStream(output, maximumBytes)
+    }
+
+    private class LimitedOutputStream(
+        output: OutputStream,
+        private val maximumBytes: Long,
+    ) : FilterOutputStream(output) {
+        private var writtenBytes = 0L
+
+        override fun write(value: Int) {
+            requireCapacity(1)
+            out.write(value)
+            writtenBytes += 1
+        }
+
+        override fun write(
+            bytes: ByteArray,
+            offset: Int,
+            length: Int,
+        ) {
+            require(offset >= 0 && length >= 0 && offset <= bytes.size - length) {
+                "Invalid output buffer range"
+            }
+            requireCapacity(length)
+            out.write(bytes, offset, length)
+            writtenBytes += length
+        }
+
+        private fun requireCapacity(additionalBytes: Int) {
+            if (writtenBytes > maximumBytes - additionalBytes) {
+                throw IOException("Output exceeds the size limit")
+            }
+        }
     }
 }

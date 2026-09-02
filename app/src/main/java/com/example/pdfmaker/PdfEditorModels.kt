@@ -59,7 +59,7 @@ class PageAnnotations {
 
 enum class PdfEditMode { NONE, EDIT_PICKER, DOODLE, TEXT, SIGNATURE }
 
-enum class ConvertTarget { NONE, WORD, PPT }
+enum class ConvertTarget { NONE, PDF, WORD, PPT }
 
 internal val penPalette =
     listOf(

@@ -64,4 +64,25 @@ class BoundedIoTest {
         assertArrayEquals("0123".toByteArray(), BoundedIo.readPrefix(input, 4))
         assertEquals('4'.code, input.read())
     }
+
+    @Test
+    fun boundedOutputAcceptsItsLimitAndRejectsOverflow() {
+        val destination = ByteArrayOutputStream()
+        val bounded = BoundedIo.limit(destination, 4)
+
+        bounded.write(byteArrayOf(1, 2, 3), 0, 3)
+        bounded.write(4)
+        assertArrayEquals(byteArrayOf(1, 2, 3, 4), destination.toByteArray())
+
+        val error = runCatching { bounded.write(5) }.exceptionOrNull()
+        assertTrue(error is IOException)
+        assertArrayEquals(byteArrayOf(1, 2, 3, 4), destination.toByteArray())
+    }
+
+    @Test
+    fun boundedOutputRejectsInvalidLimitsAndRanges() {
+        assertTrue(runCatching { BoundedIo.limit(ByteArrayOutputStream(), 0) }.isFailure)
+        val bounded = BoundedIo.limit(ByteArrayOutputStream(), 10)
+        assertTrue(runCatching { bounded.write(byteArrayOf(1, 2), 1, 2) }.isFailure)
+    }
 }

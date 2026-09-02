@@ -61,13 +61,30 @@ fun ConvertingOverlay(
                 Text("Converting… ($progress%)", color = Color(0xFF222233), fontSize = 17.sp)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "to ${if (target == ConvertTarget.WORD) "Word (.docx)" else "PowerPoint (.pptx)"}",
+                    when (target) {
+                        ConvertTarget.PDF -> "Preparing annotated PDF"
+                        ConvertTarget.WORD -> "Converting to Word (.docx)"
+                        ConvertTarget.PPT -> "Converting to PowerPoint (.pptx)"
+                        ConvertTarget.NONE -> "Preparing document"
+                    },
                     color = Color(0xFF666677),
                     fontSize = 13.sp,
                 )
             }
         }
     }
+}
+
+@Composable
+internal fun PdfEditorOperationErrorDialog(message: String, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Document operation failed") },
+        text = { Text(message) },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("OK") }
+        },
+    )
 }
 
 @Composable

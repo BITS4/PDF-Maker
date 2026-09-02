@@ -1,11 +1,13 @@
 package com.example.pdfmaker
 
+import android.content.ClipData
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -14,12 +16,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.core.content.FileProvider
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
 
 @Composable
+@Suppress("TooGenericExceptionCaught")
 fun ImportedPdfViewerScreen(
     pdfUri: Uri,
     onBack: () -> Unit,
@@ -27,7 +31,7 @@ fun ImportedPdfViewerScreen(
     initialEditMode: PdfEditMode = PdfEditMode.NONE,
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+    val operations = rememberPdfEditorOperationController()
     val localDensity = LocalDensity.current
     val density = localDensity.density
     val scaledDensity = density * localDensity.fontScale
@@ -40,8 +44,6 @@ fun ImportedPdfViewerScreen(
     val annotations = remember { mutableStateListOf<PageAnnotations>() }
     var editMode by remember { mutableStateOf(initialEditMode) }
     var showConvert by remember { mutableStateOf(false) }
-    var convertTarget by remember { mutableStateOf(ConvertTarget.NONE) }
-    var convertProgress by remember { mutableIntStateOf(0) }
     var doodleStrokes by remember { mutableStateOf<List<DrawStroke>>(emptyList()) }
     var doodleRedo by remember { mutableStateOf<List<DrawStroke>>(emptyList()) }
     var activePath by remember { mutableStateOf<List<Offset>>(emptyList()) }
@@ -57,9 +59,32 @@ fun ImportedPdfViewerScreen(
     var textInput by remember { mutableStateOf("") }
     var textColor by remember { mutableStateOf(Color.Black) }
     var textSize by remember { mutableFloatStateOf(18f) }
+    var stagedSource by remember(pdfUri) { mutableStateOf<StagedPdfSource?>(null) }
+    var loadError by remember(pdfUri) { mutableStateOf<String?>(null) }
 
-    BackHandler(enabled = editMode != PdfEditMode.NONE || showConvert) {
+    val workingUri = stagedSource?.file?.let(Uri::fromFile)
+    val latestPageBitmaps by rememberUpdatedState(pageBitmaps)
+    val latestStagedSource by rememberUpdatedState(stagedSource)
+    val latestLiveSignatures by rememberUpdatedState(liveSignatures)
+
+    DisposableEffect(pdfUri) {
+        onDispose {
+            val ownedBitmaps =
+                latestPageBitmaps.values +
+                    annotationBitmaps(annotations, latestLiveSignatures)
+            val ownedSource = latestStagedSource
+            val releaseResources = {
+                recycleDistinctBitmaps(ownedBitmaps)
+                ownedSource?.close()
+                Unit
+            }
+            operations.cancelAndRelease(releaseResources)
+        }
+    }
+
+    BackHandler(enabled = editMode != PdfEditMode.NONE || showConvert || operations.target != ConvertTarget.NONE) {
         when {
+            operations.target != ConvertTarget.NONE -> operations.cancel()
             editMode == PdfEditMode.DOODLE -> {
                 doodleStrokes = emptyList()
                 doodleRedo = emptyList()
@@ -67,6 +92,8 @@ fun ImportedPdfViewerScreen(
             }
             editMode == PdfEditMode.TEXT -> {
                 liveTexts = emptyList()
+                recycleDistinctBitmaps(liveSignatures.map(LiveSignature::bitmap))
+                liveSignatures = emptyList()
                 selectedItemId = null
                 editMode = PdfEditMode.EDIT_PICKER
             }
@@ -76,30 +103,108 @@ fun ImportedPdfViewerScreen(
     }
 
     LaunchedEffect(pdfUri) {
-        val (count, title) =
-            withContext(Dispatchers.IO) {
-                pdfPageCount(context, pdfUri) to (
-                    pdfUri.lastPathSegment
-                        ?.removeSuffix(".pdf")
-                        ?.substringAfterLast("/")
-                        ?.substringAfterLast("%2F") ?: "Document"
-                )
-            }
-        pageCount = count
-        pdfTitle = title
+        operations.cancelAndJoin()
+        operations.dismissError()
+        val obsoleteBitmaps = pageBitmaps.values + annotationBitmaps(annotations, liveSignatures)
+        val obsoleteSource = stagedSource
+        pageBitmaps = emptyMap()
+        stagedSource = null
+        loadError = null
+        pageCount = 0
+        currentPage = 0
         annotations.clear()
-        repeat(count) { annotations.add(PageAnnotations()) }
-    }
-
-    LaunchedEffect(currentPage, pageCount) {
-        if (pageCount == 0) return@LaunchedEffect
-        listOf(currentPage, currentPage + 1, currentPage - 1)
-            .filter { it in 0 until pageCount && !pageBitmaps.containsKey(it) }
-            .forEach { index ->
-                renderPage(context, pdfUri, index, displayWidth)?.let {
-                    pageBitmaps = pageBitmaps + (index to it)
+        liveSignatures = emptyList()
+        liveTexts = emptyList()
+        try {
+            withFrameNanos { }
+        } finally {
+            recycleDistinctBitmaps(obsoleteBitmaps)
+            obsoleteSource?.close()
+        }
+        var pendingSource: StagedPdfSource? = null
+        try {
+            val count = withContext(Dispatchers.IO) {
+                SafePdfInput.fromUri(context, pdfUri).also { pendingSource = it }.let { source ->
+                    PageEditPolicy.requireSupportedPageCount(PdfFileMetadata.pageCount(source.file))
                 }
             }
+            coroutineContext.ensureActive()
+            stagedSource = checkNotNull(pendingSource)
+            pendingSource = null
+            pageCount = count
+            pdfTitle =
+                pdfUri.lastPathSegment
+                    ?.removeSuffix(".pdf")
+                    ?.substringAfterLast("/")
+                    ?.substringAfterLast("%2F") ?: "Document"
+            repeat(count) { annotations.add(PageAnnotations()) }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            loadError = error.message ?: "The PDF could not be opened safely."
+        } finally {
+            pendingSource?.close()
+        }
+    }
+
+    LaunchedEffect(currentPage, pageCount, workingUri) {
+        val sourceUri = workingUri ?: return@LaunchedEffect
+        val retainedIndexes = PageBitmapCachePolicy.retainedIndexes(currentPage, pageCount)
+        val retained = pageBitmaps.filterKeys { it in retainedIndexes }
+        val obsoleteBitmaps =
+            pageBitmaps
+            .filterKeys { it !in retainedIndexes }
+            .values
+        pageBitmaps = retained
+        if (obsoleteBitmaps.isNotEmpty()) {
+            try {
+                withFrameNanos { }
+            } finally {
+                recycleDistinctBitmaps(obsoleteBitmaps)
+            }
+        }
+
+        val rendered = mutableMapOf<Int, Bitmap>()
+        try {
+            withContext(Dispatchers.IO) {
+                retainedIndexes
+                    .filter { it !in retained }
+                    .sortedBy { kotlin.math.abs(it - currentPage) }
+                    .forEach { index ->
+                        coroutineContext.ensureActive()
+                        renderPage(context, sourceUri, index, displayWidth)?.let { rendered[index] = it }
+                    }
+            }
+            coroutineContext.ensureActive()
+            pageBitmaps = retained + rendered
+            if (currentPage !in pageBitmaps) {
+                loadError = "This PDF page could not be rendered safely."
+            }
+            rendered.clear()
+        } finally {
+            recycleDistinctBitmaps(rendered.values)
+        }
+    }
+
+    if (loadError != null) {
+        Box(Modifier.fillMaxSize().background(Color(0xFF1A1A1A))) {
+            ViewerErrorView(
+                message = loadError.orEmpty(),
+                onBack = onBack,
+                modifier = Modifier.align(Alignment.Center),
+            )
+        }
+        return
+    }
+
+    if (workingUri == null) {
+        Box(
+            Modifier.fillMaxSize().background(Color(0xFF1A1A1A)),
+            contentAlignment = Alignment.Center,
+        ) {
+            CircularProgressIndicator(color = AccentBlue)
+        }
+        return
     }
 
     fun commitDoodle() {
@@ -128,54 +233,52 @@ fun ImportedPdfViewerScreen(
     }
 
     fun startOfficeConversion(target: ConvertTarget) {
-        showConvert = false
-        convertTarget = target
-        convertProgress = 0
         val timestamp = System.currentTimeMillis()
-        scope.launch(Dispatchers.IO) {
-            val file =
+        showConvert = false
+        operations.launch(
+            target = target,
+            producer = { reportProgress ->
                 when (target) {
-                    ConvertTarget.WORD ->
-                        pdfToDocx(context, pdfUri, "doc_$timestamp.docx") { progress ->
-                            scope.launch(Dispatchers.Main) { convertProgress = progress }
-                        }
-                    ConvertTarget.PPT ->
-                        pdfToPptx(context, pdfUri, "ppt_$timestamp.pptx") { progress ->
-                            scope.launch(Dispatchers.Main) { convertProgress = progress }
-                        }
-                    ConvertTarget.NONE -> null
+                    ConvertTarget.WORD -> pdfToDocx(context, workingUri, "doc_$timestamp.docx", reportProgress)
+                    ConvertTarget.PPT -> pdfToPptx(context, workingUri, "ppt_$timestamp.pptx", reportProgress)
+                    ConvertTarget.NONE,
+                    ConvertTarget.PDF,
+                    -> error("Unsupported office conversion target")
                 }
-            withContext(Dispatchers.Main) {
-                convertTarget = ConvertTarget.NONE
-                file?.let(onShareFile)
-            }
-        }
+            },
+            consumer = onShareFile,
+        )
     }
 
     fun shareAnnotatedPdf() {
-        scope.launch(Dispatchers.IO) {
-            val file =
+        val annotationSnapshot = snapshotAnnotations(annotations)
+        operations.launch(
+            target = ConvertTarget.PDF,
+            producer = { reportProgress ->
                 buildAnnotatedPdf(
                     context,
-                    pdfUri,
-                    annotations,
+                    workingUri,
+                    annotationSnapshot,
                     density,
                     scaledDensity,
                     pageBoxWidth,
                     pageBoxHeight,
                     "shared_${System.currentTimeMillis()}.pdf",
-                ) ?: return@launch
-            val shareUri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-            val intent =
-                Intent(Intent.ACTION_SEND).apply {
-                    type = "application/pdf"
-                    putExtra(Intent.EXTRA_STREAM, shareUri)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-            withContext(Dispatchers.Main) {
+                    reportProgress,
+                )
+            },
+            consumer = { file ->
+                val shareUri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                val intent =
+                    Intent(Intent.ACTION_SEND).apply {
+                        type = "application/pdf"
+                        putExtra(Intent.EXTRA_STREAM, shareUri)
+                        clipData = ClipData.newRawUri("Annotated PDF", shareUri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
                 context.startActivity(Intent.createChooser(intent, "Share PDF"))
-            }
-        }
+            },
+        )
     }
 
     if (editMode == PdfEditMode.SIGNATURE) {
@@ -252,6 +355,7 @@ fun ImportedPdfViewerScreen(
             },
             onResetText = {
                 liveTexts = emptyList()
+                recycleDistinctBitmaps(liveSignatures.map(LiveSignature::bitmap))
                 liveSignatures = emptyList()
                 selectedItemId = null
             },
@@ -290,6 +394,7 @@ fun ImportedPdfViewerScreen(
                 },
                 onCancelText = {
                     liveTexts = emptyList()
+                    recycleDistinctBitmaps(liveSignatures.map(LiveSignature::bitmap))
                     liveSignatures = emptyList()
                     selectedItemId = null
                     editMode = PdfEditMode.EDIT_PICKER
@@ -310,8 +415,8 @@ fun ImportedPdfViewerScreen(
                 onShare = ::shareAnnotatedPdf,
             )
         }
-        if (convertTarget != ConvertTarget.NONE) {
-            ConvertingOverlay(convertTarget, convertProgress) { convertTarget = ConvertTarget.NONE }
+        if (operations.target != ConvertTarget.NONE) {
+            ConvertingOverlay(operations.target, operations.progress, operations::cancel)
         }
     }
 
@@ -327,5 +432,9 @@ fun ImportedPdfViewerScreen(
             onDismiss = { showTextDialog = false },
             onAdd = { liveTexts += it },
         )
+    }
+
+    operations.errorMessage?.let { message ->
+        PdfEditorOperationErrorDialog(message = message, onDismiss = operations::dismissError)
     }
 }
