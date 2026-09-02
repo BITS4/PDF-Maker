@@ -5,6 +5,44 @@ import kotlin.math.*
 
 object ImageProcessing {
 
+    fun render(request: ImageRenderRequest): ImageRenderResult {
+        var current = request.source
+
+        fun replaceIntermediate(next: Bitmap) {
+            val previous = current
+            current = next
+            if (previous !== request.source && previous !== next && !previous.isRecycled) {
+                previous.recycle()
+            }
+        }
+
+        try {
+            replaceIntermediate(applyFilter(request.source, request.filter))
+            replaceIntermediate(
+                applyAdjustments(
+                    current,
+                    request.brightness,
+                    request.contrast,
+                    request.details,
+                ),
+            )
+            if (request.rotationDegrees != 0f) {
+                replaceIntermediate(rotateBitmap(current, request.rotationDegrees))
+            }
+
+            val display = current
+            val crop = request.cropRect
+            val shouldCrop = request.cropApplied &&
+                (crop.left > 0.001f || crop.top > 0.001f ||
+                    crop.right < 0.999f || crop.bottom < 0.999f)
+            val final = if (shouldCrop) cropBitmap(display, crop) else display
+            return ImageRenderResult(display, final)
+        } catch (error: Throwable) {
+            if (current !== request.source && !current.isRecycled) current.recycle()
+            throw error
+        }
+    }
+
     // ── Public filter entry-point ─────────────────────────────────────────────
 
     fun applyFilter(source: Bitmap, filter: ImageFilter): Bitmap = when (filter) {
@@ -207,7 +245,9 @@ object ImageProcessing {
         Canvas(step1).drawBitmap(source, 0f, 0f, Paint().also {
             it.colorFilter = ColorMatrixColorFilter(cm)
         })
-        return unsharpMask(step1, strength = 0.75f, radius = 2, threshold = 4)
+        val result = unsharpMask(step1, strength = 0.75f, radius = 2, threshold = 4)
+        if (result !== step1) step1.recycle()
+        return result
     }
 
     // ── "B&W2" — crisp black-on-white ────────────────────────────────────────
@@ -220,7 +260,9 @@ object ImageProcessing {
         Canvas(step1).drawBitmap(source, 0f, 0f, Paint().also {
             it.colorFilter = ColorMatrixColorFilter(cm)
         })
-        return unsharpMask(step1, strength = 0.6f, radius = 1, threshold = 3)
+        val result = unsharpMask(step1, strength = 0.6f, radius = 1, threshold = 3)
+        if (result !== step1) step1.recycle()
+        return result
     }
 
     // ── "Super" — vivid + sharp for colour docs / ID cards ───────────────────
@@ -233,7 +275,9 @@ object ImageProcessing {
         Canvas(step1).drawBitmap(source, 0f, 0f, Paint().also {
             it.colorFilter = ColorMatrixColorFilter(cm)
         })
-        return unsharpMask(step1, strength = 0.55f, radius = 1, threshold = 5)
+        val result = unsharpMask(step1, strength = 0.55f, radius = 1, threshold = 5)
+        if (result !== step1) step1.recycle()
+        return result
     }
 
     private fun matrixFor(f: ImageFilter): ColorMatrix = when (f) {
@@ -269,6 +313,7 @@ object ImageProcessing {
     // ── Adjustments ───────────────────────────────────────────────────────────
 
     fun applyAdjustments(source: Bitmap, brightness: Float, contrast: Float, details: Float): Bitmap {
+        if (abs(brightness) < 0.001f && abs(contrast) < 0.001f && details <= 2f) return source
         val cf = 1f + contrast / 100f
         val bf = brightness * 2.55f
         val t  = 128f * (1f - cf)
@@ -279,7 +324,10 @@ object ImageProcessing {
         Canvas(result).drawBitmap(source, 0f, 0f, Paint().also {
             it.colorFilter = ColorMatrixColorFilter(cm)
         })
-        return if (details > 2f) unsharpMask(result, details/120f, radius=1, threshold=3) else result
+        if (details <= 2f) return result
+        val sharpened = unsharpMask(result, details / 120f, radius = 1, threshold = 3)
+        if (sharpened !== result) result.recycle()
+        return sharpened
     }
 
     // ── Unsharp mask ──────────────────────────────────────────────────────────
@@ -355,18 +403,9 @@ object ImageProcessing {
 
     fun filterThumbnail(source: Bitmap, filter: ImageFilter, size: Int): Bitmap {
         val scaled = Bitmap.createScaledBitmap(source, size, size, true)
-        return applyFilter(scaled, filter)
+        val filtered = applyFilter(scaled, filter)
+        if (filtered !== scaled) scaled.recycle()
+        return filtered
     }
 
-    // ── Load display bitmap ───────────────────────────────────────────────────
-
-    fun loadDisplayBitmap(context: android.content.Context, uri: android.net.Uri, maxPx: Int = 1920): Bitmap? {
-        return try {
-            val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
-            val sample = max(1, max(opts.outWidth, opts.outHeight) / maxPx)
-            val finalOpts = BitmapFactory.Options().apply { inSampleSize=sample; inPreferredConfig=Bitmap.Config.ARGB_8888 }
-            context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, finalOpts) }
-        } catch (_: Exception) { null }
-    }
 }

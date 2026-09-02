@@ -1,9 +1,6 @@
 package com.example.pdfmaker
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Matrix
-import androidx.exifinterface.media.ExifInterface
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -14,6 +11,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.RotateLeft
+import androidx.compose.material.icons.automirrored.filled.RotateRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,33 +27,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-
-// ── Bitmap loaders ───────────────────────────────────────────────────────────
-
-/** Load bitmap — rotation is baked into the file by SmartScanScreen.bakeExifRotation()
- *  so pixels are already upright; no EXIF reading needed. */
-private fun loadBitmapForEdit(
-    context   : android.content.Context,
-    uri       : android.net.Uri,
-    sampleSize: Int = 1
-): Bitmap? {
-    val opts = BitmapFactory.Options().apply {
-        inSampleSize      = sampleSize
-        inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
-    }
-    // file:// URIs come from camera cache — use path directly
-    return if (uri.scheme?.lowercase() == "file") {
-        uri.path?.let { BitmapFactory.decodeFile(it, opts) }
-    } else {
-        context.contentResolver.openInputStream(uri)?.use {
-            BitmapFactory.decodeStream(it, null, opts)
-        }
-    }
-}
-
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -75,42 +56,135 @@ fun ImageEditScreen(
     ) { editStates.size }
 
     var showAdjust by remember { mutableStateOf(false) }
-    var adjustTab  by remember { mutableStateOf(0) }
+    var adjustTab by remember { mutableStateOf(0) }
+    val renderMutex = remember { Mutex() }
+    val renderVersions = remember { mutableMapOf<ImageEditState, Int>() }
 
     val currentState = editStates.getOrNull(pagerState.currentPage)
-    val isIdCard     = ImageToPdfState.isIdCardScan
+    val isIdCard = ImageToPdfState.isIdCardScan
+    val allImagesReady = editStates.isNotEmpty() && editStates.all {
+        it.originalBitmap != null && it.loadError == null && !it.isRendering
+    }
+
+    fun requestRender(editState: ImageEditState, debounceMillis: Long = 0L) {
+        val version = (renderVersions[editState] ?: 0) + 1
+        renderVersions[editState] = version
+        editState.isRendering = true
+        scope.launch {
+            var rendered: ImageRenderResult? = null
+            var renderSource: Bitmap? = null
+            try {
+                if (debounceMillis > 0L) delay(debounceMillis)
+                renderMutex.withLock {
+                    if (renderVersions[editState] != version) return@withLock
+                    val request = editState.renderRequest() ?: return@withLock
+                    renderSource = request.source
+                    rendered = withContext(Dispatchers.Default) {
+                        ImageProcessing.render(request)
+                    }
+                    currentCoroutineContext().ensureActive()
+                    if (
+                        renderVersions[editState] == version &&
+                        editState.originalBitmap === request.source
+                    ) {
+                        BitmapOwnership.retire(editState.installRender(requireNotNull(rendered)))
+                        rendered = null
+                    }
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                if (renderVersions[editState] == version) {
+                    editState.loadError = "This image could not be processed."
+                }
+            } finally {
+                val abandoned = rendered
+                val source = renderSource
+                if (abandoned != null && source != null) {
+                    BitmapOwnership.retire(abandoned.generatedBitmaps(source))
+                }
+                if (renderVersions[editState] == version) editState.isRendering = false
+            }
+        }
+    }
 
     // ── Load bitmaps ──────────────────────────────────────────────────────────
     // Always apply EXIF rotation for both Docs and ID card.
     // Camera sensors are physically landscape — raw pixels are always sideways.
     // The EXIF orientation tag is the ONLY thing that encodes how the phone
     // was held. Ignoring it always shows photos rotated regardless of mode.
-    LaunchedEffect(editStates.size) {
-        editStates.forEach { es ->
-            if (es.originalBitmap == null) {
-                launch(Dispatchers.IO) {
-                    val bmp = loadBitmapForEdit(context, es.uri, sampleSize = 1)
-                    if (bmp != null) {
-                        withContext(Dispatchers.Main) { es.originalBitmap = bmp }
-                        withContext(Dispatchers.Default) { es.rebuildFinal() }
+    LaunchedEffect(editStates.map(ImageEditState::uri), initialIndex) {
+        val first = editStates.getOrNull(initialIndex)
+        val orderedStates = listOfNotNull(first) + editStates.filterNot { it === first }
+        orderedStates.forEach { editState ->
+            if (editState.originalBitmap != null) return@forEach
+            val generation = renderVersions[editState] ?: 0
+            renderMutex.withLock {
+                if (editState.originalBitmap != null) return@withLock
+                var decoded: Bitmap? = null
+                var rendered: ImageRenderResult? = null
+                var renderSource: Bitmap? = null
+                editState.isRendering = true
+                try {
+                    decoded = withContext(Dispatchers.IO) {
+                        BoundedImageDecoder.decode(context, editState.uri).getOrThrow()
                     }
+                    currentCoroutineContext().ensureActive()
+                    BitmapOwnership.retire(editState.installSource(requireNotNull(decoded)))
+                    decoded = null
+
+                    val request = requireNotNull(editState.renderRequest())
+                    renderSource = request.source
+                    rendered = withContext(Dispatchers.Default) {
+                        ImageProcessing.render(request)
+                    }
+                    currentCoroutineContext().ensureActive()
+                    if (renderVersions[editState] == generation) {
+                        BitmapOwnership.retire(editState.installRender(requireNotNull(rendered)))
+                        rendered = null
+                    }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    editState.loadError = "This image could not be loaded safely."
+                } finally {
+                    decoded?.let { BitmapOwnership.retire(listOf(it)) }
+                    val abandoned = rendered
+                    val source = renderSource
+                    if (abandoned != null && source != null) {
+                        BitmapOwnership.retire(abandoned.generatedBitmaps(source))
+                    }
+                    if (renderVersions[editState] == generation) editState.isRendering = false
                 }
             }
         }
     }
 
     // ── Filter thumbnails ─────────────────────────────────────────────────────
-    val filterThumbs  = remember { mutableStateMapOf<ImageFilter, android.graphics.Bitmap>() }
+    val filterThumbs = remember { mutableStateMapOf<ImageFilter, Bitmap>() }
     val currentBitmap = currentState?.originalBitmap
     LaunchedEffect(pagerState.currentPage, currentBitmap) {
+        BitmapOwnership.retire(filterThumbs.values.toList())
         filterThumbs.clear()
-        val base = currentBitmap ?: return@LaunchedEffect
+        val base = currentBitmap?.takeUnless { it.isRecycled } ?: return@LaunchedEffect
         ImageFilter.entries.forEach { filter ->
-            launch(Dispatchers.Default) {
-                val thumb = ImageProcessing.filterThumbnail(base, filter, 80)
-                withContext(Dispatchers.Main) { filterThumbs[filter] = thumb }
+            var thumbnail: Bitmap? = null
+            try {
+                thumbnail = withContext(Dispatchers.Default) {
+                    ImageProcessing.filterThumbnail(base, filter, 80)
+                }
+                currentCoroutineContext().ensureActive()
+                filterThumbs.put(filter, requireNotNull(thumbnail))?.let {
+                    BitmapOwnership.retire(listOf(it))
+                }
+                thumbnail = null
+            } finally {
+                thumbnail?.let { BitmapOwnership.retire(listOf(it)) }
             }
         }
+    }
+    DisposableEffect(Unit) {
+        onDispose { BitmapOwnership.retire(filterThumbs.values.toList()) }
     }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
@@ -151,7 +225,13 @@ fun ImageEditScreen(
                 val es  = editStates.getOrNull(page)
                 val bmp = es?.finalBitmap ?: es?.originalBitmap
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    if (bmp != null) {
+                    if (es?.loadError != null) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.BrokenImage, null, tint = BadgeRed)
+                            Spacer(Modifier.height(8.dp))
+                            Text(es.loadError.orEmpty(), color = Color.White, fontSize = 13.sp)
+                        }
+                    } else if (bmp != null) {
                         Image(bmp.asImageBitmap(), null,
                             contentScale = ContentScale.Fit,
                             modifier = Modifier.fillMaxSize())
@@ -193,7 +273,7 @@ fun ImageEditScreen(
                         modifier = Modifier.width(72.dp).clickable {
                             currentState?.let { es ->
                                 es.filter = filter
-                                scope.launch(Dispatchers.Default) { es.rebuildFinal() }
+                                requestRender(es)
                             }
                         },
                         horizontalAlignment = Alignment.CenterHorizontally
@@ -224,21 +304,17 @@ fun ImageEditScreen(
                     .navigationBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                EditControlBtn(Icons.Default.RotateLeft, "Left") {
+                EditControlBtn(Icons.AutoMirrored.Filled.RotateLeft, "Left") {
                     currentState?.let { es ->
-                        scope.launch(Dispatchers.Default) {
-                            withContext(Dispatchers.Main) { es.totalRotation -= 90f }
-                            es.rebuildFinal()
-                        }
+                        es.totalRotation -= 90f
+                        requestRender(es)
                     }
                 }
                 Spacer(Modifier.width(20.dp))
-                EditControlBtn(Icons.Default.RotateRight, "Right") {
+                EditControlBtn(Icons.AutoMirrored.Filled.RotateRight, "Right") {
                     currentState?.let { es ->
-                        scope.launch(Dispatchers.Default) {
-                            withContext(Dispatchers.Main) { es.totalRotation += 90f }
-                            es.rebuildFinal()
-                        }
+                        es.totalRotation += 90f
+                        requestRender(es)
                     }
                 }
                 Spacer(Modifier.width(20.dp))
@@ -248,6 +324,7 @@ fun ImageEditScreen(
                 Spacer(Modifier.weight(1f))
                 Button(
                     onClick = onDone,
+                    enabled = allImagesReady,
                     colors  = ButtonDefaults.buttonColors(containerColor = AccentBlue),
                     shape   = RoundedCornerShape(24.dp),
                     contentPadding = PaddingValues(horizontal = 28.dp, vertical = 12.dp)
@@ -265,10 +342,10 @@ fun ImageEditScreen(
                 onApply     = { showAdjust = false },
                 onCancel    = {
                     currentState.brightness = 0f; currentState.contrast = 0f; currentState.details = 0f
-                    scope.launch(Dispatchers.Default) { currentState.rebuildFinal() }
+                    requestRender(currentState)
                     showAdjust = false
                 },
-                scope = scope
+                onAdjustmentChange = { requestRender(currentState, debounceMillis = 120L) }
             )
         }
     }
@@ -283,7 +360,7 @@ fun BoxScope.AdjustPanel(
     onTabChange: (Int) -> Unit,
     onApply    : () -> Unit,
     onCancel   : () -> Unit,
-    scope      : kotlinx.coroutines.CoroutineScope
+    onAdjustmentChange: () -> Unit,
 ) {
     val tabs = listOf(
         Triple("Contrast",   Icons.Default.Contrast,    0),
@@ -319,7 +396,7 @@ fun BoxScope.AdjustPanel(
                 onValueChange = { v ->
                     sliderVal = v
                     when (activeTab) { 0 -> editState.contrast = v; 1 -> editState.brightness = v; 2 -> editState.details = v }
-                    scope.launch(Dispatchers.Default) { editState.rebuildFinal() }
+                    onAdjustmentChange()
                 },
                 valueRange = if (activeTab == 2) 0f..100f else -100f..100f,
                 modifier   = Modifier.weight(1f),

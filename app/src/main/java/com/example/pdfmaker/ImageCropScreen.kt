@@ -1,7 +1,6 @@
 package com.example.pdfmaker
 
 import android.graphics.PointF
-import android.graphics.RectF
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -10,6 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.RotateLeft
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,7 +19,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.animation.core.*
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -32,151 +31,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.*
-
-// ── Quad ──────────────────────────────────────────────────────────────────────
-
-
-// ── Shimmer loading skeleton shown while the JPEG decodes from disk ─────────
-
-@Composable
-private fun CropLoadingSkeleton() {
-    // Shimmer sweep animation: moves left→right on a 1200ms loop
-    val shimmerTransition = rememberInfiniteTransition(label = "shimmer")
-    val shimmerX by shimmerTransition.animateFloat(
-        initialValue  = -1f,
-        targetValue   =  2f,
-        animationSpec = infiniteRepeatable(
-            animation  = tween(1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "shimmerX"
-    )
-
-    // Pulse animation for the scan-line
-    val scanY by shimmerTransition.animateFloat(
-        initialValue  = 0.15f,
-        targetValue   = 0.85f,
-        animationSpec = infiniteRepeatable(
-            animation  = tween(1800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "scanY"
-    )
-
-    Box(Modifier.fillMaxSize().background(Color(0xFF0D0D14))) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val w = size.width; val h = size.height
-
-            // ── Card-shaped skeleton block (matches ID card guide rect) ──────
-            val cardW = w * 0.84f; val cardH = cardW / 1.586f
-            val cardL = (w - cardW) / 2f
-            val cardT = h / 2f - cardH / 2f - h * 0.04f
-            val cardR = cardL + cardW; val cardB = cardT + cardH
-
-            // Dark background rectangle
-            drawRoundRect(
-                color       = Color(0xFF1A1A2E),
-                topLeft     = androidx.compose.ui.geometry.Offset(cardL, cardT),
-                size        = androidx.compose.ui.geometry.Size(cardW, cardH),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(12f)
-            )
-
-            // Shimmer sweep gradient over the card area
-            val shimmerBrush = Brush.linearGradient(
-                colors = listOf(
-                    Color.Transparent,
-                    Color.White.copy(alpha = 0.08f),
-                    Color.White.copy(alpha = 0.15f),
-                    Color.White.copy(alpha = 0.08f),
-                    Color.Transparent
-                ),
-                start = androidx.compose.ui.geometry.Offset(shimmerX * w, cardT),
-                end   = androidx.compose.ui.geometry.Offset(shimmerX * w + w * 0.5f, cardB)
-            )
-            drawRoundRect(
-                brush        = shimmerBrush,
-                topLeft      = androidx.compose.ui.geometry.Offset(cardL, cardT),
-                size         = androidx.compose.ui.geometry.Size(cardW, cardH),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(12f)
-            )
-
-            // Photo placeholder (left side of card)
-            val photoSize = cardH * 0.55f
-            val photoL    = cardL + cardW * 0.04f
-            val photoT    = cardT + (cardH - photoSize) / 2f
-            drawRoundRect(
-                color       = Color(0xFF252540),
-                topLeft     = androidx.compose.ui.geometry.Offset(photoL, photoT),
-                size        = androidx.compose.ui.geometry.Size(photoSize * 0.75f, photoSize),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(6f)
-            )
-
-            // Text line skeletons (right side of card)
-            val textL      = photoL + photoSize * 0.75f + cardW * 0.04f
-            val lineH      = cardH * 0.07f
-            val lineGap    = lineH * 1.8f
-            val lineWidths = listOf(0.38f, 0.30f, 0.24f, 0.36f, 0.20f)
-            lineWidths.forEachIndexed { idx, widthFrac ->
-                val ly = photoT + idx * lineGap
-                drawRoundRect(
-                    color       = Color(0xFF252540),
-                    topLeft     = androidx.compose.ui.geometry.Offset(textL, ly),
-                    size        = androidx.compose.ui.geometry.Size(cardW * widthFrac, lineH),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(3f)
-                )
-            }
-
-            // Yellow corner brackets (same as camera overlay)
-            val len = 22f; val sw  = 3.5f
-            val col = Color(0xFFFFD700).copy(alpha = 0.6f)
-            val pairs = listOf(
-                Triple(cardL, cardT,  1f),   // TL
-                Triple(cardR, cardT, -1f),   // TR
-                Triple(cardR, cardB, -1f),   // BR (will flip y too)
-                Triple(cardL, cardB,  1f)    // BL
-            )
-            pairs.forEachIndexed { i, (cx, cy, sx) ->
-                val sy = if (i < 2) 1f else -1f
-                drawLine(col, androidx.compose.ui.geometry.Offset(cx, cy + sy * len),
-                              androidx.compose.ui.geometry.Offset(cx, cy), sw)
-                drawLine(col, androidx.compose.ui.geometry.Offset(cx, cy),
-                              androidx.compose.ui.geometry.Offset(cx + sx * len, cy), sw)
-            }
-
-            // Animated horizontal scan-line
-            val scanLineY = cardT + cardH * scanY
-            drawLine(
-                brush = Brush.horizontalGradient(
-                    colors = listOf(Color.Transparent,
-                                    Color(0xFFFFD700).copy(alpha = 0.7f),
-                                    Color(0xFFFFD700).copy(alpha = 0.9f),
-                                    Color(0xFFFFD700).copy(alpha = 0.7f),
-                                    Color.Transparent),
-                    startX = cardL, endX = cardR
-                ),
-                start       = androidx.compose.ui.geometry.Offset(cardL, scanLineY),
-                end         = androidx.compose.ui.geometry.Offset(cardR, scanLineY),
-                strokeWidth = 2f
-            )
-        }
-
-        // Status text below skeleton
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 120.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text("Preparing image…",
-                color    = Color.White.copy(alpha = 0.55f),
-                fontSize = 13.sp)
-        }
-    }
-}
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -212,31 +73,46 @@ fun ImageCropScreen(
         if (editState.originalBitmap == null) {
             // ── Phase 1: decode ───────────────────────────────────────────────
             isLoading = true
-            val bmp = withContext(Dispatchers.IO) {
-                loadBitmapForCrop(context, editState.uri)
-            }
-            if (bmp != null) {
-                editState.originalBitmap = bmp
-                editState.displayBitmap  = bmp
-            }
-            isLoading = false          // ← image is now visible on screen
+            var decoded: android.graphics.Bitmap? = null
+            try {
+                decoded = withContext(Dispatchers.IO) {
+                    BoundedImageDecoder.decode(context, editState.uri).getOrThrow()
+                }
+                currentCoroutineContext().ensureActive()
+                val bmp = requireNotNull(decoded)
+                BitmapOwnership.retire(editState.installSource(bmp))
+                decoded = null
+                isLoading = false
 
-            // ── Phase 2: edge detect (image already shown, no black screen) ──
-            if (bmp != null && !autoDetected) {
-                isDetecting = true
-                val detected = withContext(Dispatchers.Default) { autoDetectQuad(bmp) }
-                quad         = detected
-                autoDetected = true
-                isDetecting  = false
+                if (!autoDetected) {
+                    isDetecting = true
+                    quad = withContext(Dispatchers.Default) { autoDetectQuad(bmp) }
+                    autoDetected = true
+                    isDetecting = false
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                editState.loadError = "This image could not be loaded safely."
+                isDetecting = false
+            } finally {
+                decoded?.let { BitmapOwnership.retire(listOf(it)) }
+                isLoading = false
             }
         } else if (!autoDetected) {
             // Bitmap already in memory (returning from edit screen)
             val bmp = editState.originalBitmap!!
             isDetecting = true
-            val detected = withContext(Dispatchers.Default) { autoDetectQuad(bmp) }
-            quad         = detected
-            autoDetected = true
-            isDetecting  = false
+            try {
+                quad = withContext(Dispatchers.Default) { autoDetectQuad(bmp) }
+                autoDetected = true
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                editState.loadError = "Document edges could not be detected."
+            } finally {
+                isDetecting = false
+            }
         }
     }
 
@@ -281,10 +157,15 @@ fun ImageCropScreen(
                 fontWeight=FontWeight.SemiBold, modifier=Modifier.weight(1f))
             // Manual re-trigger button
             IconButton(onClick = {
+                if (isDetecting || isProcessing) return@IconButton
                 val bmp = bitmap ?: return@IconButton
-                scope.launch(Dispatchers.Default) {
-                    val d = autoDetectQuad(bmp)
-                    withContext(Dispatchers.Main) { quad = d }
+                isDetecting = true
+                scope.launch {
+                    try {
+                        quad = withContext(Dispatchers.Default) { autoDetectQuad(bmp) }
+                    } finally {
+                        isDetecting = false
+                    }
                 }
             }) {
                 Icon(Icons.Default.AutoFixHigh, "Auto detect", tint = AccentBlue)
@@ -300,6 +181,16 @@ fun ImageCropScreen(
                 exit    = androidx.compose.animation.fadeOut(tween(300))
             ) {
                 CropLoadingSkeleton()
+            }
+            if (!isLoading && bitmap == null && editState.loadError != null) {
+                Column(
+                    modifier = Modifier.align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Icon(Icons.Default.BrokenImage, null, tint = BadgeRed)
+                    Spacer(Modifier.height(8.dp))
+                    Text(editState.loadError.orEmpty(), color = Color.White, fontSize = 13.sp)
+                }
             }
             // Phase 2: small badge while Canny+Hough runs — image already visible
             if (isDetecting && !isLoading) {
@@ -429,14 +320,30 @@ fun ImageCropScreen(
             }
 
             // Rotate left  (re-runs auto-detect after rotation)
-            EditControlBtn(Icons.Default.RotateLeft, "Left",
+            EditControlBtn(Icons.AutoMirrored.Filled.RotateLeft, "Left",
                 tint = if (isLoading || bitmap == null) Color.White.copy(0.3f) else Color.White) {
+                if (isProcessing) return@EditControlBtn
                 val bmp = editState.displayBitmap ?: editState.originalBitmap ?: return@EditControlBtn
-                scope.launch(Dispatchers.Default) {
-                    val rot = ImageProcessing.rotateBitmap(bmp, -90f)
-                    withContext(Dispatchers.Main) { editState.displayBitmap=rot; editState.totalRotation-=90f }
-                    val d = autoDetectQuad(rot)
-                    withContext(Dispatchers.Main) { quad=d }
+                isProcessing = true
+                scope.launch {
+                    var rotated: android.graphics.Bitmap? = null
+                    try {
+                        rotated = withContext(Dispatchers.Default) {
+                            ImageProcessing.rotateBitmap(bmp, -90f)
+                        }
+                        currentCoroutineContext().ensureActive()
+                        val preview = requireNotNull(rotated)
+                        BitmapOwnership.retire(editState.installCropPreview(preview))
+                        rotated = null
+                        quad = withContext(Dispatchers.Default) { autoDetectQuad(preview) }
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (_: Exception) {
+                        editState.loadError = "This image could not be rotated."
+                    } finally {
+                        rotated?.let { BitmapOwnership.retire(listOf(it)) }
+                        isProcessing = false
+                    }
                 }
             }
             Spacer(Modifier.width(14.dp))
@@ -457,16 +364,25 @@ fun ImageCropScreen(
                 onClick = {
                     val bmp = editState.displayBitmap ?: editState.originalBitmap ?: return@Button
                     isProcessing = true
-                    scope.launch(Dispatchers.Default) {
-                        val warped = perspectiveWarp(bmp, quad)
-                        withContext(Dispatchers.Main) {
-                            editState.displayBitmap  = warped
-                            editState.originalBitmap = warped
-                            editState.cropRect       = RectF(0f,0f,1f,1f)
-                            editState.cropApplied    = false
+                    scope.launch {
+                        var warped: android.graphics.Bitmap? = null
+                        try {
+                            warped = withContext(Dispatchers.Default) { perspectiveWarp(bmp, quad) }
+                            currentCoroutineContext().ensureActive()
+                            BitmapOwnership.retire(
+                                editState.commitCroppedSource(requireNotNull(warped)),
+                            )
+                            warped = null
+                            isProcessing = false
+                            onNext()
+                        } catch (error: CancellationException) {
+                            throw error
+                        } catch (_: Exception) {
+                            editState.loadError = "This image could not be cropped."
+                            isProcessing = false
+                        } finally {
+                            warped?.let { BitmapOwnership.retire(listOf(it)) }
                         }
-                        editState.rebuildFinal()
-                        withContext(Dispatchers.Main) { isProcessing=false; onNext() }
                     }
                 },
                 enabled  = !isProcessing && !isLoading && !isDetecting && bitmap != null,

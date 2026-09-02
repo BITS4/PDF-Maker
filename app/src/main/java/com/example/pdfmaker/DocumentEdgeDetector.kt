@@ -1,13 +1,10 @@
 package com.example.pdfmaker
 
-import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.PointF
-import android.net.Uri
 import kotlin.math.*
 
 data class Quad(
@@ -32,9 +29,14 @@ fun perspectiveWarp(src: Bitmap, quad: Quad): Bitmap {
     val br = PointF(quad.br.x * w, quad.br.y * h)
     val bl = PointF(quad.bl.x * w, quad.bl.y * h)
     fun dist(a: PointF, b: PointF) = sqrt((b.x-a.x).pow(2)+(b.y-a.y).pow(2))
-    val outW = ((dist(tl,tr)+dist(bl,br))/2f).coerceAtLeast(10f)
-    val outH = ((dist(tl,bl)+dist(tr,br))/2f).coerceAtLeast(10f)
-    val dst = Bitmap.createBitmap(outW.toInt(), outH.toInt(), Bitmap.Config.ARGB_8888)
+    val measuredWidth = ((dist(tl, tr) + dist(bl, br)) / 2f).coerceAtLeast(10f).toInt()
+    val measuredHeight = ((dist(tl, bl) + dist(tr, br)) / 2f).coerceAtLeast(10f).toInt()
+    val output = requireNotNull(
+        ImageInputPolicy.fitWithinLimits(measuredWidth, measuredHeight),
+    ) { "Crop output dimensions are invalid" }
+    val outW = output.width.toFloat()
+    val outH = output.height.toFloat()
+    val dst = Bitmap.createBitmap(output.width, output.height, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(dst)
     canvas.drawColor(android.graphics.Color.WHITE)
     val matrix = Matrix()
@@ -63,13 +65,13 @@ fun perspectiveWarp(src: Bitmap, quad: Quad): Bitmap {
 fun autoDetectQuad(bmp: Bitmap): Quad {
     // 1. Resize
     val procMax = 512
-    val sc  = procMax.toFloat() / maxOf(bmp.width, bmp.height)
+    val sc  = min(1f, procMax.toFloat() / maxOf(bmp.width, bmp.height))
     val pw  = (bmp.width  * sc).toInt().coerceAtLeast(1)
     val ph  = (bmp.height * sc).toInt().coerceAtLeast(1)
     val sml = Bitmap.createScaledBitmap(bmp, pw, ph, true)
     val pix = IntArray(pw * ph)
     sml.getPixels(pix, 0, pw, 0, 0, pw, ph)
-    sml.recycle()
+    if (sml !== bmp) sml.recycle()
 
     // 2. Grayscale
     val gray = FloatArray(pw * ph) { i ->
@@ -240,42 +242,3 @@ internal fun edgeScanFallback(edge: BooleanArray, pw: Int, ph: Int): Quad {
     val b=(bottomY.toFloat()/ph).coerceIn(0.55f,0.97f)
     return Quad(PointF(l,t), PointF(r,t), PointF(r,b), PointF(l,b))
 }
-
-// ── Bitmap loader for crop screen ────────────────────────────────────────────
-// Rotation is already baked into every JPEG by SmartScanScreen.bakeExifRotation()
-// before navigation, so no EXIF handling is needed here at all.
-// Two-pass: read dimensions → calculate sample size → decode at 1/N resolution.
-
-internal fun loadBitmapForCrop(
-    context: Context,
-    uri: Uri,
-    maxDimension: Int = 1_920,
-): Bitmap? {
-    require(maxDimension > 0) { "Maximum decode dimension must be positive" }
-
-    fun decode(options: BitmapFactory.Options): Bitmap? =
-        context.contentResolver.openInputStream(uri)?.use { stream ->
-            BitmapFactory.decodeStream(stream, null, options)
-        }
-
-    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    decode(bounds)
-    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-
-    var sampleSize = 1
-    var width = bounds.outWidth
-    var height = bounds.outHeight
-    while (maxOf(width, height) > maxDimension) {
-        sampleSize *= 2
-        width /= 2
-        height /= 2
-    }
-
-    return decode(
-        BitmapFactory.Options().apply {
-            inSampleSize = sampleSize
-            inPreferredConfig = Bitmap.Config.ARGB_8888
-        },
-    )
-}
-

@@ -60,12 +60,15 @@ object ImageToPdfState {
     var currentEditIndex by mutableStateOf(0)
     var isIdCardScan     by mutableStateOf(false)
 
-    fun addUris(uris: List<Uri>) {
-        val existing = editStates.map { it.uri }.toSet()
-        uris.filter { it !in existing }.forEach { editStates.add(ImageEditState(it)) }
+    fun addUris(uris: List<Uri>): Int {
+        val currentUris = editStates.map(ImageEditState::uri)
+        val selection = ImageInputPolicy.mergeDistinct(currentUris, uris)
+        selection.items.drop(currentUris.size).forEach { editStates.add(ImageEditState(it)) }
+        return selection.rejectedCount
     }
 
     fun clear() {
+        editStates.forEach { BitmapOwnership.retire(it.releaseBitmaps()) }
         editStates.clear()
         currentEditIndex = 0
         isIdCardScan     = false
@@ -73,7 +76,7 @@ object ImageToPdfState {
 
     fun removeAt(index: Int) {
         if (index in editStates.indices) {
-            editStates.removeAt(index)
+            BitmapOwnership.retire(editStates.removeAt(index).releaseBitmaps())
             currentEditIndex = currentEditIndex.coerceIn(0, (editStates.size - 1).coerceAtLeast(0))
         }
     }

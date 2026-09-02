@@ -5,6 +5,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -54,13 +55,17 @@ private suspend fun loadDeviceImages(context: Context): List<DeviceImage> =
                 collection, projection, null, null, sortOrder
             )?.use { cursor ->
                 val idCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
-                while (cursor.moveToNext()) {
+                while (cursor.moveToNext() && list.size < ImageInputPolicy.MAX_GALLERY_ITEMS) {
                     val id  = cursor.getLong(idCol)
                     val uri = ContentUris.withAppendedId(collection, id)
                     list += DeviceImage(id, uri)
                 }
             }
-        } catch (_: Exception) {}
+        } catch (_: SecurityException) {
+            // The system picker below remains available when media access is not granted.
+        } catch (_: IllegalArgumentException) {
+            // Some document providers do not expose a MediaStore-compatible collection.
+        }
         list
     }
 
@@ -73,7 +78,9 @@ fun ImageSelectionScreen(
     onBack     : () -> Unit
 ) {
     val context   = LocalContext.current
-    var selected  by remember { mutableStateOf(preSelected.toSet()) }
+    var selected by remember(preSelected) {
+        mutableStateOf(ImageInputPolicy.mergeDistinct(emptyList(), preSelected).items)
+    }
     var allImages by remember { mutableStateOf<List<DeviceImage>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
@@ -83,9 +90,21 @@ fun ImageSelectionScreen(
     }
 
     // Fallback picker — also allows adding extra images when gallery is shown
+    fun addToSelection(candidates: List<Uri>) {
+        val result = ImageInputPolicy.mergeDistinct(selected, candidates)
+        selected = result.items
+        if (result.rejectedCount > 0) {
+            Toast.makeText(
+                context,
+                "You can import up to ${ImageInputPolicy.MAX_SELECTED_IMAGES} images at once.",
+                Toast.LENGTH_SHORT,
+            ).show()
+        }
+    }
+
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetMultipleContents()
-    ) { uris -> if (uris.isNotEmpty()) selected = selected + uris }
+    ) { uris -> if (uris.isNotEmpty()) addToSelection(uris) }
 
     Column(Modifier.fillMaxSize().background(currentBg)) {
 
@@ -110,7 +129,7 @@ fun ImageSelectionScreen(
                 modifier   = Modifier.weight(1f).padding(start = 4.dp)
             )
             if (selected.isNotEmpty()) {
-                TextButton(onClick = { onImport(selected.toList()) }) {
+                TextButton(onClick = { onImport(selected) }) {
                     Text(
                         "Next (${selected.size})",
                         color      = AccentBlue,
@@ -141,7 +160,7 @@ fun ImageSelectionScreen(
                 Text("Open Gallery", color = AccentBlue, fontSize = 13.sp)
             }
             if (selected.isNotEmpty()) {
-                TextButton(onClick = { selected = emptySet() }) {
+                TextButton(onClick = { selected = emptyList() }) {
                     Text("Clear All", color = BadgeRed, fontSize = 13.sp)
                 }
             }
@@ -197,8 +216,11 @@ fun ImageSelectionScreen(
                             .aspectRatio(1f)
                             .clip(RoundedCornerShape(4.dp))
                             .clickable {
-                                selected = if (isSelected) selected - img.uri
-                                          else            selected + img.uri
+                                if (isSelected) {
+                                    selected = selected.filterNot { it == img.uri }
+                                } else {
+                                    addToSelection(listOf(img.uri))
+                                }
                             }
                     ) {
                         AsyncImage(
