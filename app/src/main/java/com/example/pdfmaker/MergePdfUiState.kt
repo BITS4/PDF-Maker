@@ -13,24 +13,34 @@ import androidx.compose.runtime.setValue
 import java.io.File
 
 internal data class MergeRequest(
+    val generation: Long,
     val uris: List<Uri>,
     val requestedName: String,
     val totalPages: Int,
 )
 
 @Stable
-internal class MergePdfUiState {
+internal class MergePdfUiState(
+    private val operation: MergeOperationState = MergeOperationState(),
+) {
     var items by mutableStateOf<List<MergeItem>>(emptyList())
         private set
-    var phase by mutableStateOf(MergeState.EMPTY)
+    var phase by
+        mutableStateOf(
+            when {
+                operation.isActive -> MergeState.MERGING
+                operation.result != null -> MergeState.DONE
+                else -> MergeState.EMPTY
+            },
+        )
         private set
     var progress by mutableIntStateOf(0)
         private set
     var progressText by mutableStateOf("")
         private set
-    var resultFile by mutableStateOf<File?>(null)
+    var resultFile by mutableStateOf(operation.result?.file)
         private set
-    var resultPdfFile by mutableStateOf<PdfFile?>(null)
+    var resultPdfFile by mutableStateOf(operation.result?.catalogEntry)
         private set
     var errorMessage by mutableStateOf("")
         private set
@@ -41,7 +51,7 @@ internal class MergePdfUiState {
     var showRenameDialog by mutableStateOf(false)
     var showPreMergeDialog by mutableStateOf(false)
 
-    private var completedMerges = 0
+    private var completedMerges = if (operation.result == null) 0 else 1
 
     val summary: MergeSummary
         get() =
@@ -51,7 +61,7 @@ internal class MergePdfUiState {
             )
 
     fun addLoaded(loaded: List<MergeItem>) {
-        if (loaded.isEmpty()) return
+        if (loaded.isEmpty() || phase == MergeState.MERGING || phase == MergeState.DONE) return
         items = items + loaded
         phase = MergeState.READY
         errorMessage = ""
@@ -59,16 +69,19 @@ internal class MergePdfUiState {
     }
 
     fun reject(message: String) {
+        if (phase == MergeState.MERGING || phase == MergeState.DONE) return
         errorMessage = message.ifBlank { DefaultMergeError }
         shareMessage = null
         phase = MergeState.ERROR
     }
 
     fun rename(name: String) {
+        if (phase == MergeState.MERGING || phase == MergeState.DONE) return
         name.trim().takeIf(String::isNotEmpty)?.let { outputName = it }
     }
 
     fun remove(index: Int): MergeItem? {
+        if (phase != MergeState.READY) return null
         val removed = items.getOrNull(index) ?: return null
         items = items.toMutableList().apply { removeAt(index) }
         if (items.isEmpty()) phase = MergeState.EMPTY
@@ -79,12 +92,15 @@ internal class MergePdfUiState {
         index: Int,
         direction: MergeItemMove,
     ) {
+        if (phase != MergeState.READY) return
         items = MergeScreenPolicy.moved(items, index, direction)
     }
 
     fun beginMerge(requestedName: String): MergeRequest? {
+        if (phase != MergeState.READY) return null
         if (!MergeScreenPolicy.canMerge(items.size)) return null
         rename(requestedName)
+        val generation = operation.begin() ?: return null
         phase = MergeState.MERGING
         progress = 0
         progressText = ""
@@ -93,6 +109,7 @@ internal class MergePdfUiState {
         resultFile = null
         resultPdfFile = null
         return MergeRequest(
+            generation = generation,
             uris = items.map(MergeItem::uri),
             requestedName = outputName,
             totalPages = summary.pageCount,
@@ -100,18 +117,23 @@ internal class MergePdfUiState {
     }
 
     fun reportProgress(
+        generation: Long,
         percent: Int,
         message: String,
-    ) {
-        if (phase != MergeState.MERGING) return
+    ): Boolean {
+        if (phase != MergeState.MERGING || !operation.accepts(generation)) return false
         progress = MergeScreenPolicy.progress(percent)
         progressText = message
+        return true
     }
 
     fun mergeSucceeded(
+        generation: Long,
         file: File,
         pdfFile: PdfFile,
-    ) {
+    ): Boolean {
+        if (phase != MergeState.MERGING) return false
+        if (!operation.complete(generation, MergeOwnedResult(file, pdfFile))) return false
         resultFile = file
         resultPdfFile = pdfFile
         completedMerges += 1
@@ -120,6 +142,20 @@ internal class MergePdfUiState {
         phase = MergeState.DONE
         errorMessage = ""
         shareMessage = null
+        return true
+    }
+
+    fun mergeFailed(
+        generation: Long,
+        message: String,
+    ): Boolean {
+        if (phase != MergeState.MERGING || !operation.fail(generation)) return false
+        progress = 0
+        progressText = ""
+        errorMessage = message.ifBlank { DefaultMergeError }
+        shareMessage = null
+        phase = MergeState.ERROR
+        return true
     }
 
     fun reportShareResult(launched: Boolean): Boolean {
@@ -129,6 +165,7 @@ internal class MergePdfUiState {
     }
 
     fun retry() {
+        if (phase != MergeState.ERROR) return
         phase = if (items.isEmpty()) MergeState.EMPTY else MergeState.READY
         errorMessage = ""
         shareMessage = null
@@ -136,6 +173,7 @@ internal class MergePdfUiState {
 
     fun reset(): List<MergeItem> {
         val released = items
+        operation.clear()
         items = emptyList()
         resultFile = null
         resultPdfFile = null
@@ -145,6 +183,18 @@ internal class MergePdfUiState {
         shareMessage = null
         phase = MergeState.EMPTY
         return released
+    }
+
+    fun cancelActiveMerge(): Boolean {
+        if (phase != MergeState.MERGING || !operation.cancel()) return false
+        progress = 0
+        progressText = ""
+        errorMessage = ""
+        shareMessage = null
+        resultFile = null
+        resultPdfFile = null
+        phase = if (MergeScreenPolicy.canMerge(items.size)) MergeState.READY else MergeState.EMPTY
+        return true
     }
 
     private companion object {

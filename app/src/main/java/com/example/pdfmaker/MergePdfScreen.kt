@@ -1,6 +1,8 @@
 package com.example.pdfmaker
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 
 @Composable
@@ -11,6 +13,12 @@ fun MergePdfScreen(
     val state = rememberMergePdfUiState()
     val actions = rememberMergePdfActions(state, onOpenFile)
     val colors = remember { MergePdfColors() }
+    val handleBack = { actions.exit(onBack) }
+
+    BackHandler(onBack = handleBack)
+    DisposableEffect(actions) {
+        onDispose(actions::release)
+    }
 
     if (state.showRenameDialog) {
         MergeRenameDialog(
@@ -39,16 +47,16 @@ fun MergePdfScreen(
         colors = colors,
         callbacks =
             MergePdfCallbacks(
-                onBack = onBack,
-                onSelectFiles = actions.selectFiles,
+                onBack = handleBack,
+                onSelectFiles = actions::selectFiles,
                 onRename = { state.showRenameDialog = true },
                 onMerge = { state.showPreMergeDialog = true },
-                onRemove = actions.removeItem,
+                onRemove = actions::removeItem,
                 onMove = state::move,
-                onOpen = actions.openResult,
-                onShare = actions.shareResult,
-                onReset = actions.reset,
-                onRetry = state::retry,
+                onOpen = actions::openResult,
+                onShare = actions::shareResult,
+                onReset = actions::reset,
+                onRetry = actions::retry,
             ),
     )
 }

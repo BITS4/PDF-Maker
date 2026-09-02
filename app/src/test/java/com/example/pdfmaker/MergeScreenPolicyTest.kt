@@ -109,6 +109,18 @@ class MergeScreenPolicyTest {
     }
 
     @Test
+    fun `generation advances monotonically and fails closed at invalid boundaries`() {
+        assertEquals(1L, MergeScreenPolicy.nextGeneration(0L))
+        assertEquals(42L, MergeScreenPolicy.nextGeneration(41L))
+        assertThrows(IllegalArgumentException::class.java) {
+            MergeScreenPolicy.nextGeneration(-1L)
+        }
+        assertThrows(ArithmeticException::class.java) {
+            MergeScreenPolicy.nextGeneration(Long.MAX_VALUE)
+        }
+    }
+
+    @Test
     fun `default output names advance safely`() {
         assertEquals("merged_document_1", MergeScreenPolicy.defaultOutputName(0))
         assertEquals("merged_document_2", MergeScreenPolicy.defaultOutputName(1))

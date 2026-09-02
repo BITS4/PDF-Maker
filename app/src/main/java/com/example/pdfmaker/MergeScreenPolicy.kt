@@ -61,6 +61,11 @@ internal object MergeScreenPolicy {
 
     fun progress(percent: Int): Int = percent.coerceIn(0, 100)
 
+    fun nextGeneration(current: Long): Long {
+        require(current >= 0L) { "Merge generation cannot be negative" }
+        return Math.addExact(current, 1L)
+    }
+
     fun defaultOutputName(completedMerges: Int): String {
         require(completedMerges >= 0) { "Completed merge count cannot be negative" }
         return "merged_document_${Math.addExact(completedMerges, 1)}"
