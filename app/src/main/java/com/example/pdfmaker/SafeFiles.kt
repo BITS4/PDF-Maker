@@ -21,8 +21,7 @@ object SafeFileName {
                     character.isLetterOrDigit() -> append(character)
                     character == ' ' || character == '-' || character == '_' || character == '.' -> append(character)
                     character == '/' || character == '\\' -> append('_')
-                    !Character.isISOControl(character) &&
-                        Character.getDirectionality(character) !in unsafeDirectionalClasses -> append('_')
+                    !Character.isISOControl(character) && character !in unsafeDirectionalControls -> append('_')
                 }
             }
         }
@@ -48,16 +47,16 @@ object SafeFileName {
         return cleaned.ifBlank { "document" }
     }
 
-    private val unsafeDirectionalClasses = setOf(
-        Character.DIRECTIONALITY_RIGHT_TO_LEFT_OVERRIDE,
-        Character.DIRECTIONALITY_LEFT_TO_RIGHT_OVERRIDE,
-        Character.DIRECTIONALITY_POP_DIRECTIONAL_FORMAT,
-        Character.DIRECTIONALITY_RIGHT_TO_LEFT_EMBEDDING,
-        Character.DIRECTIONALITY_LEFT_TO_RIGHT_EMBEDDING,
-        Character.DIRECTIONALITY_RIGHT_TO_LEFT_ISOLATE,
-        Character.DIRECTIONALITY_LEFT_TO_RIGHT_ISOLATE,
-        Character.DIRECTIONALITY_FIRST_STRONG_ISOLATE,
-        Character.DIRECTIONALITY_POP_DIRECTIONAL_ISOLATE,
+    private val unsafeDirectionalControls = setOf(
+        '\u202A', // left-to-right embedding
+        '\u202B', // right-to-left embedding
+        '\u202C', // pop directional formatting
+        '\u202D', // left-to-right override
+        '\u202E', // right-to-left override
+        '\u2066', // left-to-right isolate
+        '\u2067', // right-to-left isolate
+        '\u2068', // first-strong isolate
+        '\u2069', // pop directional isolate
     )
 }
 

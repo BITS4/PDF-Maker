@@ -25,6 +25,7 @@ class SafeFileNameTest {
     @Test
     fun normalizesUnicodeAndDropsDirectionalOverrides() {
         assertEquals("Caféreport", SafeFileName.baseName("Cafe\u0301\u202Ereport"))
+        assertEquals("invoicetotal", SafeFileName.baseName("invoice\u2067total\u2069"))
     }
 
     @Test
