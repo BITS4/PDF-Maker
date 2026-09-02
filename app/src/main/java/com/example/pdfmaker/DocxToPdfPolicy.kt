@@ -77,10 +77,12 @@ internal object DocxToPdfPolicy {
     ): DocxInputMetadata {
         val mimeType = normalizedMimeType(provider.mimeType)
         val providerName = boundedName(provider.displayName)
+        val fallback = boundedName(fallbackName)
+        val path = boundedName(pathSegment)
+        val selectedName = providerName ?: fallback ?: path
         if (mimeType == null || mimeType in genericMimeTypes) {
-            requireGenericNameIsDocx(providerName)
+            requireGenericNameIsDocx(selectedName)
         }
-        val selectedName = providerName ?: boundedName(fallbackName) ?: boundedName(pathSegment)
         val baseName =
             selectedName
                 ?.substringAfterLast('/')

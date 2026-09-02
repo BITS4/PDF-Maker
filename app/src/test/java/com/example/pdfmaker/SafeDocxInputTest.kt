@@ -2,10 +2,12 @@ package com.example.pdfmaker
 
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.util.concurrent.CancellationException
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -63,6 +65,37 @@ class SafeDocxInputTest {
         )
     }
 
+    @Test
+    fun stagingCancellationClosesInputAndErasesPartialSnapshot() {
+        val input = CloseTrackingInput(docxBytes() + ByteArray(24_000) { index -> index.toByte() })
+        var checks = 0
+
+        assertThrows(CancellationException::class.java) {
+            SafeDocxInput.stage(input, temporaryFolder.root) {
+                checks += 1
+                if (checks == 2) throw CancellationException("cancel staging")
+            }
+        }
+
+        assertTrue(input.closed)
+        assertTrue(checks >= 2)
+        assertTrue(temporaryFolder.root.listFiles().orEmpty().isEmpty())
+    }
+
+    @Test
+    fun entryReadCancellationStopsMidCopyWithoutReturningPartialBytes() {
+        var checks = 0
+
+        assertThrows(CancellationException::class.java) {
+            SafeDocxInput.readEntry(ByteArrayInputStream(ByteArray(24_000)), 30_000) {
+                checks += 1
+                if (checks == 2) throw CancellationException("cancel entry")
+            }
+        }
+
+        assertTrue(checks >= 2)
+    }
+
     private fun docxBytes(): ByteArray = ByteArrayOutputStream().also { bytes ->
         ZipOutputStream(bytes).use { zip ->
             zip.putNextEntry(ZipEntry("[Content_Types].xml"))
@@ -73,4 +106,14 @@ class SafeDocxInputTest {
             zip.closeEntry()
         }
     }.toByteArray()
+
+    private class CloseTrackingInput(bytes: ByteArray) : ByteArrayInputStream(bytes) {
+        var closed = false
+            private set
+
+        override fun close() {
+            closed = true
+            super.close()
+        }
+    }
 }

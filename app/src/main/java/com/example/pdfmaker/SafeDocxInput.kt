@@ -15,7 +15,12 @@ object SafeDocxInput {
     const val MAX_CONVERSION_BYTES = 75L * 1024L * 1024L
     const val MAX_ENTRIES = 2_000
 
-    fun stage(input: InputStream, directory: File, maximumBytes: Long = MAX_DOCX_BYTES): File {
+    fun stage(
+        input: InputStream,
+        directory: File,
+        maximumBytes: Long = MAX_DOCX_BYTES,
+        beforeChunk: () -> Unit = {},
+    ): File {
         require(maximumBytes > 0) { "Maximum DOCX size must be positive" }
         check((directory.exists() && directory.isDirectory) || directory.mkdirs()) {
             "Could not create the DOCX staging directory"
@@ -24,25 +29,29 @@ object SafeDocxInput {
         try {
             input.use { source ->
                 FileOutputStream(temporary).use { output ->
-                    val copied = BoundedIo.copy(source, output, maximumBytes)
+                    val copied = BoundedIo.copy(source, output, maximumBytes, beforeChunk)
                     require(copied > 0) { "The DOCX is empty" }
                     output.flush()
                     output.fd.sync()
                 }
             }
-            require(ImportedDocumentInspector.inspect(temporary) == IncomingDocumentKind.DOCX) {
+            require(ImportedDocumentInspector.inspect(temporary, beforeChunk) == IncomingDocumentKind.DOCX) {
                 "The selected content is not a safe DOCX"
             }
             return temporary
         } catch (error: Throwable) {
-            temporary.delete()
+            OwnedImportCleanup.erase(temporary)
             throw error
         }
     }
 
-    fun readEntry(input: InputStream, maximumBytes: Long): ByteArray {
+    fun readEntry(
+        input: InputStream,
+        maximumBytes: Long,
+        beforeChunk: () -> Unit = {},
+    ): ByteArray {
         val output = ByteArrayOutputStream()
-        BoundedIo.copy(input, output, maximumBytes)
+        BoundedIo.copy(input, output, maximumBytes, beforeChunk)
         return output.toByteArray()
     }
 

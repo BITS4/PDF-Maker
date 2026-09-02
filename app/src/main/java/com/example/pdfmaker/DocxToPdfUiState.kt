@@ -139,6 +139,12 @@ internal class DocxToPdfUiState {
         return true
     }
 
+    fun shareSucceeded(expectedResult: DocxSavedResult): Boolean {
+        if (phase != DocxToPdfPhase.DONE || result !== expectedResult) return false
+        errorMessage = null
+        return true
+    }
+
     fun dismissError() {
         errorMessage = null
     }

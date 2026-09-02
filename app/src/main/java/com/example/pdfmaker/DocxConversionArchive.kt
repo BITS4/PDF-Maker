@@ -14,7 +14,7 @@ internal class DocxConversionArchive internal constructor(
     private val extractionDirectory: File,
 ) : Closeable {
     override fun close() {
-        mediaFiles.values.forEach(File::delete)
+        mediaFiles.values.forEach(OwnedImportCleanup::erase)
         extractionDirectory.delete()
     }
 }
@@ -24,6 +24,7 @@ internal class DocxConversionArchive internal constructor(
 internal fun extractDocxConversionArchive(
     stagedDocx: File,
     workingDirectory: File,
+    beforeChunk: () -> Unit = {},
 ): DocxConversionArchive {
     check((workingDirectory.exists() && workingDirectory.isDirectory) || workingDirectory.mkdirs()) {
         "Could not create the DOCX working directory"
@@ -47,7 +48,7 @@ internal fun extractDocxConversionArchive(
             }
 
             fun readXmlPart(limit: Long): String {
-                val bytes = SafeDocxInput.readEntry(zip, remainingLimit(limit))
+                val bytes = SafeDocxInput.readEntry(zip, remainingLimit(limit), beforeChunk)
                 totalRead += bytes.size
                 return SafeDocxInput.decodeXml(bytes, limit)
             }
@@ -65,14 +66,19 @@ internal fun extractDocxConversionArchive(
                 var completed = false
                 try {
                     val copied = FileOutputStream(output).use { destination ->
-                        BoundedIo.copy(zip, destination, remainingLimit(SafeDocxInput.MAX_MEDIA_BYTES))
+                        BoundedIo.copy(
+                            zip,
+                            destination,
+                            remainingLimit(SafeDocxInput.MAX_MEDIA_BYTES),
+                            beforeChunk,
+                        )
                     }
                     require(copied > 0) { "DOCX contains an empty media item" }
                     totalRead += copied
                     mediaFiles[mediaName] = output
                     completed = true
                 } finally {
-                    if (!completed) output.delete()
+                    if (!completed) OwnedImportCleanup.erase(output)
                 }
             }
 
@@ -81,12 +87,15 @@ internal fun extractDocxConversionArchive(
                     zip,
                     DISCARDING_OUTPUT,
                     remainingLimit(SafeDocxInput.MAX_CONVERSION_BYTES),
+                    beforeChunk,
                 )
                 totalRead += copied
             }
 
+            beforeChunk()
             var entry = zip.nextEntry
             while (entry != null) {
+                beforeChunk()
                 entryCount += 1
                 require(entryCount <= SafeDocxInput.MAX_ENTRIES) { "DOCX contains too many entries" }
                 when {
@@ -105,6 +114,7 @@ internal fun extractDocxConversionArchive(
                     else -> skipPart()
                 }
                 zip.closeEntry()
+                beforeChunk()
                 entry = zip.nextEntry
             }
         }
@@ -118,7 +128,7 @@ internal fun extractDocxConversionArchive(
         return archive
     } finally {
         if (!ownershipTransferred) {
-            mediaFiles.values.forEach(File::delete)
+            mediaFiles.values.forEach(OwnedImportCleanup::erase)
             extractionDirectory.delete()
         }
     }

@@ -1,6 +1,5 @@
 package com.example.pdfmaker
 
-import android.content.Context
 import android.net.Uri
 import android.os.OperationCanceledException
 import androidx.compose.runtime.Composable
@@ -10,9 +9,9 @@ import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
@@ -22,37 +21,60 @@ import java.io.File
 import java.io.IOException
 
 internal class DocxToPdfActions(
-    private val context: Context,
     private val scope: CoroutineScope,
     private val state: DocxToPdfUiState,
+    private val boundaries: DocxToPdfBoundaries,
+    private val dispatchers: DocxActionDispatchers,
 ) {
+    private val progressUpdates = Channel<DocxProgressUpdate>(Channel.CONFLATED)
+    private val progressCollector =
+        scope.launch(dispatchers.main, start = CoroutineStart.UNDISPATCHED) {
+            for (update in progressUpdates) {
+                state.reportProgress(update.generation, update.percentage, update.label)
+            }
+        }
     private var activeJob: Job? = null
-    private var selectedUri: Uri? = null
+    private var selectedSource: DocxInputSource? = null
     private var released = false
 
     fun select(
         uri: Uri,
         fallbackName: String? = null,
+    ) = select(DocxInputSource.provider(uri), fallbackName)
+
+    internal fun select(
+        source: DocxInputSource,
+        fallbackName: String? = null,
     ) {
         if (released) return
         val generation = state.beginSelection()
-        launchTracked { prepareSelection(uri, fallbackName, generation) }
+        launchTracked { prepareSelection(source, fallbackName, generation) }
     }
 
     fun startConversion() {
         if (released) return
-        val uri = selectedUri ?: return
+        val source = selectedSource ?: return
         val request = state.beginConversion() ?: return
-        launchTracked { convert(uri, request) }
+        launchTracked { convert(source, request) }
     }
 
     fun shareResult() {
         if (released) return
         val result = state.result ?: return
         launchTracked {
-            val shared = withContext(Dispatchers.IO) { shareDocxPdf(context, result.file) }
+            val shared =
+                try {
+                    withContext(dispatchers.main) { boundaries.share(result.file) }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (expectedBoundaryFailure: RuntimeException) {
+                    logFailure("share_launch_failed", expectedBoundaryFailure)
+                    false
+                }
             currentCoroutineContext().ensureActive()
-            if (!shared) {
+            if (shared) {
+                state.shareSucceeded(result)
+            } else {
                 state.shareFailed(
                     result,
                     DocxToPdfPolicy.failureMessage(
@@ -72,7 +94,7 @@ internal class DocxToPdfActions(
 
     fun reset() {
         activeJob?.cancel()
-        selectedUri = null
+        selectedSource = null
         state.reset()
     }
 
@@ -84,18 +106,20 @@ internal class DocxToPdfActions(
         state.cancelActive()
         activeJob?.cancel()
         activeJob = null
-        selectedUri = null
+        selectedSource = null
+        progressUpdates.close()
+        progressCollector.cancel()
     }
 
     private suspend fun prepareSelection(
-        uri: Uri,
+        source: DocxInputSource,
         fallbackName: String?,
         generation: Long,
     ) {
         try {
-            val input = readDocxInputMetadata(context, uri, fallbackName)
+            val input = withContext(dispatchers.io) { boundaries.inspect(source, fallbackName) }
             currentCoroutineContext().ensureActive()
-            if (state.selectionSucceeded(generation, input)) selectedUri = uri
+            if (state.selectionSucceeded(generation, input)) selectedSource = source
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: IOException) {
@@ -113,32 +137,32 @@ internal class DocxToPdfActions(
 
     @Suppress("TooGenericExceptionCaught")
     private suspend fun convert(
-        uri: Uri,
+        source: DocxInputSource,
         request: DocxConversionRequest,
     ) {
         var unclaimedOutput: File? = null
         var failureStage = DocxToPdfFailureStage.CONVERT
         try {
-            val output =
-                withContext(Dispatchers.IO) {
-                    val converted =
-                        docxToPdf(
-                            context = context,
-                            uri = uri,
-                            baseName = request.input.displayName,
-                            onProgress = { progress, text ->
-                                reportProgress(request.generation, progress, text)
-                            },
-                        )
-                    unclaimedOutput = converted.file
-                    currentCoroutineContext().ensureActive()
-                    failureStage = DocxToPdfFailureStage.VERIFY
-                    verifyConvertedOutput(converted)
+            val converted =
+                withContext(dispatchers.io) {
+                    boundaries.convert(
+                        source = source,
+                        baseName = request.input.displayName,
+                        onProgress = { percentage, label ->
+                            progressUpdates.trySend(
+                                DocxProgressUpdate(request.generation, percentage, label),
+                            )
+                        },
+                    )
                 }
+            unclaimedOutput = converted.file
+            currentCoroutineContext().ensureActive()
+            failureStage = DocxToPdfFailureStage.VERIFY
+            val output = withContext(dispatchers.io) { boundaries.verify(converted) }
             currentCoroutineContext().ensureActive()
             if (state.conversionSucceeded(request.generation, output)) {
                 unclaimedOutput = null
-                FileCache.prependFile(output.catalogEntry)
+                cacheWithoutInvalidatingResult(output.catalogEntry)
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -149,13 +173,23 @@ internal class DocxToPdfActions(
         }
     }
 
-    private fun reportProgress(
-        generation: Long,
-        progress: Int,
-        text: String,
-    ) {
-        scope.launch(Dispatchers.Main.immediate) {
-            state.reportProgress(generation, progress, text)
+    private fun cacheWithoutInvalidatingResult(catalogEntry: PdfFile) {
+        try {
+            boundaries.cache(catalogEntry)
+        } catch (expectedBoundaryFailure: RuntimeException) {
+            logFailure("result_cache_unavailable", expectedBoundaryFailure)
+        }
+    }
+
+    private suspend fun deleteUnclaimedOutput(file: File) {
+        withContext(NonCancellable + dispatchers.io) {
+            try {
+                boundaries.deleteUnclaimed(file)
+            } catch (error: IOException) {
+                logFailure("unclaimed_output_delete_failed", error)
+            } catch (expectedBoundaryFailure: RuntimeException) {
+                logFailure("unclaimed_output_delete_failed", expectedBoundaryFailure)
+            }
         }
     }
 
@@ -164,13 +198,7 @@ internal class DocxToPdfActions(
         stage: DocxToPdfFailureStage,
         error: Exception,
     ) {
-        Timber
-            .tag("DocxToPdf")
-            .w(
-                ObservabilityPolicy.sanitizedThrowable(error),
-                "event=docx_operation_failed stage=%s",
-                stage.name.lowercase(),
-            )
+        logFailure("operation_failed_${stage.name.lowercase()}", error)
         val message = DocxToPdfPolicy.failureMessage(stage, error)
         if (stage == DocxToPdfFailureStage.SELECT) {
             state.selectionFailed(generation, message)
@@ -182,9 +210,7 @@ internal class DocxToPdfActions(
     private fun rejectSelection(
         generation: Long,
         error: Exception,
-    ) {
-        reject(generation, DocxToPdfFailureStage.SELECT, error)
-    }
+    ) = reject(generation, DocxToPdfFailureStage.SELECT, error)
 
     private fun launchTracked(operation: suspend () -> Unit) {
         activeJob?.cancel()
@@ -200,42 +226,37 @@ internal class DocxToPdfActions(
         activeJob = launchedJob
         launchedJob.start()
     }
+
+    private fun logFailure(
+        event: String,
+        error: Exception,
+    ) {
+        Timber
+            .tag("DocxToPdf")
+            .w(
+                ObservabilityPolicy.sanitizedThrowable(error),
+                "event=%s",
+                event,
+            )
+    }
 }
+
+internal data class DocxProgressUpdate(
+    val generation: Long,
+    val percentage: Int,
+    val label: String,
+)
 
 @Composable
 internal fun rememberDocxToPdfActions(state: DocxToPdfUiState): DocxToPdfActions {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    return remember(context, scope, state) { DocxToPdfActions(context, scope, state) }
-}
-
-private fun verifyConvertedOutput(converted: DocxPdfResult): DocxSavedResult {
-    val file = converted.file
-    require(file.isFile && file.length() in 1..DocxConversionPolicy.MAX_OUTPUT_BYTES) {
-        "Converted PDF output is missing or exceeds its limit"
-    }
-    SecureDocumentTypePolicy.requirePlainPdfFile(file)
-    val verifiedPageCount = PdfFileMetadata.pageCount(file)
-    require(verifiedPageCount == converted.pageCount && verifiedPageCount in 1..DocxConversionPolicy.MAX_PAGES) {
-        "Converted PDF page metadata is inconsistent"
-    }
-    val sizeBytes = file.length()
-    val catalogEntry =
-        PdfFile(
-            name = file.name,
-            filePath = file.absolutePath,
-            size = FileRepository.formatSize(sizeBytes),
-            date = FileRepository.formatDate(file.lastModified()),
-            pageCount = verifiedPageCount,
-            lastModified = file.lastModified(),
+    return remember(context, scope, state) {
+        DocxToPdfActions(
+            scope = scope,
+            state = state,
+            boundaries = AndroidDocxToPdfBoundaries(context),
+            dispatchers = DocxActionDispatchers.production(),
         )
-    return DocxSavedResult(file = file, catalogEntry = catalogEntry, sizeBytes = sizeBytes)
-}
-
-private suspend fun deleteUnclaimedOutput(file: File) {
-    withContext(NonCancellable + Dispatchers.IO) {
-        if (file.exists() && !file.delete()) {
-            Timber.tag("DocxToPdf").w("event=unclaimed_output_delete_failed")
-        }
     }
 }

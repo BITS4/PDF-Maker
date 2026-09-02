@@ -181,6 +181,8 @@ class DocxToPdfUiStateTest {
         assertNull(state.errorMessage)
         assertTrue(state.shareFailed(completed, "Try another app"))
         assertEquals("Try another app", state.errorMessage)
+        assertTrue(state.shareSucceeded(completed))
+        assertNull(state.errorMessage)
     }
 
     @Test
@@ -194,6 +196,7 @@ class DocxToPdfUiStateTest {
         state.conversionSucceeded(request.generation, current)
 
         assertFalse(state.shareFailed(obsolete, "stale"))
+        assertFalse(state.shareSucceeded(obsolete))
         assertSame(current, state.result)
         assertNull(state.errorMessage)
     }

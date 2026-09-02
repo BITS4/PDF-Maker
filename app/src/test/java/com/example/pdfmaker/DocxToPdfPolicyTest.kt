@@ -86,6 +86,46 @@ class DocxToPdfPolicyTest {
     }
 
     @Test
+    fun `generic MIME validates fallback and path names when provider name is absent`() {
+        assertEquals(
+            "fallback",
+            metadata(
+                displayName = null,
+                mimeType = null,
+                fallbackName = "fallback.docx",
+                pathSegment = "ignored.pdf",
+            ).displayName,
+        )
+        assertEquals(
+            "path-name",
+            metadata(
+                displayName = null,
+                mimeType = "application/octet-stream",
+                fallbackName = null,
+                pathSegment = "path-name.DOCX",
+            ).displayName,
+        )
+        listOf("fallback.pdf", "legacy.doc").forEach { fallback ->
+            assertThrows(IllegalArgumentException::class.java) {
+                metadata(
+                    displayName = null,
+                    mimeType = null,
+                    fallbackName = fallback,
+                    pathSegment = null,
+                )
+            }
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            metadata(
+                displayName = null,
+                mimeType = "*/*",
+                fallbackName = null,
+                pathSegment = "payload.png",
+            )
+        }
+    }
+
+    @Test
     fun `meaningful incompatible and malformed MIME types are rejected`() {
         listOf(
             "application/msword",
