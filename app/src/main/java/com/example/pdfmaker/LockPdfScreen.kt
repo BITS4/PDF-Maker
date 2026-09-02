@@ -27,6 +27,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -196,7 +198,10 @@ fun LockPdfScreen(onBack: () -> Unit) {
                                 scope.launch {
                                     lState = LockState.LOCKING
                                     val error = withContext(Dispatchers.IO) {
-                                        lockFileInPlace(f.filePath, password)
+                                        val operationContext = currentCoroutineContext()
+                                        lockFileInPlace(f.filePath, password) {
+                                            operationContext.ensureActive()
+                                        }
                                     }
                                     if (error == null) {
                                         // Success — invalidate thumbnail + refresh file list
@@ -334,14 +339,20 @@ fun FilePickRow(file: PdfFile, onClick: () -> Unit) {
 // ── Crypto: lock file in-place ─────────────────────────────────────────────────
 // Returns null on success, error message string on failure
 
-internal fun lockFileInPlace(filePath: String, password: String): String? =
-    SecureDocumentStore.lockInPlace(File(filePath), password)
+internal fun lockFileInPlace(
+    filePath: String,
+    password: String,
+    beforeChunk: () -> Unit = {},
+): String? = SecureDocumentStore.lockInPlace(File(filePath), password, beforeChunk)
 
 // ── Crypto: unlock file in-place ──────────────────────────────────────────────
 // Returns null on success, error message on failure
 
-internal fun unlockFileInPlace(filePath: String, password: String): String? =
-    SecureDocumentStore.unlockInPlace(File(filePath), password)
+internal fun unlockFileInPlace(
+    filePath: String,
+    password: String,
+    beforeChunk: () -> Unit = {},
+): String? = SecureDocumentStore.unlockInPlace(File(filePath), password, beforeChunk)
 
 // ── Crypto helpers ─────────────────────────────────────────────────────────────
 

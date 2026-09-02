@@ -27,6 +27,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -178,7 +180,10 @@ fun UnlockPdfScreen(onBack: () -> Unit) {
                                 scope.launch {
                                     ulState = UlState.UNLOCKING
                                     val error = withContext(Dispatchers.IO) {
-                                        unlockFileInPlace(f.filePath, password)
+                                        val operationContext = currentCoroutineContext()
+                                        unlockFileInPlace(f.filePath, password) {
+                                            operationContext.ensureActive()
+                                        }
                                     }
                                     when (error) {
                                         null -> {
@@ -189,7 +194,7 @@ fun UnlockPdfScreen(onBack: () -> Unit) {
                                             outName = f.name
                                             ulState = UlState.DONE
                                         }
-                                        "Wrong password" -> {
+                                        "Wrong password", "Wrong password or damaged file" -> {
                                             wrongPass = true
                                             ulState   = UlState.ENTER_PASSWORD
                                         }

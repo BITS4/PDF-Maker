@@ -1,7 +1,6 @@
 package com.example.pdfmaker
 
 import android.content.Context
-import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -49,9 +48,12 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import timber.log.Timber
 
 @Composable
 internal fun ViewerUnlockGate(
@@ -165,33 +167,25 @@ internal fun ViewerUnlockGate(
     }
 }
 
-private fun unlockViewerFile(
+private suspend fun unlockViewerFile(
     context: Context,
     sourcePath: String,
     password: String,
 ): File? {
-    return try {
-        val encrypted = readBoundedViewerFile(File(sourcePath), SecureDocumentStore.MAX_DOCUMENT_BYTES)
-        val decrypted = try {
-            decryptPdf(encrypted, password) ?: return null
-        } finally {
-            encrypted.fill(0)
-        }
-        try {
-            OutputStore.writeUnique(
-                pdfMakerCacheDirectory(context),
-                "pdfmaker-unlocked",
-                "pdf",
-            ) { output ->
-                output.write(decrypted)
-            }
-        } finally {
-            decrypted.fill(0)
-        }
-    } catch (ignoredError: Exception) {
-        Log.w("PdfViewer", "Unable to unlock PDF", ignoredError)
-        null
-    }
+    val operationContext = currentCoroutineContext()
+    return SecureDocumentStore.decryptedCopy(
+        source = File(sourcePath),
+        destinationDirectory = pdfMakerCacheDirectory(context),
+        password = password,
+        beforeChunk = operationContext::ensureActive,
+    )
+}
+
+private fun reportViewerCleanupFailure(error: Throwable) {
+    Timber.tag("ViewerUnlockGate").w(
+        ObservabilityPolicy.sanitizedThrowable(error),
+        "event=viewer_temporary_cleanup_failure",
+    )
 }
 
 internal fun deleteViewerTemporaryFile(
@@ -202,5 +196,5 @@ internal fun deleteViewerTemporaryFile(
         val directory = pdfMakerCacheDirectory(context).canonicalFile
         val temporaryFile = File(path).canonicalFile
         if (temporaryFile.parentFile == directory && temporaryFile.isFile) temporaryFile.delete()
-    }.onFailure { Log.w("PdfViewer", "Unable to delete temporary PDF", it) }
+    }.onFailure(::reportViewerCleanupFailure)
 }
