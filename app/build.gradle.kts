@@ -1,7 +1,15 @@
+import io.gitlab.arturbosch.detekt.Detekt
+import kotlinx.kover.gradle.plugin.dsl.CoverageUnit
+import org.jlleitschuh.gradle.ktlint.reporter.ReporterType
+
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.detekt)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kover)
+    alias(libs.plugins.ktlint)
+    alias(libs.plugins.owasp.dependency.check)
 }
 
 android {
@@ -13,39 +21,143 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isDebuggable = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                "proguard-rules.pro",
             )
         }
     }
+
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
+
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = "17"
     }
+
     buildFeatures {
         compose = true
     }
 
-    // ── 16 KB page-size compliance ────────────────────────────────────────────
-    // Required for Google Play submissions targeting Android 15+ (API 35+).
-    // Ensures .so files are extracted and loaded with correct alignment.
+    // Android 15+ requires 16 KB page-aligned native libraries.
     packaging {
         jniLibs {
             useLegacyPackaging = false
         }
+        resources {
+            excludes += setOf(
+                "/META-INF/{AL2.0,LGPL2.1}",
+                "META-INF/DEPENDENCIES",
+                "META-INF/LICENSE*",
+                "META-INF/NOTICE*",
+            )
+        }
     }
+
+    lint {
+        abortOnError = true
+        absolutePaths = false
+        checkDependencies = true
+        checkReleaseBuilds = true
+        explainIssues = true
+        htmlReport = true
+        lintConfig = rootProject.file("config/lint/lint.xml")
+        sarifReport = true
+        textReport = true
+        warningsAsErrors = true
+        xmlReport = true
+    }
+
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = false
+        }
+    }
+}
+
+detekt {
+    allRules = false
+    autoCorrect = false
+    buildUponDefaultConfig = true
+    baseline = rootProject.file("config/detekt/baseline.xml")
+    config.setFrom(rootProject.files("config/detekt/detekt.yml"))
+    parallel = true
+}
+
+ktlint {
+    version.set(libs.versions.ktlintEngine)
+    baseline.set(rootProject.file("config/ktlint/baseline.xml"))
+    ignoreFailures.set(false)
+    outputToConsole.set(true)
+    reporters {
+        reporter(ReporterType.CHECKSTYLE)
+        reporter(ReporterType.PLAIN)
+        reporter(ReporterType.SARIF)
+    }
+    filter {
+        exclude("**/generated/**")
+    }
+}
+
+tasks.withType<Detekt>().configureEach {
+    jvmTarget = "17"
+    reports {
+        html.required.set(true)
+        md.required.set(true)
+        sarif.required.set(true)
+        txt.required.set(false)
+        xml.required.set(true)
+    }
+}
+
+kover {
+    reports {
+        filters {
+            excludes {
+                classes(
+                    "*.BuildConfig",
+                    "*.R",
+                    "*.R$*",
+                    "*.ComposableSingletons*",
+                )
+            }
+        }
+        total {
+            html {
+                onCheck = false
+            }
+            xml {
+                onCheck = false
+            }
+        }
+        verify {
+            // This is an honest initial floor for a UI-heavy legacy baseline. Raise it only with tested behavior.
+            rule("staged global line coverage") {
+                minBound(1, CoverageUnit.LINE)
+            }
+            rule("staged global branch coverage") {
+                minBound(1, CoverageUnit.BRANCH)
+            }
+        }
+    }
+}
+
+dependencyCheck {
+    failBuildOnCVSS = 7.0F
+    formats = listOf("HTML", "JSON", "SARIF")
 }
 
 dependencies {
@@ -57,35 +169,25 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material.icons.extended)
+    implementation(libs.androidx.appcompat)
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+    implementation(libs.androidx.exifinterface)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.coil.compose)
+    implementation(libs.google.mlkit.text.recognition)
+    implementation(libs.kotlinx.coroutines.play.services)
 
-    // Material Icons Extended (for all icons)
-    implementation("androidx.compose.material:material-icons-extended")
-
-    // AppCompat — required for AppCompatDelegate (dark mode + locale switching)
-    implementation("androidx.appcompat:appcompat:1.7.0")
-
-    // ── CameraX 1.4.0 — first version with 16 KB page-aligned native libs ────
-    val camerax_version = "1.4.0"
-    implementation("androidx.camera:camera-core:$camerax_version")
-    implementation("androidx.camera:camera-camera2:$camerax_version")
-    implementation("androidx.camera:camera-lifecycle:$camerax_version")
-    implementation("androidx.camera:camera-view:$camerax_version")
-
-    // ── ExifInterface — correct photo orientation on load ────────────────────
-    implementation("androidx.exifinterface:exifinterface:1.3.7")
-
-    // ── lifecycle-runtime-compose — non-deprecated LocalLifecycleOwner ───────
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
-
-    // ── Coil — async image loading (thumbnail strip in Smart Scan) ────────────
-    implementation("io.coil-kt:coil-compose:2.5.0")
-    implementation("com.google.mlkit:text-recognition:16.0.1")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
     testImplementation(libs.junit)
+
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

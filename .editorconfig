@@ -10,8 +10,12 @@ trim_trailing_whitespace = true
 indent_style = space
 indent_size = 4
 continuation_indent_size = 4
-max_line_length = 120
-ktlint_code_style = android_studio
+max_line_length = 160
+ktlint_code_style = ktlint_official
+ij_kotlin_allow_trailing_comma = true
+ij_kotlin_allow_trailing_comma_on_call_site = true
+ktlint_function_naming_ignore_when_annotated_with = Composable,Test
+ktlint_standard_no-wildcard-imports = disabled
 
 [*.{xml,yml,yaml,json,toml}]
 indent_style = space

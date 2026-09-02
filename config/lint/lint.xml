@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!-- Dependabot owns version freshness; lint remains strict for product and security defects. -->
+    <issue id="AndroidGradlePluginVersion,GradleDependency" severity="ignore" />
+</lint>
