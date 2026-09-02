@@ -1,6 +1,5 @@
 package com.example.pdfmaker
 
-import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -117,7 +116,7 @@ internal fun ViewerTopBar(
 @Composable
 internal fun ViewerBottomBar(
     visible: Boolean,
-    pages: List<Bitmap>,
+    pages: List<ViewerPageArtifact>,
     currentPage: Int,
     totalPages: Int,
     isLoading: Boolean,
@@ -151,9 +150,12 @@ internal fun ViewerBottomBar(
                         contentPadding = PaddingValues(horizontal = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        itemsIndexed(pages) { index, bitmap ->
+                        itemsIndexed(
+                            items = pages,
+                            key = { _, artifact -> artifact.file.absolutePath },
+                        ) { index, artifact ->
                             ViewerThumbnail(
-                                bitmap = bitmap,
+                                artifact = artifact,
                                 page = index + 1,
                                 active = index + 1 == currentPage,
                                 onClick = { scope.launch { listState.animateScrollToItem(index) } },
@@ -206,11 +208,12 @@ internal fun ViewerBottomBar(
 
 @Composable
 private fun ViewerThumbnail(
-    bitmap: Bitmap,
+    artifact: ViewerPageArtifact,
     page: Int,
     active: Boolean,
     onClick: () -> Unit,
 ) {
+    val bitmap = rememberViewerArtifactBitmap(artifact, maxDimension = 200)
     Box(
         Modifier
             .width(46.dp)
@@ -221,12 +224,14 @@ private fun ViewerThumbnail(
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Image(
-            bitmap.asImageBitmap(),
-            contentDescription = "Page $page thumbnail",
-            contentScale = ContentScale.Fit,
-            modifier = Modifier.fillMaxSize().padding(2.dp),
-        )
+        if (bitmap != null) {
+            Image(
+                bitmap.asImageBitmap(),
+                contentDescription = "Page $page thumbnail",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize().padding(2.dp),
+            )
+        }
         Box(
             Modifier
                 .align(Alignment.BottomCenter)

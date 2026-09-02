@@ -24,7 +24,12 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -34,10 +39,15 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 
 @Composable
 internal fun ViewerPageList(
-    pages: List<Bitmap>,
+    pages: List<ViewerPageArtifact>,
     isLoading: Boolean,
     listState: LazyListState,
     scale: Float,
@@ -57,24 +67,99 @@ internal fun ViewerPageList(
         contentPadding = PaddingValues(vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        itemsIndexed(pages) { index, bitmap ->
-            Image(
-                bitmap = bitmap.asImageBitmap(),
-                contentDescription = "Page ${index + 1}",
-                contentScale = ContentScale.FillWidth,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .graphicsLayer(
-                            scaleX = scale,
-                            scaleY = scale,
-                            translationX = if (scale > 1f) offset.x else 0f,
-                            translationY = if (scale > 1f) offset.y else 0f,
-                        ).clickable(onClick = onToggleBars),
+        itemsIndexed(
+            items = pages,
+            key = { _, artifact -> artifact.file.absolutePath },
+        ) { index, artifact ->
+            ViewerPageArtifactImage(
+                artifact = artifact,
+                page = index + 1,
+                scale = scale,
+                offset = offset,
+                onToggleBars = onToggleBars,
             )
         }
         if (isLoading) item { PageLoadingPlaceholder() }
     }
+}
+
+@Composable
+private fun ViewerPageArtifactImage(
+    artifact: ViewerPageArtifact,
+    page: Int,
+    scale: Float,
+    offset: Offset,
+    onToggleBars: () -> Unit,
+) {
+    val bitmap = rememberViewerArtifactBitmap(artifact, maxDimension = 2_048)
+    val modifier =
+        Modifier
+            .fillMaxWidth()
+            .aspectRatio(artifact.aspectRatio)
+            .background(Color.White)
+            .graphicsLayer(
+                scaleX = scale,
+                scaleY = scale,
+                translationX = if (scale > 1f) offset.x else 0f,
+                translationY = if (scale > 1f) offset.y else 0f,
+            ).clickable(onClick = onToggleBars)
+
+    if (bitmap == null) {
+        Box(modifier)
+    } else {
+        Image(
+            bitmap = bitmap.asImageBitmap(),
+            contentDescription = "Page $page",
+            contentScale = ContentScale.FillBounds,
+            modifier = modifier,
+        )
+    }
+}
+
+@Composable
+internal fun rememberViewerArtifactBitmap(
+    artifact: ViewerPageArtifact,
+    maxDimension: Int,
+): Bitmap? {
+    val path = artifact.file.absolutePath
+    var bitmap by remember(path, maxDimension) { mutableStateOf<Bitmap?>(null) }
+
+    LaunchedEffect(path, maxDimension) {
+        var pending: Bitmap? = null
+        try {
+            pending = try {
+                withContext(Dispatchers.IO) {
+                    if (
+                        !ViewerPageArtifactPolicy.acceptsArtifact(
+                            artifact.width,
+                            artifact.height,
+                            artifact.file.length(),
+                        )
+                    ) {
+                        null
+                    } else {
+                        artifact.file.inputStream().use { input ->
+                            ThumbnailInput.decodeImage(input, maxDimension.coerceIn(1, 2_048))
+                        }
+                    }
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (ignoredError: Exception) {
+                null
+            }
+            currentCoroutineContext().ensureActive()
+            bitmap = pending
+            pending = null
+        } finally {
+            pending?.let { decoded -> if (!decoded.isRecycled) decoded.recycle() }
+        }
+    }
+
+    DisposableEffect(path, maxDimension) {
+        onDispose { bitmap?.let { decoded -> if (!decoded.isRecycled) decoded.recycle() } }
+    }
+    return bitmap
 }
 
 @Composable

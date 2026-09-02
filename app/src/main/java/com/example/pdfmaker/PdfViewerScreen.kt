@@ -1,6 +1,5 @@
 package com.example.pdfmaker
 
-import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -33,6 +32,8 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun PdfViewerScreen(
@@ -45,7 +46,8 @@ fun PdfViewerScreen(
     val kind = remember(file.filePath, file.name) { detectViewerFileKind(file.filePath, file.name) }
     val listState = rememberLazyListState()
 
-    var pages by remember { mutableStateOf<List<Bitmap>>(emptyList()) }
+    var pages by remember { mutableStateOf<List<ViewerPageArtifact>>(emptyList()) }
+    var pageStore by remember(file.filePath) { mutableStateOf<ViewerPageArtifactStore?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var loadedCount by remember { mutableIntStateOf(0) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -61,11 +63,13 @@ fun PdfViewerScreen(
         }
     val currentPage by remember { derivedStateOf { listState.firstVisibleItemIndex + 1 } }
 
-    DisposableEffect(file.filePath) {
-        onDispose {
-            pages.forEach { bitmap -> if (!bitmap.isRecycled) bitmap.recycle() }
-            decryptedPath?.let { deleteViewerTemporaryFile(context, it) }
-        }
+    val activePageStore = pageStore
+    DisposableEffect(activePageStore) {
+        onDispose { activePageStore?.close() }
+    }
+    DisposableEffect(decryptedPath) {
+        val temporaryPath = decryptedPath
+        onDispose { temporaryPath?.let { deleteViewerTemporaryFile(context, it) } }
     }
 
     if (isLocked) {
@@ -85,9 +89,9 @@ fun PdfViewerScreen(
     }
 
     LaunchedEffect(viewFile.filePath, kind, screenWidth) {
-        val previousPages = pages
+        pageStore?.close()
+        pageStore = null
         pages = emptyList()
-        previousPages.forEach { bitmap -> if (!bitmap.isRecycled) bitmap.recycle() }
         listState.scrollToItem(0)
         scale = 1f
         offset = Offset.Zero
@@ -97,6 +101,8 @@ fun PdfViewerScreen(
 
         if (!canRenderInApp(kind)) return@LaunchedEffect
 
+        val nextStore = ViewerPageArtifactStore.create(context)
+        pageStore = nextStore
         try {
             val targetWidth =
                 viewerTargetWidth(
@@ -104,13 +110,31 @@ fun PdfViewerScreen(
                     density = context.resources.displayMetrics.density,
                 )
             pageStreamForFile(viewFile, kind, targetWidth).collect { bitmap ->
-                pages = pages + bitmap
-                loadedCount += 1
+                try {
+                    val artifact = withContext(Dispatchers.IO) {
+                        nextStore.persist(bitmap, loadedCount)
+                    }
+                    pages = pages + artifact
+                    loadedCount += 1
+                } finally {
+                    if (!bitmap.isRecycled) bitmap.recycle()
+                }
             }
-            if (loadedCount == 0) errorMessage = "This document could not be rendered."
+            if (loadedCount == 0) {
+                errorMessage = "This document could not be rendered."
+                pages = emptyList()
+                nextStore.close()
+                if (pageStore === nextStore) pageStore = null
+            }
         } catch (cancellation: CancellationException) {
+            pages = emptyList()
+            nextStore.close()
+            if (pageStore === nextStore) pageStore = null
             throw cancellation
         } catch (ignoredError: Exception) {
+            pages = emptyList()
+            nextStore.close()
+            if (pageStore === nextStore) pageStore = null
             errorMessage = viewerErrorMessage(ignoredError)
         } finally {
             isLoading = false
