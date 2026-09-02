@@ -8,13 +8,17 @@ import android.graphics.Matrix
 import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 
-internal fun loadPageStates(context: Context, uri: Uri): List<PageState> =
-    withSafePdfRenderer(context, uri) { renderer ->
+internal suspend fun loadPageStates(context: Context, uri: Uri): List<PageState> {
+    val loadContext = currentCoroutineContext()
+    return withSafePdfRenderer(context, uri) { renderer ->
         val pageCount = PageEditPolicy.requireSupportedPageCount(renderer.pageCount)
         val loadedPages = mutableListOf<PageState>()
         try {
             repeat(pageCount) { pageIndex ->
+                loadContext.ensureActive()
                 renderer.openPage(pageIndex).use { page ->
                     val target = RenderSizing.fitWithin(page.width, page.height, 200)
                         ?: error("PDF page has invalid dimensions")
@@ -25,12 +29,14 @@ internal fun loadPageStates(context: Context, uri: Uri): List<PageState> =
                     )
                     try {
                         Canvas(bitmap).drawColor(Color.WHITE)
+                        loadContext.ensureActive()
                         page.render(
                             bitmap,
                             null,
                             null,
                             PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY,
                         )
+                        loadContext.ensureActive()
                         loadedPages += PageState(bitmap)
                     } catch (error: Throwable) {
                         bitmap.recycle()
@@ -38,12 +44,20 @@ internal fun loadPageStates(context: Context, uri: Uri): List<PageState> =
                     }
                 }
             }
+            loadContext.ensureActive()
             loadedPages
         } catch (error: Throwable) {
-            loadedPages.forEach { it.bitmap.recycle() }
+            recyclePageStates(loadedPages)
             throw error
         }
     }
+}
+
+internal fun recyclePageStates(pages: Iterable<PageState>) {
+    pages.forEach { page ->
+        if (!page.bitmap.isRecycled) page.bitmap.recycle()
+    }
+}
 
 internal fun savePages(
     context: Context,
@@ -123,4 +137,3 @@ internal fun savePages(
     }
     outputFile.absolutePath to outputFile.name
 }.getOrNull()
-

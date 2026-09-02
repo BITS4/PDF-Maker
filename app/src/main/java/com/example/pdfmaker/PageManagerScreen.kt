@@ -35,10 +35,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.IOException
+import java.util.concurrent.atomic.AtomicReference
 
 internal data class PageState(
     val bitmap  : Bitmap,
@@ -61,45 +67,67 @@ fun PageManagerScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit = {}) {
     var outPath    by remember { mutableStateOf("") }
     var outName    by remember { mutableStateOf("") }
     var errMsg     by remember { mutableStateOf("") }
-    val latestPages by rememberUpdatedState(pages)
+    val loadCoordinator = remember { PageLoadCoordinator() }
+    val ownedPages = remember { AtomicReference<List<PageState>>(emptyList()) }
+    val activeLoad = remember { AtomicReference<Job?>(null) }
 
     DisposableEffect(Unit) {
         onDispose {
-            latestPages.forEach { page ->
-                if (!page.bitmap.isRecycled) page.bitmap.recycle()
-            }
+            loadCoordinator.invalidate()
+            activeLoad.getAndSet(null)?.cancel()
+            recyclePageStates(ownedPages.getAndSet(emptyList()))
         }
     }
 
     fun loadPdf(uri: Uri) {
-        scope.launch {
+        val request = loadCoordinator.begin(uri.toString())
+        val nextJob = scope.launch(start = CoroutineStart.LAZY) {
+            val activeJob = checkNotNull(coroutineContext[Job])
+            val loadedPages = AtomicReference<List<PageState>?>(null)
+            fun showLoadFailure(error: Exception) {
+                if (loadCoordinator.isCurrent(request)) {
+                    recyclePageStates(ownedPages.getAndSet(emptyList()))
+                    pages = emptyList()
+                    errMsg = error.message ?: "Could not read this PDF"
+                    pmState = PmState.ERROR
+                }
+            }
             loading   = true
             pickedUri = uri
             pickedName = uri.lastPathSegment
                 ?.substringAfterLast("/")?.substringAfterLast("%2F")
                 ?.removeSuffix(".pdf")?.take(40) ?: "document"
-            val result = withContext(Dispatchers.IO) {
-                runCatching { loadPageStates(context, uri) }
+            try {
+                withContext(Dispatchers.IO) {
+                    loadedPages.set(loadPageStates(context, uri))
+                }
+                coroutineContext.ensureActive()
+                if (!loadCoordinator.isCurrent(request)) return@launch
+
+                val replacement = checkNotNull(loadedPages.getAndSet(null)) {
+                    "The PDF preview did not return any pages"
+                }
+                recyclePageStates(ownedPages.getAndSet(replacement))
+                pages = replacement
+                pmState = PmState.EDIT
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: IOException) {
+                showLoadFailure(error)
+            } catch (error: SecurityException) {
+                showLoadFailure(error)
+            } catch (error: IllegalArgumentException) {
+                showLoadFailure(error)
+            } catch (error: IllegalStateException) {
+                showLoadFailure(error)
+            } finally {
+                loadedPages.getAndSet(null)?.let(::recyclePageStates)
+                if (loadCoordinator.isCurrent(request)) loading = false
+                activeLoad.compareAndSet(activeJob, null)
             }
-            result.fold(
-                onSuccess = { loadedPages ->
-                    pages.forEach { page ->
-                        if (!page.bitmap.isRecycled) page.bitmap.recycle()
-                    }
-                    pages = loadedPages
-                    pmState = PmState.EDIT
-                },
-                onFailure = { error ->
-                    pages.forEach { page ->
-                        if (!page.bitmap.isRecycled) page.bitmap.recycle()
-                    }
-                    pages = emptyList()
-                    errMsg = error.message ?: "Could not read this PDF"
-                    pmState = PmState.ERROR
-                },
-            )
-            loading = false
         }
+        activeLoad.getAndSet(nextJob)?.cancel()
+        nextJob.start()
     }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
