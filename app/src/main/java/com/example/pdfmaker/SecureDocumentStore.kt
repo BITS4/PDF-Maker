@@ -37,8 +37,9 @@ object SecureDocumentStore {
             if (isLocked(target)) return@safely "File is already locked"
             val plaintextLength = SecureDocumentLimits.requirePlaintextLength(target.length())
             transformAtomically(target) { input, output ->
+                beforeChunk()
                 SecureDocumentCodec.encrypt(
-                    input,
+                    SecureDocumentTypePolicy.verifiedInput(input),
                     output,
                     plaintextLength,
                     password,
@@ -62,7 +63,10 @@ object SecureDocumentStore {
         ) {
             val target = validateWritableFile(file)
             val encryptedLength = SecureDocumentLimits.requireEncryptedLength(target.length())
-            val decrypted = transformAtomically(target) { input, output ->
+            val decrypted = transformAtomically(
+                target = target,
+                validateOutput = SecureDocumentTypePolicy::requirePlainPdfFile,
+            ) { input, output ->
                 SecureDocumentCodec.decrypt(
                     input,
                     output,
@@ -94,10 +98,20 @@ object SecureDocumentStore {
         bytes: ByteArray,
         password: String,
         baseName: String,
+    ): Pair<String, String>? = encryptedCopy(getPdfMakerDir(context), bytes, password, baseName)
+
+    internal fun encryptedCopy(
+        destinationDirectory: File,
+        bytes: ByteArray,
+        password: String,
+        baseName: String,
     ): Pair<String, String>? = safely(onFailure = { null }) {
         SecureDocumentLimits.requirePlaintextLength(bytes.size.toLong())
+        SecureDocumentTypePolicy.requirePlainPdf(
+            bytes.copyOfRange(0, minOf(bytes.size, SecureDocumentTypePolicy.SIGNATURE_BYTES)),
+        )
         val output = OutputStore.writeUnique(
-            getPdfMakerDir(context),
+            destinationDirectory,
             "${SafeFileName.baseName(baseName)}_locked",
             "pdf",
         ) { destination ->
@@ -123,16 +137,18 @@ object SecureDocumentStore {
             "pdf",
             beforeCommit = beforeChunk,
         ) { destination ->
+            val validatingOutput = PlainPdfValidatingOutputStream(destination)
             val decrypted = FileInputStream(inputFile).use { input ->
                 SecureDocumentCodec.decrypt(
                     input,
-                    destination,
+                    validatingOutput,
                     encryptedLength,
                     password,
                     beforeChunk,
                 )
             }
             if (!decrypted) throw SecureDocumentRejectedException()
+            validatingOutput.requirePlainPdf()
         }
     }
 
@@ -145,6 +161,7 @@ object SecureDocumentStore {
 
     private fun transformAtomically(
         target: File,
+        validateOutput: (File) -> Unit = {},
         transform: (InputStream, OutputStream) -> Boolean,
     ): Boolean {
         val parent = requireNotNull(target.parentFile?.canonicalFile) { "File has no parent directory" }
@@ -163,6 +180,7 @@ object SecureDocumentStore {
                 }
             }
             if (!transformed) return false
+            validateOutput(temporary)
             moveReplacing(temporary, target)
             committed = true
             return true

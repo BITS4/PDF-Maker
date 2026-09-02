@@ -51,9 +51,11 @@ fun LockPdfScreen(onBack: () -> Unit) {
     var outName     by remember { mutableStateOf("") }
     var errMsg      by remember { mutableStateOf("") }
 
-    // All files that are NOT yet locked
+    // Only PDFs that are not yet locked can enter the secure-document flow.
     val allFiles = FileCache.files
-    val unlocked = remember(allFiles) { allFiles.filter { !isLockedFile(it.filePath) } }
+    val unlocked = remember(allFiles) {
+        LockPdfSelectionPolicy.unlockedPdfCandidates(allFiles, ::isLockedFile)
+    }
 
     Box(Modifier.fillMaxSize().background(currentBg)) {
         Column(Modifier.fillMaxSize()) {

@@ -276,7 +276,7 @@ class SecureDocumentStoreTest {
 
     @Test
     fun wrongPasswordPreservesEncryptedFileByteForByte() {
-        val file = temporaryFolder.newFile("private.pdf").apply { writeText("secret") }
+        val file = temporaryFolder.newFile("private.pdf").apply { writeText("%PDF-1.7\nsecret") }
         assertNull(SecureDocumentStore.lockInPlace(file, "password"))
         val before = file.readBytes()
 
@@ -287,7 +287,7 @@ class SecureDocumentStoreTest {
 
     @Test
     fun tamperedCiphertextPreservesTheOriginalFileAndCleansTemporaryOutput() {
-        val file = temporaryFolder.newFile("tampered.pdf").apply { writeText("secret") }
+        val file = temporaryFolder.newFile("tampered.pdf").apply { writeText("%PDF-1.7\nsecret") }
         assertNull(SecureDocumentStore.lockInPlace(file, "password"))
         java.io.RandomAccessFile(file, "rw").use { randomAccess ->
             randomAccess.seek(randomAccess.length() - 1)
@@ -321,7 +321,7 @@ class SecureDocumentStoreTest {
                 .contains("invalid or unsupported"),
         )
 
-        val locked = temporaryFolder.newFile("locked.pdf").apply { writeText("content") }
+        val locked = temporaryFolder.newFile("locked.pdf").apply { writeText("%PDF-1.7\ncontent") }
         assertNull(SecureDocumentStore.lockInPlace(locked, "password"))
         val before = locked.readBytes()
         assertTrue(SecureDocumentStore.lockInPlace(locked, "password")!!.contains("already locked"))
@@ -380,7 +380,8 @@ class SecureDocumentStoreTest {
 
     @Test
     fun cancellationPropagatesAndAtomicLockPreservesTheOriginal() {
-        val original = ByteArray(64 * 1024) { index -> index.toByte() }
+        val original = "%PDF-1.7\n".toByteArray() +
+            ByteArray(64 * 1024) { index -> index.toByte() }
         val source = temporaryFolder.newFile("cancelled.pdf").apply { writeBytes(original) }
         var checks = 0
 
