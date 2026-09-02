@@ -2,6 +2,9 @@
 .github
 .gradle
 .idea
+.env
+.env.*
+!.env.example
 **/build
 captures
 local.properties

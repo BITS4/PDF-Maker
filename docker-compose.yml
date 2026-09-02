@@ -1,0 +1,21 @@
+services:
+  verify:
+    build:
+      context: .
+      target: development
+    working_dir: /workspace
+    command:
+      - ./gradlew
+      - verify
+      - --no-daemon
+      - --stacktrace
+      - --project-cache-dir
+      - /tmp/pdf-maker-project-cache
+    environment:
+      GRADLE_USER_HOME: /root/.gradle
+    volumes:
+      - .:/workspace
+      - pdf-maker-gradle-cache:/root/.gradle
+
+volumes:
+  pdf-maker-gradle-cache:
