@@ -2,6 +2,7 @@ package com.example.pdfmaker
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
@@ -17,6 +18,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import java.io.ByteArrayOutputStream
 import java.io.File
 
@@ -88,23 +91,23 @@ internal fun CompressingAnimation(progress: Int, accent: Color) {
 
 // ── Core compression logic ────────────────────────────────────────────────────
 
-internal fun compressPdf(
+internal suspend fun compressPdf(
     context: Context,
     uri: Uri,
     level: CompressLevel,
     baseName: String,
     onProg: (Int) -> Unit,
-): File? = runCatching {
-    withSafePdfRenderer(context, uri) { renderer ->
-        val pageCount = renderer.pageCount
-        require(pageCount > 0) { "The PDF has no pages" }
+): File {
+    val operationContext = currentCoroutineContext()
+    return withSafePdfRenderer(context, uri) { renderer ->
+        val pageCount = CompressionPolicy.requirePageCount(renderer.pageCount)
         val outputDocument = PdfDocument()
         try {
             repeat(pageCount) { pageIndex ->
+                operationContext.ensureActive()
                 onProg((pageIndex * 90) / pageCount)
                 renderer.openPage(pageIndex).use { page ->
-                    val target = RenderSizing.fitWithin(page.width, page.height, level.maxDimPx)
-                        ?: error("PDF page has invalid dimensions")
+                    val target = CompressionPolicy.renderSize(page.width, page.height, level.maxDimPx)
                     val sourceBitmap = Bitmap.createBitmap(
                         target.width,
                         target.height,
@@ -112,18 +115,27 @@ internal fun compressPdf(
                     )
                     try {
                         android.graphics.Canvas(sourceBitmap).drawColor(android.graphics.Color.WHITE)
+                        val transform = Matrix().apply {
+                            setScale(
+                                target.width.toFloat() / page.width.toFloat(),
+                                target.height.toFloat() / page.height.toFloat(),
+                            )
+                        }
                         page.render(
                             sourceBitmap,
                             null,
-                            null,
+                            transform,
                             PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY,
                         )
+                        operationContext.ensureActive()
                         val jpegBytes = ByteArrayOutputStream().use { encoded ->
                             check(
                                 sourceBitmap.compress(
                                     Bitmap.CompressFormat.JPEG,
                                     level.jpegQuality,
-                                    encoded,
+                                    BoundedIo.limit(encoded, CompressionPolicy.MAX_ENCODED_PAGE_BYTES) {
+                                        operationContext.ensureActive()
+                                    },
                                 ),
                             ) { "Could not encode compressed PDF page" }
                             encoded.toByteArray()
@@ -158,17 +170,23 @@ internal fun compressPdf(
                 directory = getPdfMakerDir(context),
                 requestedBaseName = "compressed_${baseName}_${level.label.lowercase()}",
                 extension = "pdf",
-            ) { outputDocument.writeTo(it) }
+                beforeCommit = { operationContext.ensureActive() },
+            ) { output ->
+                operationContext.ensureActive()
+                outputDocument.writeTo(BoundedIo.limit(output, CompressionPolicy.MAX_OUTPUT_BYTES) {
+                    operationContext.ensureActive()
+                })
+            }
         } finally {
             outputDocument.close()
         }
     }.also { onProg(100) }
-}.getOrNull()
+}
 
 // ── Share compressed file ─────────────────────────────────────────────────────
 
-internal fun shareCompressedFile(context: Context, file: File) {
-    try {
+internal fun shareCompressedFile(context: Context, file: File): Result<Unit> =
+    runCatching {
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
         val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
             type = "application/pdf"
@@ -176,8 +194,7 @@ internal fun shareCompressedFile(context: Context, file: File) {
             addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         context.startActivity(android.content.Intent.createChooser(intent, "Share compressed PDF"))
-    } catch (_: Exception) {}
-}
+    }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -185,4 +202,3 @@ internal fun formatSize(kb: Long): String = when {
     kb >= 1024 -> "%.1f MB".format(kb / 1024f)
     else       -> "$kb KB"
 }
-

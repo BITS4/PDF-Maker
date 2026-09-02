@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -91,28 +92,25 @@ fun CompressScreen(onBack: () -> Unit) {
                     scope.launch(Dispatchers.Main) { progress = p }
                 }
                 withContext(Dispatchers.Main) {
-                    if (out != null) {
-                        resultFile   = out
-                        resultSizeKb = out.length() / 1024
-                        // Register immediately so it shows on home/files screen
-                        val pageCount = PdfFileMetadata.pageCount(out)
-                        FileCache.prependFile(
-                            PdfFile(
-                                name         = out.name,
-                                filePath     = out.absolutePath,
-                                size         = formatSize(resultSizeKb),
-                                date         = java.text.SimpleDateFormat("MM/dd HH:mm", java.util.Locale.getDefault())
-                                                   .format(java.util.Date()),
-                                pageCount    = pageCount,
-                                lastModified = out.lastModified()
-                            )
+                    resultFile   = out
+                    resultSizeKb = out.length() / 1024
+                    // Register immediately so it shows on home/files screen
+                    val pageCount = PdfFileMetadata.pageCount(out)
+                    FileCache.prependFile(
+                        PdfFile(
+                            name         = out.name,
+                            filePath     = out.absolutePath,
+                            size         = formatSize(resultSizeKb),
+                            date         = java.text.SimpleDateFormat("MM/dd HH:mm", java.util.Locale.getDefault())
+                                               .format(java.util.Date()),
+                            pageCount    = pageCount,
+                            lastModified = out.lastModified()
                         )
-                        state = CompressState.DONE
-                    } else {
-                        errorMsg = "Compression failed. The file may be encrypted or corrupted."
-                        state    = CompressState.ERROR
-                    }
+                    )
+                    state = CompressState.DONE
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     errorMsg = e.message ?: "Unknown error"
@@ -395,7 +393,12 @@ fun CompressScreen(onBack: () -> Unit) {
                         val file = resultFile
                         Button(
                             onClick = {
-                                if (file != null) shareCompressedFile(context, file)
+                                if (file != null) {
+                                    shareCompressedFile(context, file).onFailure { error ->
+                                        errorMsg = error.message ?: "This PDF could not be shared."
+                                        state = CompressState.ERROR
+                                    }
+                                }
                             },
                             modifier = Modifier.fillMaxWidth().height(52.dp),
                             shape    = RoundedCornerShape(14.dp),
