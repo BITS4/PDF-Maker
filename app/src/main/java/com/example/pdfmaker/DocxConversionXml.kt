@@ -1,46 +1,61 @@
 package com.example.pdfmaker
 
-import java.io.StringReader
-import javax.xml.parsers.SAXParserFactory
 import org.xml.sax.Attributes
-import org.xml.sax.InputSource
-import org.xml.sax.SAXException
 import org.xml.sax.helpers.DefaultHandler
 
-internal fun parseConversionRelationships(xml: String): Map<String, String> {
+internal fun parseConversionRelationships(
+    xml: String,
+    checkCancellation: () -> Unit = {},
+): Map<String, String> {
     val handler = ConversionRelationshipHandler()
-    parseConversionXml(xml, handler)
-    return handler.relationships.toMap()
+    SecureSaxParser.parse(xml, handler, checkCancellation = checkCancellation)
+    return handler.result()
 }
 
 internal fun parseConversionDocument(
     xml: String,
     relationships: Map<String, String>,
+    checkCancellation: () -> Unit = {},
 ): List<DocBlock> {
     val handler = ConversionDocumentHandler(relationships)
-    parseConversionXml(xml, handler)
+    SecureSaxParser.parse(xml, handler, checkCancellation = checkCancellation)
     return handler.result()
 }
 
-private fun parseConversionXml(xml: String, handler: DefaultHandler) {
-    require(!xml.contains("<!DOCTYPE", ignoreCase = true)) { "DOCTYPE is not allowed" }
-    require(!xml.contains("<!ENTITY", ignoreCase = true)) { "XML entities are not allowed" }
-    val parser = SAXParserFactory.newInstance().apply { isNamespaceAware = true }.newSAXParser()
-    parser.xmlReader.entityResolver = org.xml.sax.EntityResolver { _, _ ->
-        throw SAXException("External XML entities are not allowed")
-    }
-    parser.parse(InputSource(StringReader(xml)), handler)
-}
-
 private class ConversionRelationshipHandler : DefaultHandler() {
-    val relationships = mutableMapOf<String, String>()
+    private val relationships = mutableMapOf<String, String>()
+    private var rootSeen = false
 
-    override fun startElement(uri: String?, localName: String?, qName: String?, attributes: Attributes) {
-        if (xmlName(localName, qName) != "Relationship") return
-        val id = attributes.localValue("Id")
-        val target = attributes.localValue("Target").replace('\\', '/')
-        val parent = target.substringBeforeLast('/', "")
-        if (id.isEmpty() || !parent.endsWith("media")) return
+    override fun startElement(
+        uri: String?,
+        localName: String?,
+        qName: String?,
+        attributes: Attributes,
+    ) {
+        val namespace = uri.orEmpty()
+        val name = xmlName(localName, qName)
+        if (!rootSeen) {
+            rootSeen = true
+            require(name == "Relationships" && namespace in OoxmlNamespaces.packageRelationships) {
+                "DOCX relationships use an unsupported namespace"
+            }
+            return
+        }
+        if (name == "Relationship" && namespace in OoxmlNamespaces.packageRelationships) {
+            captureRelationship(attributes)
+        }
+    }
+
+    private fun captureRelationship(attributes: Attributes) {
+        val id = attributes.valueIn("Id", UNQUALIFIED_NAMESPACE)
+        val target = attributes.valueIn("Target", UNQUALIFIED_NAMESPACE).replace('\\', '/')
+        val targetMode = attributes.valueIn("TargetMode", UNQUALIFIED_NAMESPACE)
+        val relationshipType = attributes.valueIn("Type", UNQUALIFIED_NAMESPACE)
+        if (id.isEmpty()) return
+        if (targetMode.equals("External", ignoreCase = true)) return
+        if (relationshipType !in OoxmlNamespaces.imageRelationships) return
+        if (target.substringBeforeLast('/', "") != "media") return
+        if (target.substringAfterLast('/').isEmpty()) return
         require(id !in relationships) { "DOCX contains duplicate relationship identifiers" }
         DocxConversionPolicy.requireCanAdd(
             relationships.size,
@@ -49,17 +64,24 @@ private class ConversionRelationshipHandler : DefaultHandler() {
         )
         relationships[id] = target.substringAfterLast('/')
     }
+
+    fun result(): Map<String, String> {
+        require(rootSeen) { "DOCX relationships are empty" }
+        return relationships.toMap()
+    }
 }
 
 private class ConversionDocumentHandler(
     private val relationships: Map<String, String>,
 ) : DefaultHandler() {
     private val blocks = mutableListOf<DocBlock>()
+    private var rootSeen = false
     private var inBody = false
     private var inParagraph = false
     private var inRun = false
     private var inRunProperties = false
-    private var inText = false
+    private var depth = 0
+    private var textElementDepth: Int? = null
     private var paragraphHasStandaloneBlock = false
     private var bold = false
     private var italic = false
@@ -69,52 +91,159 @@ private class ConversionDocumentHandler(
     private val runText = StringBuilder()
     private var totalTextCharacters = 0
 
-    @Suppress("CyclomaticComplexMethod")
-    override fun startElement(uri: String?, localName: String?, qName: String?, attributes: Attributes) {
-        when (xmlName(localName, qName)) {
+    override fun startElement(
+        uri: String?,
+        localName: String?,
+        qName: String?,
+        attributes: Attributes,
+    ) {
+        depth += 1
+        val namespace = uri.orEmpty()
+        val name = xmlName(localName, qName)
+        validateDocumentRoot(namespace, name)
+        when {
+            namespace in OoxmlNamespaces.wordProcessing -> {
+                startWordElement(name, attributes)
+            }
+
+            namespace in OoxmlNamespaces.drawing && name == "blip" && inParagraph -> {
+                addImage(attributes.valueIn("embed", OoxmlNamespaces.officeRelationships))
+            }
+
+            namespace == OoxmlNamespaces.VML && name == "imagedata" && inParagraph -> {
+                addImage(attributes.valueIn("id", OoxmlNamespaces.officeRelationships))
+            }
+        }
+    }
+
+    private fun validateDocumentRoot(
+        namespace: String,
+        name: String,
+    ) {
+        if (rootSeen) return
+        rootSeen = true
+        require(name == "document" && namespace in OoxmlNamespaces.wordProcessing) {
+            "DOCX document uses an unsupported namespace"
+        }
+    }
+
+    private fun startWordElement(
+        name: String,
+        attributes: Attributes,
+    ) {
+        when (name) {
+            "body", "p", "r", "rPr", "t" -> startWordStructure(name)
+            "tab", "pStyle", "br" -> applyWordTextControl(name, attributes)
+            "b", "i", "sz" -> applyRunProperty(name, attributes)
+        }
+    }
+
+    private fun startWordStructure(name: String) {
+        when (name) {
             "body" -> inBody = true
-            "p" -> if (inBody) startParagraph()
-            "r" -> if (inParagraph) startRun()
-            "rPr" -> inRunProperties = true
-            "t" -> if (inRun) inText = true
-            "tab" -> if (inRun) appendText("\t")
-            "pStyle" -> if (inParagraph) paragraphStyle = attributes.localValue("val")
-            "b" -> if (inRunProperties && inRun) bold = attributes.isEnabledProperty()
-            "i" -> if (inRunProperties && inRun) italic = attributes.isEnabledProperty()
-            "sz" -> if (inRunProperties && inRun) {
-                attributes.localValue("val").toFloatOrNull()?.let { value ->
+            "p" -> if (inBody && !inParagraph) startParagraph()
+            "r" -> if (inParagraph && !inRun) startRun()
+            "rPr" -> if (inRun) inRunProperties = true
+            "t" -> if (inRun && !inRunProperties && textElementDepth == null) textElementDepth = depth
+        }
+    }
+
+    private fun applyWordTextControl(
+        name: String,
+        attributes: Attributes,
+    ) {
+        when (name) {
+            "tab" -> {
+                if (inRun) appendText("\t")
+            }
+
+            "pStyle" -> {
+                if (inParagraph) {
+                    paragraphStyle = attributes.valueIn("val", OoxmlNamespaces.wordProcessing)
+                }
+            }
+
+            "br" -> {
+                if (inRun) {
+                    if (attributes.valueIn("type", OoxmlNamespaces.wordProcessing) == "page") {
+                        addPageBreak()
+                    } else {
+                        appendText("\n")
+                    }
+                }
+            }
+        }
+    }
+
+    private fun applyRunProperty(
+        name: String,
+        attributes: Attributes,
+    ) {
+        if (!inRunProperties || !inRun) return
+        when (name) {
+            "b" -> {
+                bold = attributes.isEnabledWordProperty()
+            }
+
+            "i" -> {
+                italic = attributes.isEnabledWordProperty()
+            }
+
+            "sz" -> {
+                attributes.valueIn("val", OoxmlNamespaces.wordProcessing).toFloatOrNull()?.let { value ->
                     fontSize = (value / 2f).coerceIn(7f, 72f)
                 }
             }
-            "br" -> if (attributes.localValue("type") == "page") addPageBreak() else appendText("\n")
-            "blip" -> addImage(attributes.localValue("embed"))
-            "imagedata" -> addImage(attributes.localValue("id"))
         }
     }
 
-    override fun characters(characters: CharArray, start: Int, length: Int) {
-        if (length <= 0 || !isCollectingRunText()) return
-        appendText(String(characters, start, length))
+    override fun characters(
+        characters: CharArray,
+        start: Int,
+        length: Int,
+    ) {
+        if (length > 0 && isCollectingRunText()) appendText(String(characters, start, length))
     }
 
-    private fun isCollectingRunText(): Boolean =
-        inText && inRun && inParagraph && !inRunProperties
+    private fun isCollectingRunText(): Boolean = depth == textElementDepth && inRun && inParagraph && !inRunProperties
 
-    override fun endElement(uri: String?, localName: String?, qName: String?) {
-        when (xmlName(localName, qName)) {
-            "t" -> inText = false
-            "rPr" -> inRunProperties = false
-            "r" -> {
-                flushRun()
-                inRun = false
-                inText = false
+    override fun endElement(
+        uri: String?,
+        localName: String?,
+        qName: String?,
+    ) {
+        if (uri.orEmpty() in OoxmlNamespaces.wordProcessing) {
+            when (xmlName(localName, qName)) {
+                "t" -> {
+                    if (depth == textElementDepth) textElementDepth = null
+                }
+
+                "rPr" -> {
+                    inRunProperties = false
+                }
+
+                "r" -> {
+                    if (inRun) {
+                        flushRun()
+                        inRun = false
+                        textElementDepth = null
+                    }
+                }
+
+                "p" -> {
+                    if (inParagraph) finishParagraph()
+                }
+
+                "body" -> {
+                    inBody = false
+                }
             }
-            "p" -> finishParagraph()
-            "body" -> inBody = false
         }
+        depth -= 1
     }
 
     fun result(): List<DocBlock> {
+        require(rootSeen) { "DOCX document is empty" }
         require(blocks.isNotEmpty()) { "DOCX document body is empty" }
         return blocks.toList()
     }
@@ -129,6 +258,8 @@ private class ConversionDocumentHandler(
 
     private fun startRun() {
         inRun = true
+        inRunProperties = false
+        textElementDepth = null
         bold = false
         italic = false
         fontSize = 11f
@@ -171,13 +302,14 @@ private class ConversionDocumentHandler(
     }
 
     private fun addParagraph() {
-        val heading = when {
-            paragraphStyle.contains("Heading1", ignoreCase = true) -> 1
-            paragraphStyle.contains("Heading2", ignoreCase = true) -> 2
-            paragraphStyle.contains("Heading3", ignoreCase = true) -> 3
-            paragraphStyle.equals("Title", ignoreCase = true) -> 1
-            else -> 0
-        }
+        val heading =
+            when {
+                paragraphStyle.contains("Heading1", ignoreCase = true) -> 1
+                paragraphStyle.contains("Heading2", ignoreCase = true) -> 2
+                paragraphStyle.contains("Heading3", ignoreCase = true) -> 3
+                paragraphStyle.equals("Title", ignoreCase = true) -> 1
+                else -> 0
+            }
         addBlock(DocBlock.Paragraph(paragraphRuns.toList(), heading))
         paragraphRuns = mutableListOf()
     }
@@ -208,17 +340,23 @@ private class ConversionDocumentHandler(
     }
 }
 
-private fun xmlName(localName: String?, qualifiedName: String?): String =
-    localName?.takeIf(String::isNotEmpty) ?: qualifiedName.orEmpty().substringAfter(':')
+private fun xmlName(
+    localName: String?,
+    qualifiedName: String?,
+): String = localName?.takeIf(String::isNotEmpty) ?: qualifiedName.orEmpty().substringAfter(':')
 
-private fun Attributes.localValue(name: String): String {
+private fun Attributes.valueIn(
+    name: String,
+    namespaces: Set<String>,
+): String {
     repeat(length) { index ->
-        if (getLocalName(index) == name || getQName(index).substringAfter(':') == name) {
-            return getValue(index).orEmpty()
-        }
+        val attributeName =
+            getLocalName(index).orEmpty().takeIf(String::isNotEmpty) ?: getQName(index).orEmpty().substringAfter(':')
+        if (attributeName == name && getURI(index).orEmpty() in namespaces) return getValue(index).orEmpty()
     }
     return ""
 }
 
-private fun Attributes.isEnabledProperty(): Boolean =
-    localValue("val").lowercase() !in setOf("0", "false", "off")
+private fun Attributes.isEnabledWordProperty(): Boolean = valueIn("val", OoxmlNamespaces.wordProcessing).lowercase() !in setOf("0", "false", "off")
+
+private val UNQUALIFIED_NAMESPACE = setOf("")
