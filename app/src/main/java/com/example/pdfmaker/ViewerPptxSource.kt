@@ -6,12 +6,12 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
 import android.text.TextPaint
-import android.util.Log
 import kotlinx.coroutines.flow.FlowCollector
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
 import java.io.File
 import java.util.zip.ZipInputStream
+import timber.log.Timber
 
 private const val PRESENTATION_WIDTH_EMU = 9_144_000f
 private const val PRESENTATION_HEIGHT_EMU = 5_143_500f
@@ -187,7 +187,7 @@ private fun parseViewerSlideElements(
             event = parser.next()
         }
     } catch (ignoredError: Exception) {
-        Log.w("PdfViewer", "Unable to parse PowerPoint slide", ignoredError)
+        Timber.tag("PdfViewer").w(ignoredError, "event=presentation_slide_parse_failed")
     }
     return texts to images
 }

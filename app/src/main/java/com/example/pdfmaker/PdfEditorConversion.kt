@@ -10,16 +10,16 @@ import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.ParcelFileDescriptor
-import android.util.Log
 import androidx.compose.ui.graphics.toArgb
-import java.io.FilterOutputStream
-import java.io.File
-import java.io.OutputStream
-import java.util.zip.ZipEntry
-import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import java.io.File
+import java.io.FilterOutputStream
+import java.io.OutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
+import timber.log.Timber
 
 private const val PDF_EDITOR_LOG_TAG = "PdfEditor"
 
@@ -35,7 +35,7 @@ internal fun renderPage(
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (ignoredError: Exception) {
-        Log.w(PDF_EDITOR_LOG_TAG, "Unable to render PDF page $pageIndex", ignoredError)
+        Timber.tag(PDF_EDITOR_LOG_TAG).w(ignoredError, "event=pdf_page_render_failed page=%d", pageIndex)
         null
     }
 
@@ -88,7 +88,7 @@ internal fun pdfPageCount(
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (ignoredError: Exception) {
-        Log.w(PDF_EDITOR_LOG_TAG, "Unable to read PDF page count", ignoredError)
+        Timber.tag(PDF_EDITOR_LOG_TAG).w(ignoredError, "event=pdf_page_count_failed")
         0
     }
 

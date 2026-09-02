@@ -1,8 +1,8 @@
 package com.example.pdfmaker
 
-import android.util.Log
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
+import timber.log.Timber
 
 internal fun boundedSpreadsheetText(
     currentLength: Int,
@@ -45,7 +45,7 @@ internal fun parseViewerSharedStrings(
         }
         strings
     } catch (ignoredError: Exception) {
-        Log.w("PdfViewer", "Unable to parse spreadsheet strings", ignoredError)
+        Timber.tag("PdfViewer").w(ignoredError, "event=spreadsheet_strings_parse_failed")
         emptyList()
     }
 }
@@ -109,7 +109,7 @@ internal fun parseViewerSheet(
         }
         rows
     } catch (ignoredError: Exception) {
-        Log.w("PdfViewer", "Unable to parse spreadsheet sheet", ignoredError)
+        Timber.tag("PdfViewer").w(ignoredError, "event=spreadsheet_sheet_parse_failed")
         emptyList()
     }
 }

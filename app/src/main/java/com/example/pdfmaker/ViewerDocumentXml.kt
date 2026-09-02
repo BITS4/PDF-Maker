@@ -1,8 +1,8 @@
 package com.example.pdfmaker
 
-import android.util.Log
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
+import timber.log.Timber
 
 internal fun boundedViewerTextFragment(
     currentLength: Int,
@@ -30,7 +30,7 @@ internal fun parseViewerRelationships(xml: String): Map<String, String> {
         }
         relationships
     } catch (ignoredError: Exception) {
-        Log.w("PdfViewer", "Unable to parse document relationships", ignoredError)
+        Timber.tag("PdfViewer").w(ignoredError, "event=document_relationship_parse_failed")
         emptyMap()
     }
 }
@@ -143,7 +143,7 @@ internal fun parseViewerDocument(
         }
         blocks
     } catch (ignoredError: Exception) {
-        Log.w("PdfViewer", "Unable to parse Word document", ignoredError)
+        Timber.tag("PdfViewer").w(ignoredError, "event=word_document_parse_failed")
         emptyList()
     }
 }
