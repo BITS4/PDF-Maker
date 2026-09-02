@@ -2,6 +2,7 @@ package com.example.pdfmaker
 
 import android.content.Context
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.graphics.Color as AColor
 import android.graphics.Paint
 import android.graphics.Typeface
@@ -24,6 +25,7 @@ internal fun docxToPdf(
     baseName : String,
     onProg   : (Int, String) -> Unit
 ): File? {
+    var documentToClose: PdfDocument? = null
     return try {
         onProg(5, "Reading document…")
 
@@ -32,35 +34,62 @@ internal fun docxToPdf(
         val mediaImages = mutableMapOf<String, ByteArray>()   // "image1.jpeg" → bytes
         val relsMap     = mutableMapOf<String, String>()       // rId → target filename
 
-        context.contentResolver.openInputStream(uri)?.use { raw ->
-            ZipInputStream(raw).use { zis ->
+        val providerInput = context.contentResolver.openInputStream(uri) ?: return null
+        val stagedDocx = SafeDocxInput.stage(providerInput, File(context.cacheDir, "pdfmaker"))
+        try {
+            ZipInputStream(stagedDocx.inputStream()).use { zis ->
+                var entryCount = 0
+                var totalRead = 0L
+
+                fun readPart(limit: Long): ByteArray {
+                    val bytes = SafeDocxInput.readEntry(zis, limit)
+                    require(totalRead <= SafeDocxInput.MAX_CONVERSION_BYTES - bytes.size) {
+                        "DOCX conversion data exceeds its limit"
+                    }
+                    totalRead += bytes.size
+                    return bytes
+                }
+
                 var entry = zis.nextEntry
                 while (entry != null) {
+                    entryCount += 1
+                    require(entryCount <= SafeDocxInput.MAX_ENTRIES) { "DOCX contains too many entries" }
                     val name = entry.name
                     when {
                         name == "word/document.xml" -> {
-                            xmlContent.append(zis.bufferedReader().readText())
+                            val xml = SafeDocxInput.decodeXml(
+                                readPart(SafeDocxInput.MAX_XML_BYTES),
+                                SafeDocxInput.MAX_XML_BYTES,
+                            )
+                            xmlContent.append(xml)
                         }
                         name == "word/_rels/document.xml.rels" -> {
-                            // Parse relationship file to map rId → media filename
-                            parseRels(zis.bufferedReader().readText(), relsMap)
+                            val relationships = SafeDocxInput.decodeXml(
+                                readPart(SafeDocxInput.MAX_RELATIONSHIPS_BYTES),
+                                SafeDocxInput.MAX_RELATIONSHIPS_BYTES,
+                            )
+                            parseRels(relationships, relsMap)
                         }
                         name.startsWith("word/media/") -> {
                             val imgName = name.substringAfterLast("/")
-                            mediaImages[imgName] = zis.readBytes()
+                            require(imgName !in mediaImages) { "DOCX contains duplicate media entries" }
+                            mediaImages[imgName] = readPart(SafeDocxInput.MAX_MEDIA_BYTES)
                         }
                     }
                     zis.closeEntry()
                     entry = zis.nextEntry
                 }
             }
-        } ?: return null
+        } finally {
+            stagedDocx.delete()
+        }
 
         if (xmlContent.isEmpty()) return null
         onProg(30, "Parsing content…")
 
         // ── Step 2: parse document.xml into blocks ────────────────────────────
         val blocks = parseDocXml(xmlContent.toString(), relsMap)
+        require(blocks.size <= 50_000) { "DOCX contains too many document blocks" }
 
         onProg(50, "Rendering pages…")
 
@@ -73,7 +102,7 @@ internal fun docxToPdf(
         val marginB = 60f
         val contentW = pageW - marginL - marginR
 
-        val pdfDoc  = PdfDocument()
+        val pdfDoc = PdfDocument().also { documentToClose = it }
         var pageNum = 1
         var info    = PdfDocument.PageInfo.Builder(pageW, pageH, pageNum).create()
         var page    = pdfDoc.startPage(info)
@@ -172,11 +201,16 @@ internal fun docxToPdf(
 
                 is DocBlock.ImageBlock -> {
                     val imgBytes = mediaImages[block.name] ?: return@forEachIndexed
-                    val bmp = BitmapFactory.decodeByteArray(imgBytes, 0, imgBytes.size)
+                    val bmp = decodeBoundedDocxImage(imgBytes)
                         ?: return@forEachIndexed
 
                     val maxImgW = contentW
-                    val scale   = (maxImgW / bmp.width.toFloat()).coerceAtMost(1f)
+                    val maxImgH = pageH - marginT - marginB
+                    val scale = minOf(
+                        1f,
+                        maxImgW / bmp.width.toFloat(),
+                        maxImgH / bmp.height.toFloat(),
+                    )
                     val dispW   = bmp.width  * scale
                     val dispH   = bmp.height * scale
 
@@ -193,14 +227,29 @@ internal fun docxToPdf(
         pdfDoc.finishPage(page)
         onProg(97, "Saving…")
 
-        val dir  = getPdfMakerDir(context)
-        val file = File(dir, "$baseName.pdf")
-        file.outputStream().use { pdfDoc.writeTo(it) }
-        pdfDoc.close()
+        val file = OutputStore.writeUnique(getPdfMakerDir(context), baseName, "pdf") {
+            pdfDoc.writeTo(it)
+        }
 
         onProg(100, "Done!")
         file
-    } catch (_: Exception) { null }
+    } catch (_: Exception) {
+        null
+    } finally {
+        runCatching { documentToClose?.close() }
+    }
+}
+
+private fun decodeBoundedDocxImage(bytes: ByteArray): android.graphics.Bitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    val target = RenderSizing.fitWithin(bounds.outWidth, bounds.outHeight, 2_000) ?: return null
+    var sampleSize = 1
+    while (bounds.outWidth / sampleSize > target.width * 2 || bounds.outHeight / sampleSize > target.height * 2) {
+        sampleSize *= 2
+    }
+    val options = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
 }
 
 // ── Parse word/_rels/document.xml.rels ───────────────────────────────────────
@@ -365,4 +414,3 @@ internal fun docxFormatSize(kb: Long): String = when {
     kb >= 1024 -> "%.1f MB".format(kb / 1024f)
     else       -> "$kb KB"
 }
-
