@@ -65,12 +65,7 @@ object PinCredential {
             val iterations = parts[2].toInt()
             val salt = Base64.getDecoder().decode(parts[3])
             val hash = Base64.getDecoder().decode(parts[4])
-            if (
-                pinLength !in 4..6 ||
-                iterations !in MIN_ITERATIONS..MAX_ITERATIONS ||
-                salt.size != SALT_BYTES ||
-                hash.size != HASH_BITS / 8
-            ) {
+            if (!hasSupportedShape(pinLength, iterations, salt, hash)) {
                 return null
             }
             ParsedCredential(pinLength, iterations, salt, hash)
@@ -78,6 +73,20 @@ object PinCredential {
             null
         }
     }
+
+    private fun hasSupportedShape(
+        pinLength: Int,
+        iterations: Int,
+        salt: ByteArray,
+        hash: ByteArray,
+    ): Boolean =
+        when {
+            pinLength !in 4..6 -> false
+            iterations !in MIN_ITERATIONS..MAX_ITERATIONS -> false
+            salt.size != SALT_BYTES -> false
+            hash.size != HASH_BITS / 8 -> false
+            else -> true
+        }
 
     private data class ParsedCredential(
         val pinLength: Int,
