@@ -4,8 +4,6 @@ import android.graphics.Bitmap
 import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -47,6 +45,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -81,35 +80,28 @@ fun MergePdfScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit) {
     var showRenameDialog  by remember { mutableStateOf(false) }
     var showPreMergeDialog by remember { mutableStateOf(false) }
 
+    val latestItems by rememberUpdatedState(items)
+    DisposableEffect(Unit) {
+        onDispose {
+            BitmapOwnership.retire(latestItems.mapNotNull(MergeItem::thumb))
+        }
+    }
+
     // Drag-to-reorder state
     var dragFromIdx  by remember { mutableIntStateOf(-1) }
     var dragToIdx    by remember { mutableIntStateOf(-1) }
 
-    val filePicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenMultipleDocuments()
-    ) { uris ->
-        if (uris.isNotEmpty()) {
-            scope.launch(Dispatchers.IO) {
-                val newItems = uris.mapNotNull { uri ->
-                    try {
-                        val name = uri.lastPathSegment
-                            ?.substringAfterLast("/")?.substringAfterLast("%2F")
-                            ?.removeSuffix(".pdf")?.take(40) ?: "document"
-                        val sizeKb = context.contentResolver
-                            .openFileDescriptor(uri, "r")?.use { it.statSize / 1024 } ?: 0L
-                        val cnt   = pdfPageCount(context, uri)
-                        val thumb = renderPage(context, uri, 0, 300)
-                        MergeItem(uri = uri, name = name, sizeKb = sizeKb,
-                                  pageCount = cnt, thumb = thumb)
-                    } catch (_: Exception) { null }
-                }
-                withContext(Dispatchers.Main) {
-                    items = items + newItems
-                    state = if (items.isNotEmpty()) MergeState.READY else MergeState.EMPTY
-                }
-            }
-        }
-    }
+    val selectFiles = rememberMergeInputPicker(
+        currentItems = items,
+        onLoaded = { loaded ->
+            items = items + loaded
+            state = MergeState.READY
+        },
+        onError = { message ->
+            errorMsg = message
+            state = MergeState.ERROR
+        },
+    )
 
     fun startMerge(requestedName: String = outputName) {
         if (items.size < 2) return
@@ -121,27 +113,24 @@ fun MergePdfScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit) {
                     scope.launch(Dispatchers.Main) { progress = p; progressText = txt }
                 }
                 withContext(Dispatchers.Main) {
-                    if (file != null) {
-                        resultFile = file
-                        val totalPages = items.sumOf { it.pageCount }
-                        FileCache.prependFile(
-                            PdfFile(
-                                name         = file.name,
-                                filePath     = file.absolutePath,
-                                size         = mergeFormatSize(file.length() / 1024),
-                                date         = SimpleDateFormat("MM/dd HH:mm", Locale.getDefault()).format(Date()),
-                                pageCount    = totalPages,
-                                lastModified = file.lastModified()
-                            )
+                    resultFile = file
+                    val totalPages = items.sumOf { it.pageCount }
+                    FileCache.prependFile(
+                        PdfFile(
+                            name         = file.name,
+                            filePath     = file.absolutePath,
+                            size         = mergeFormatSize(file.length() / 1024),
+                            date         = SimpleDateFormat("MM/dd HH:mm", Locale.getDefault()).format(Date()),
+                            pageCount    = totalPages,
+                            lastModified = file.lastModified()
                         )
-                        mergeCount += 1
-                        outputName = "merged_document_$mergeCount"
-                        state = MergeState.DONE
-                    } else {
-                        errorMsg = "Merge failed. One or more files may be encrypted or corrupted."
-                        state    = MergeState.ERROR
-                    }
+                    )
+                    mergeCount += 1
+                    outputName = "merged_document_$mergeCount"
+                    state = MergeState.DONE
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     errorMsg = e.message ?: "Unknown error"
@@ -190,7 +179,7 @@ fun MergePdfScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit) {
                     fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f).padding(start = 4.dp))
                 if (state == MergeState.READY) {
-                    IconButton(onClick = { filePicker.launch(arrayOf("application/pdf")) }) {
+                    IconButton(onClick = selectFiles) {
                         Icon(Icons.Default.Add, null, tint = accent)
                     }
                 }
@@ -200,7 +189,7 @@ fun MergePdfScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit) {
 
                 // 1. Empty
                 MergeState.EMPTY -> MergeEmptyPanel(
-                    onSelectFiles = { filePicker.launch(arrayOf("application/pdf")) },
+                    onSelectFiles = selectFiles,
                 )
 
                 // ── 2. Ready — draggable list ─────────────────────────────────
@@ -252,7 +241,9 @@ fun MergePdfScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit) {
                                 textSec   = textSec,
                                 accent    = accent,
                                 onDelete  = {
-                                    items = items.toMutableList().also { l -> l.removeAt(idx) }
+                                    val removed = items[idx]
+                                    items = items.toMutableList().also { list -> list.removeAt(idx) }
+                                    BitmapOwnership.retire(listOfNotNull(removed.thumb))
                                     if (items.isEmpty()) state = MergeState.EMPTY
                                 },
                                 onMoveUp  = {
@@ -279,7 +270,7 @@ fun MergePdfScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit) {
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(cardBg)
                                     .border(1.dp, Color(0xFF333344), RoundedCornerShape(12.dp))
-                                    .clickable { filePicker.launch(arrayOf("application/pdf")) }
+                                    .clickable(onClick = selectFiles)
                                     .padding(vertical = 16.dp),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -414,7 +405,12 @@ fun MergePdfScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit) {
                             // Share
                             Button(
                                 onClick = {
-                                    if (file != null) shareMergedFile(context, file)
+                                    if (file != null) {
+                                        shareMergedFile(context, file).onFailure { error ->
+                                            errorMsg = error.message ?: "This PDF could not be shared."
+                                            state = MergeState.ERROR
+                                        }
+                                    }
                                 },
                                 modifier = Modifier.weight(1f).height(54.dp),
                                 shape    = RoundedCornerShape(14.dp),
@@ -428,6 +424,7 @@ fun MergePdfScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit) {
                         Spacer(Modifier.height(12.dp))
                         OutlinedButton(
                             onClick = {
+                                BitmapOwnership.retire(items.mapNotNull(MergeItem::thumb))
                                 items = emptyList(); resultFile = null; state = MergeState.EMPTY
                             },
                             modifier = Modifier.fillMaxWidth().height(52.dp),

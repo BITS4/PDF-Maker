@@ -6,23 +6,27 @@ import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import androidx.core.content.FileProvider
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import java.io.File
 
 // ── Core merge logic ──────────────────────────────────────────────────────────
 
-internal fun mergePdfs(
+internal suspend fun mergePdfs(
     context  : Context,
     uris     : List<Uri>,
     baseName : String,
     onProg   : (Int, String) -> Unit
-): File? {
+): File {
+    val operationContext = currentCoroutineContext()
     val pdfDocument = PdfDocument()
-    return try {
-        require(uris.isNotEmpty()) { "Choose at least one PDF" }
+    try {
+        MergePdfPolicy.requireSourceCount(uris.size)
         var pageNum = 1
         val total   = uris.size
 
         uris.forEachIndexed { fileIdx, uri ->
+            operationContext.ensureActive()
             onProg(
                 (fileIdx * 90 / total),
                 "Processing file ${fileIdx + 1} of $total…"
@@ -36,9 +40,9 @@ internal fun mergePdfs(
                     throw error
                 }
                 try {
-                    require(renderer.pageCount in 1..500) { "A source PDF has an unsafe page count" }
-                    require(pageNum - 1 + renderer.pageCount <= 1_000) { "Merged PDF exceeds 1,000 pages" }
+                    MergePdfPolicy.updatedTotalPages(pageNum - 1, renderer.pageCount)
                     for (index in 0 until renderer.pageCount) {
+                        operationContext.ensureActive()
                         val page = renderer.openPage(index)
                         try {
                             val size = RenderSizing.fitWithin(page.width, page.height, 2_000)
@@ -53,6 +57,7 @@ internal fun mergePdfs(
                                     )
                                 }
                                 page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                                operationContext.ensureActive()
                                 val info = PdfDocument.PageInfo.Builder(size.width, size.height, pageNum++).create()
                                 val outputPage = pdfDocument.startPage(info)
                                 outputPage.canvas.drawBitmap(bitmap, 0f, 0f, null)
@@ -71,13 +76,19 @@ internal fun mergePdfs(
         }
 
         onProg(95, "Saving…")
-        val output = OutputStore.writeUnique(getPdfMakerDir(context), baseName, "pdf") {
-            pdfDocument.writeTo(it)
+        val output = OutputStore.writeUnique(
+            directory = getPdfMakerDir(context),
+            requestedBaseName = baseName,
+            extension = "pdf",
+            beforeCommit = { operationContext.ensureActive() },
+        ) {
+            operationContext.ensureActive()
+            pdfDocument.writeTo(BoundedIo.limit(it, MergePdfPolicy.MAX_OUTPUT_BYTES) {
+                operationContext.ensureActive()
+            })
         }
         onProg(100, "Done!")
-        output
-    } catch (_: Exception) {
-        null
+        return output
     } finally {
         pdfDocument.close()
     }
@@ -85,8 +96,8 @@ internal fun mergePdfs(
 
 // ── Share merged file ─────────────────────────────────────────────────────────
 
-internal fun shareMergedFile(context: Context, file: File) {
-    try {
+internal fun shareMergedFile(context: Context, file: File): Result<Unit> =
+    runCatching {
         val uri = androidx.core.content.FileProvider.getUriForFile(
             context, "${context.packageName}.provider", file
         )
@@ -99,8 +110,7 @@ internal fun shareMergedFile(context: Context, file: File) {
                 }, "Share merged PDF"
             )
         )
-    } catch (_: Exception) {}
-}
+    }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
