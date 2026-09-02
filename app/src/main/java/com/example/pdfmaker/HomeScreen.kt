@@ -134,7 +134,7 @@ fun HomeScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    val deleted = FileRepository.deleteFile(fileToConfirmDelete.filePath)
+                    val deleted = FileRepository.deleteFile(context, fileToConfirmDelete.filePath)
                     if (deleted) {
                         FileCache.removeFile(fileToConfirmDelete.filePath)
                         PdfThumbnailCache.invalidate(fileToConfirmDelete.filePath)

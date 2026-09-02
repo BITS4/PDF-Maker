@@ -13,16 +13,18 @@ object FileRepository {
     /** Lists only application-owned files. Access to arbitrary device files goes through Android's picker. */
     fun loadPdfFiles(context: Context): List<PdfFile> {
         val found = mutableMapOf<String, PdfFile>()
-        val roots = buildSet {
+        val roots = ownedRoots(context)
+        roots.forEach { root -> scanOwnedDirectory(root, root, found, maxDepth = 2) }
+        return found.values.sortedByDescending { it.lastModified }
+    }
+
+    private fun ownedRoots(context: Context): Set<File> = buildSet {
             add(getPdfMakerDir(context).canonicalFile)
             add(File(context.filesDir, "documents/PDFMaker").canonicalFile)
             context.getExternalFilesDirs(Environment.DIRECTORY_DOCUMENTS)
                 .filterNotNull()
                 .forEach { add(File(it, "PDFMaker").canonicalFile) }
         }
-        roots.forEach { root -> scanOwnedDirectory(root, root, found, maxDepth = 2) }
-        return found.values.sortedByDescending { it.lastModified }
-    }
 
     private fun scanOwnedDirectory(
         root: File,
@@ -58,10 +60,13 @@ object FileRepository {
         return loadPdfFiles(context).filter { it.lastModified >= cutoff }
     }
 
-    fun deleteFile(filePath: String): Boolean =
+    fun deleteFile(context: Context, filePath: String): Boolean =
         try {
-            File(filePath).delete()
-        } catch (_: Exception) {
+            val candidate = File(filePath).canonicalFile
+            OwnedFilePolicy.contains(ownedRoots(context), candidate) && candidate.isFile && candidate.delete()
+        } catch (_: java.io.IOException) {
+            false
+        } catch (_: SecurityException) {
             false
         }
 

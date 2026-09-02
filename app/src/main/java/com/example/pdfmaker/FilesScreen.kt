@@ -135,7 +135,7 @@ fun FilesScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    if (FileRepository.deleteFile(fileToDelete.filePath)) {
+                    if (FileRepository.deleteFile(context, fileToDelete.filePath)) {
                         FileCache.removeFile(fileToDelete.filePath)
                         PdfThumbnailCache.invalidate(fileToDelete.filePath)
                         Toast.makeText(context, "Deleted", Toast.LENGTH_SHORT).show()
