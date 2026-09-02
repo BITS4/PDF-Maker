@@ -166,6 +166,10 @@ private fun printUri(
                 cancellationSignal: CancellationSignal?,
                 callback: WriteResultCallback
             ) {
+                if (cancellationSignal?.isCanceled == true) {
+                    callback.onWriteCancelled()
+                    return
+                }
                 try {
                     SafePdfInput.fromUri(context, uri).use { source ->
                         source.file.inputStream().use { input ->
@@ -175,7 +179,11 @@ private fun printUri(
                             }
                         }
                     }
-                    callback.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
+                    if (cancellationSignal?.isCanceled == true) {
+                        callback.onWriteCancelled()
+                    } else {
+                        callback.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
+                    }
                 } catch (e: Exception) {
                     callback.onWriteFailed(e.message ?: "The PDF could not be printed safely")
                 }
@@ -187,7 +195,6 @@ private fun printUri(
         }
 
         printManager.print(jobName, adapter, PrintAttributes.Builder().build())
-        onDone()
     } catch (e: Exception) {
         onError(e.message ?: "Print failed")
     }
