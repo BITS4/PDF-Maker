@@ -1,16 +1,11 @@
 package com.example.pdfmaker
 
 import android.Manifest
-import android.content.Context
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Matrix
 import android.net.Uri
 import android.view.OrientationEventListener
 import android.view.Surface
-import androidx.exifinterface.media.ExifInterface
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.Camera
@@ -19,7 +14,6 @@ import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
 import androidx.camera.core.UseCaseGroup
-import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
@@ -59,97 +53,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.*
 import java.io.File
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlin.coroutines.resume
-import kotlin.math.max
 
 // ── Enums ─────────────────────────────────────────────────────────────────────
-
-enum class IdCardCaptureSide { NONE, SINGLE, BOTH }
-
-private enum class IdCardStep { IDLE, CAPTURE_FRONT, FLIP_CARD, CAPTURE_BACK }
-
-// ── Top-level data class — must be outside the composable for type inference ──
-
-data class CapturedDoc(val file: File, val thumb: Bitmap)
-
-// ── CameraX coroutine helper ──────────────────────────────────────────────────
-
-private suspend fun Context.getCameraProvider(): ProcessCameraProvider =
-    suspendCancellableCoroutine { cont ->
-        ProcessCameraProvider.getInstance(this).also { future ->
-            future.addListener({ cont.resume(future.get()) },
-                ContextCompat.getMainExecutor(this))
-        }
-    }
-
-// ── Image helpers — top-level so they can be called from any coroutine ────────
-
-/**
- * Read the EXIF rotation tag, rotate pixels accordingly, write a corrected JPEG,
- * and clear the EXIF orientation to NORMAL. After this call the file is always
- * upright — no downstream code ever needs to read EXIF again.
- */
-private fun bakeExifRotation(src: File): File {
-    val degrees = try {
-        when (ExifInterface(src.absolutePath).getAttributeInt(
-            ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL
-        )) {
-            ExifInterface.ORIENTATION_ROTATE_90  ->  90f
-            ExifInterface.ORIENTATION_ROTATE_180 -> 180f
-            ExifInterface.ORIENTATION_ROTATE_270 -> 270f
-            else                                 ->   0f
-        }
-    } catch (_: Exception) { 0f }
-
-    if (degrees == 0f) return src   // already upright — nothing to do
-
-    // Sample down to ≤2048 px longest side to keep rotation memory safe
-    val sizeOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    BitmapFactory.decodeFile(src.absolutePath, sizeOpts)
-    var s = 1
-    while (max(sizeOpts.outWidth, sizeOpts.outHeight) / s > 2048) s *= 2
-
-    val raw = BitmapFactory.decodeFile(
-        src.absolutePath,
-        BitmapFactory.Options().apply {
-            inSampleSize      = s
-            inPreferredConfig = Bitmap.Config.ARGB_8888
-        }
-    ) ?: return src
-
-    val rotated = Bitmap.createBitmap(
-        raw, 0, 0, raw.width, raw.height,
-        Matrix().apply { postRotate(degrees) }, true
-    ).also { if (it !== raw) raw.recycle() }
-
-    val out = File(src.parent, "corrected_${System.currentTimeMillis()}.jpg")
-    out.outputStream().use { rotated.compress(Bitmap.CompressFormat.JPEG, 95, it) }
-    rotated.recycle()
-
-    // Mark as NORMAL so nothing re-rotates it
-    try {
-        ExifInterface(out.absolutePath).run {
-            setAttribute(ExifInterface.TAG_ORIENTATION,
-                ExifInterface.ORIENTATION_NORMAL.toString())
-            saveAttributes()
-        }
-    } catch (_: Exception) {}
-
-    return out
-}
-
-/** Decode a small thumbnail from an already-upright file (pixels already baked). */
-private fun smallThumb(file: File, sizePx: Int): Bitmap {
-    val sizeOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    BitmapFactory.decodeFile(file.absolutePath, sizeOpts)
-    var s = 1
-    while (max(sizeOpts.outWidth, sizeOpts.outHeight) / s > sizePx * 2) s *= 2
-    return BitmapFactory.decodeFile(
-        file.absolutePath,
-        BitmapFactory.Options().apply { inSampleSize = s }
-    ) ?: Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.RGB_565)
-}
 
 // ── Main composable ───────────────────────────────────────────────────────────
 
@@ -552,217 +457,6 @@ fun SmartScanScreen(
                     idCardStep      = IdCardStep.IDLE
                 }
             )
-        }
-    }
-}
-
-// ── Flip-card overlay ─────────────────────────────────────────────────────────
-
-@Composable
-private fun FlipCardOverlay(onReady: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth(0.80f)
-            .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xF0141420))
-            .padding(28.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Box(
-            modifier = Modifier.size(72.dp).background(Color(0xFF1E2240), CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(Icons.Default.CreditCard, null, tint = Color(0xFFFFD700),
-                modifier = Modifier.size(40.dp))
-        }
-        Text("Front side captured!", color = Color.White,
-            fontSize = 20.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-        Text("Now flip the card over and position the back side inside the frame.",
-            color = Color(0xFFCCCCCC), fontSize = 14.sp, textAlign = TextAlign.Center)
-        Button(
-            onClick  = onReady,
-            modifier = Modifier.fillMaxWidth().height(50.dp),
-            colors   = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700)),
-            shape    = RoundedCornerShape(25.dp)
-        ) {
-            Text("Ready — scan back side",
-                color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-        }
-    }
-}
-
-// ── Canvas overlays ───────────────────────────────────────────────────────────
-
-@Composable
-fun GridOverlay() {
-    Canvas(Modifier.fillMaxSize()) {
-        val sw  = 0.8.dp.toPx()
-        val col = Color.White.copy(alpha = 0.38f)
-        drawLine(col, Offset(size.width / 3f,   0f), Offset(size.width / 3f,   size.height), sw)
-        drawLine(col, Offset(size.width * 2/3f, 0f), Offset(size.width * 2/3f, size.height), sw)
-        drawLine(col, Offset(0f, size.height / 3f),  Offset(size.width, size.height / 3f),   sw)
-        drawLine(col, Offset(0f, size.height * 2/3f),Offset(size.width, size.height * 2/3f), sw)
-    }
-}
-
-@Composable
-fun DocsCornerOverlay(alpha: Float) {
-    Canvas(Modifier.fillMaxSize()) {
-        val w = size.width; val h = size.height
-        val l = w * 0.1f; val t = h * 0.14f; val r = w - l; val b = h - t
-        val len = 38.dp.toPx(); val sw = 3.dp.toPx()
-        val col = Color(0xFF4F8EF7).copy(alpha = alpha)
-        drawLine(col, Offset(l, t + len), Offset(l, t),       sw)
-        drawLine(col, Offset(l, t),       Offset(l + len, t), sw)
-        drawLine(col, Offset(r - len, t), Offset(r, t),       sw)
-        drawLine(col, Offset(r, t),       Offset(r, t + len), sw)
-        drawLine(col, Offset(r, b - len), Offset(r, b),       sw)
-        drawLine(col, Offset(r, b),       Offset(r - len, b), sw)
-        drawLine(col, Offset(l, b - len), Offset(l, b),       sw)
-        drawLine(col, Offset(l, b),       Offset(l + len, b), sw)
-    }
-}
-
-@Composable
-fun IdCardCornerOverlay(alpha: Float) {
-    Canvas(Modifier.fillMaxSize()) {
-        val w  = size.width; val h = size.height
-        val cW = w * 0.84f; val cH = cW / 1.586f
-        val l  = (w - cW) / 2f
-        val t  = h / 2f - cH / 2f - h * 0.04f
-        val r  = l + cW; val b = t + cH
-        val len = 30.dp.toPx(); val sw = 3.5.dp.toPx()
-        val col = Color(0xFFFFD700).copy(alpha = alpha)
-        drawLine(col, Offset(l, t + len), Offset(l, t),       sw)
-        drawLine(col, Offset(l, t),       Offset(l + len, t), sw)
-        drawLine(col, Offset(r - len, t), Offset(r, t),       sw)
-        drawLine(col, Offset(r, t),       Offset(r, t + len), sw)
-        drawLine(col, Offset(r, b - len), Offset(r, b),       sw)
-        drawLine(col, Offset(r, b),       Offset(r - len, b), sw)
-        drawLine(col, Offset(l, b - len), Offset(l, b),       sw)
-        drawLine(col, Offset(l, b),       Offset(l + len, b), sw)
-        val dim = Color.Black.copy(alpha = 0.45f)
-        drawRect(dim, size = androidx.compose.ui.geometry.Size(w, t))
-        drawRect(dim, topLeft = Offset(0f, b), size = androidx.compose.ui.geometry.Size(w, h - b))
-        drawRect(dim, topLeft = Offset(0f, t), size = androidx.compose.ui.geometry.Size(l, cH))
-        drawRect(dim, topLeft = Offset(r,  t), size = androidx.compose.ui.geometry.Size(w - r, cH))
-    }
-}
-
-// ── ID card setup overlay ─────────────────────────────────────────────────────
-
-@Composable
-fun IdCardSetupOverlay(
-    onSelect : (IdCardCaptureSide) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var selected by remember { mutableStateOf(IdCardCaptureSide.BOTH) }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.62f))
-            .clickable { onDismiss() },
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth(0.88f)
-                .clip(RoundedCornerShape(18.dp))
-                .background(Color.White)
-                .clickable {}
-                .padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Column(
-                Modifier.fillMaxWidth()
-                    .background(Color(0xFFF2F2F2), RoundedCornerShape(10.dp))
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Row(
-                    Modifier.fillMaxWidth().height(58.dp)
-                        .background(Color(0xFFDDE4FF), RoundedCornerShape(6.dp))
-                        .padding(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(Modifier.size(42.dp)
-                        .background(Color(0xFFBBBBBB), RoundedCornerShape(4.dp)),
-                        contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.Person, null,
-                            tint = Color.White, modifier = Modifier.size(28.dp))
-                    }
-                    Spacer(Modifier.width(10.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Box(Modifier.width(90.dp).height(7.dp)
-                            .background(Color(0xFFAAAAAA), RoundedCornerShape(3.dp)))
-                        Box(Modifier.width(120.dp).height(7.dp)
-                            .background(Color(0xFFAAAAAA), RoundedCornerShape(3.dp)))
-                        Box(Modifier.width(60.dp).height(7.dp)
-                            .background(Color(0xFFAAAAAA), RoundedCornerShape(3.dp)))
-                    }
-                }
-                Column(
-                    Modifier.fillMaxWidth().height(52.dp)
-                        .background(Color(0xFFE8F5E9), RoundedCornerShape(6.dp))
-                        .padding(8.dp),
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    repeat(3) {
-                        Box(Modifier.fillMaxWidth().height(6.dp)
-                            .background(Color(0xFF9E9E9E), RoundedCornerShape(2.dp)))
-                        if (it < 2) Spacer(Modifier.height(4.dp))
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Box(Modifier.fillMaxWidth(0.65f).height(6.dp)
-                        .background(Color(0xFF9E9E9E), RoundedCornerShape(2.dp)))
-                }
-            }
-
-            Spacer(Modifier.height(12.dp))
-            Text(
-                "Scans are placed on a single PDF page. Your data is never shared.",
-                color = Color.Gray, fontSize = 11.sp, textAlign = TextAlign.Center
-            )
-            Spacer(Modifier.height(16.dp))
-
-            Row(
-                Modifier.fillMaxWidth()
-                    .background(Color(0xFFF0F0F0), RoundedCornerShape(12.dp))
-            ) {
-                listOf(
-                    IdCardCaptureSide.SINGLE to "Single side",
-                    IdCardCaptureSide.BOTH   to "Both sides"
-                ).forEach { (side, label) ->
-                    val isSel = selected == side
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (isSel) AccentBlue else Color.Transparent)
-                            .clickable { selected = side }
-                            .padding(vertical = 12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(label,
-                            color      = if (isSel) Color.White else Color.Gray,
-                            fontSize   = 14.sp,
-                            fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal)
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(14.dp))
-            Button(
-                onClick  = { onSelect(selected) },
-                modifier = Modifier.fillMaxWidth().height(50.dp),
-                colors   = ButtonDefaults.buttonColors(containerColor = AccentBlue),
-                shape    = RoundedCornerShape(28.dp)
-            ) {
-                Text("Scan now", color = Color.White,
-                    fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            }
         }
     }
 }
