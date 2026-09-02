@@ -7,11 +7,12 @@ import org.junit.Test
 class SplitPreviewPolicyTest {
     @Test
     fun `bounds preview count and thumbnail allocation`() {
-        val plan = SplitPreviewPolicy.plan(
-            pageCount = SplitPreviewPolicy.MAX_PREVIEW_PAGES,
-            pageWidth = 4_000,
-            pageHeight = 6_000,
-        )
+        val plan =
+            SplitPreviewPolicy.plan(
+                pageCount = SplitPreviewPolicy.MAX_PREVIEW_PAGES,
+                pageWidth = 4_000,
+                pageHeight = 6_000,
+            )
 
         assertEquals(SplitPreviewPolicy.MAX_PREVIEW_PAGES, plan.pageCount)
         assertTrue(plan.thumbnailSize.width <= SplitPreviewPolicy.THUMBNAIL_WIDTH_PX)

@@ -1,9 +1,6 @@
 package com.example.pdfmaker
 
 import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Color as AndroidColor
-import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -36,8 +33,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
@@ -48,12 +46,13 @@ private enum class SplitMode  { RANGE, CUSTOM }
 private enum class SplitState { PICK, CONFIGURE, SPLITTING, DONE, ERROR }
 
 @Composable
+// Compose state-machine callbacks stay colocated while staging, rendering, and output live in tested modules.
+@Suppress("CyclomaticComplexMethod", "LongMethod", "TooGenericExceptionCaught")
 fun SplitPdfScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit = {}) {
     val context = LocalContext.current
     val scope   = rememberCoroutineScope()
 
     var state         by remember { mutableStateOf(SplitState.PICK) }
-    var pickedUri     by remember { mutableStateOf<Uri?>(null) }
     var pickedName    by remember { mutableStateOf("") }
     var pickedSize    by remember { mutableStateOf("") }
     var totalPages    by remember { mutableIntStateOf(0) }
@@ -66,77 +65,60 @@ fun SplitPdfScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit = {}) {
     var outName       by remember { mutableStateOf("") }
     var errMsg        by remember { mutableStateOf("") }
     var loadingThumbs by remember { mutableStateOf(false) }
-    var previewJob    by remember { mutableStateOf<Job?>(null) }
+    var stagedSource  by remember { mutableStateOf<StagedPdfSource?>(null) }
+    var activeJob     by remember { mutableStateOf<Job?>(null) }
+
+    val latestThumbs by rememberUpdatedState(thumbs)
+    val latestSource by rememberUpdatedState(stagedSource)
+    val latestJob by rememberUpdatedState(activeJob)
 
     DisposableEffect(Unit) {
         onDispose {
-            previewJob?.cancel()
-            thumbs.forEach { bitmap -> if (!bitmap.isRecycled) bitmap.recycle() }
+            val resources = latestThumbs
+            val source = latestSource
+            val release = {
+                BitmapOwnership.retire(resources)
+                source?.close()
+                Unit
+            }
+            latestJob?.let { job ->
+                job.cancel()
+                job.invokeOnCompletion { release() }
+            } ?: release()
         }
     }
 
     fun loadPdf(uri: Uri) {
-        previewJob?.cancel()
-        previewJob = scope.launch {
-            val activeJob = coroutineContext[Job]
+        activeJob?.cancel()
+        stagedSource?.close()
+        stagedSource = null
+        BitmapOwnership.retire(thumbs)
+        thumbs = emptyList()
+
+        lateinit var loadJob: Job
+        loadJob = scope.launch(start = CoroutineStart.LAZY) {
             loadingThumbs = true
-            pickedUri  = uri
             pickedName = uri.lastPathSegment
                 ?.substringAfterLast("/")?.substringAfterLast("%2F")
                 ?.removeSuffix(".pdf")?.take(40) ?: "document"
-            val bytes  = context.contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize } ?: 0L
-            pickedSize = when {
-                bytes < 1024        -> "$bytes B"
-                bytes < 1024*1024   -> "${bytes/1024} KB"
-                else                -> "${"%.1f".format(bytes/(1024.0*1024))} MB"
-            }
+            var pendingSource: StagedPdfSource? = null
+            var pendingThumbs: List<Bitmap> = emptyList()
             try {
-                val loadedThumbs = withContext(Dispatchers.IO) {
-                    val loadingContext = coroutineContext
-                    withSafePdfRenderer(context, uri) { renderer ->
-                        val pageCount = renderer.pageCount
-                        require(pageCount in 1..SplitPreviewPolicy.MAX_PREVIEW_PAGES) {
-                            "PDF must contain between 1 and ${SplitPreviewPolicy.MAX_PREVIEW_PAGES} pages"
-                        }
-                        val list = mutableListOf<Bitmap>()
-                        try {
-                            for (index in 0 until pageCount) {
-                                loadingContext.ensureActive()
-                                renderer.openPage(index).use { page ->
-                                    val plan = SplitPreviewPolicy.plan(pageCount, page.width, page.height)
-                                    val bitmap = Bitmap.createBitmap(
-                                        plan.thumbnailSize.width,
-                                        plan.thumbnailSize.height,
-                                        Bitmap.Config.ARGB_8888,
-                                    )
-                                    try {
-                                        Canvas(bitmap).drawColor(AndroidColor.WHITE)
-                                        page.render(
-                                            bitmap,
-                                            null,
-                                            null,
-                                            PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY,
-                                        )
-                                        list += bitmap
-                                    } catch (error: Throwable) {
-                                        bitmap.recycle()
-                                        throw error
-                                    }
-                                }
-                            }
-                            list
-                        } catch (error: Throwable) {
-                            list.forEach { bitmap -> if (!bitmap.isRecycled) bitmap.recycle() }
-                            throw error
-                        }
+                val preview = withContext(Dispatchers.IO) {
+                    SafePdfInput.fromUri(context, uri).also { pendingSource = it }.let { source ->
+                        loadSplitPdfPreview(source).also { pendingThumbs = it.bitmaps }
                     }
                 }
-                val previousThumbs = thumbs
-                thumbs = loadedThumbs
-                previousThumbs.forEach { bitmap -> if (!bitmap.isRecycled) bitmap.recycle() }
-                totalPages = loadedThumbs.size
+                ensureActive()
+                val source = checkNotNull(pendingSource)
+                stagedSource = source
+                pendingSource = null
+                pickedSize = FileRepository.formatSize(source.file.length())
+                thumbs = preview.bitmaps
+                pendingThumbs = emptyList()
+                totalPages = preview.pageCount
                 rangeFrom = 1
-                rangeTo = loadedThumbs.size
+                rangeTo = preview.pageCount
                 selPages = emptySet()
                 state = SplitState.CONFIGURE
             } catch (cancelled: CancellationException) {
@@ -145,9 +127,16 @@ fun SplitPdfScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit = {}) {
                 errMsg = error.message ?: "The PDF preview could not be loaded safely."
                 state = SplitState.ERROR
             } finally {
-                if (previewJob === activeJob) loadingThumbs = false
+                pendingSource?.close()
+                BitmapOwnership.retire(pendingThumbs)
+                if (activeJob === loadJob) {
+                    activeJob = null
+                    loadingThumbs = false
+                }
             }
         }
+        activeJob = loadJob
+        loadJob.start()
     }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -273,21 +262,36 @@ fun SplitPdfScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit = {}) {
                             PageSelection.Custom(selPages)
                         }
                         val selectedPages = PageSelectionPolicy.resolve(totalPages, selection)
-                        val canSplit = selectedPages.isNotEmpty()
+                        val canSplit = selectedPages.isNotEmpty() && !loadingThumbs && activeJob?.isActive != true
                         Button(onClick = {
-                            val uri = pickedUri ?: return@Button
-                            scope.launch {
+                            val source = stagedSource ?: return@Button
+                            lateinit var splitJob: Job
+                            splitJob = scope.launch(start = CoroutineStart.LAZY) {
                                 state = SplitState.SPLITTING
-                                val pages = selectedPages
-                                val res = withContext(Dispatchers.IO) { doSplitPdf(context, uri, pages, pickedName) }
-                                if (res != null) {
-                                    outPath = res.first; outName = res.second
+                                try {
+                                    val pages = selectedPages
+                                    val result = withContext(Dispatchers.IO) {
+                                        doSplitPdf(context, source, pages, pickedName)
+                                    }
+                                    ensureActive()
+                                    val (resultPath, resultName) = result
+                                    outPath = resultPath
+                                    outName = resultName
                                     val f = File(outPath)
-                                    val sz = f.length().let { if (it < 1024*1024) "${it/1024} KB" else "${"%.1f".format(it/(1024.0*1024))} MB" }
+                                    val sz = FileRepository.formatSize(f.length())
                                     FileCache.prependFile(PdfFile(f.nameWithoutExtension, outPath, sz, "", pages.size, f.lastModified()))
                                     state = SplitState.DONE
-                                } else { errMsg = "Split failed. Please try another PDF."; state = SplitState.ERROR }
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (error: Exception) {
+                                    errMsg = error.message ?: "Split failed. Please try another PDF."
+                                    state = SplitState.ERROR
+                                } finally {
+                                    if (activeJob === splitJob) activeJob = null
+                                }
                             }
+                            activeJob = splitJob
+                            splitJob.start()
                         }, enabled = canSplit,
                             colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
                             shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
