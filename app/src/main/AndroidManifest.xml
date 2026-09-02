@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Required only when release telemetry is explicitly enabled at build time. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <!-- Camera & flash (required for Smart Scan) -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.FLASHLIGHT" />
@@ -11,6 +14,7 @@
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 
     <application
+        android:name=".PdfMakerApplication"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -20,6 +24,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.PDFMaker"
         android:usesCleartextTraffic="false">
+
+        <!-- Auto-init could transmit data before the application's privacy policy is applied. -->
+        <meta-data
+            android:name="io.sentry.auto-init"
+            android:value="false" />
 
         <activity
             android:name=".MainActivity"
