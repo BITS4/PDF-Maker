@@ -3,6 +3,7 @@ package com.example.pdfmaker
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
@@ -47,20 +48,39 @@ private suspend fun FlowCollector<Bitmap>.emitPdfPages(
     ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
         PdfRenderer(descriptor).use { renderer ->
             for (index in 0 until minOf(renderer.pageCount, ViewerResourceLimits.MAX_RENDERED_PAGES)) {
-                renderer.openPage(index).use pageUse@{ page ->
-                    val target = RenderSizing.fitWithin(
-                        page.width,
-                        page.height,
-                        width.coerceIn(1, 2_048),
-                        allowUpscale = true,
-                    ) ?: return@pageUse
-                    val bitmap = Bitmap.createBitmap(target.width, target.height, Bitmap.Config.ARGB_8888)
-                    Canvas(bitmap).drawColor(Color.WHITE)
-                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                    emit(bitmap)
+                renderer.openPage(index).use { page ->
+                    emit(renderViewerPdfPage(page, width))
                 }
             }
         }
+    }
+}
+
+private fun renderViewerPdfPage(
+    page: PdfRenderer.Page,
+    width: Int,
+): Bitmap {
+    val target =
+        RenderSizing.fitWithin(
+            page.width,
+            page.height,
+            width.coerceIn(1, 2_048),
+            allowUpscale = true,
+        ) ?: error("PDF page has invalid dimensions")
+    val scale =
+        RenderSizing.scaleTo(page.width, page.height, target)
+            ?: error("PDF page has invalid dimensions")
+    val transform = Matrix()
+    transform.setScale(scale.scaleX, scale.scaleY)
+    val bitmap = Bitmap.createBitmap(target.width, target.height, Bitmap.Config.ARGB_8888)
+    var rendered = false
+    try {
+        Canvas(bitmap).drawColor(Color.WHITE)
+        page.render(bitmap, null, transform, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+        rendered = true
+        return bitmap
+    } finally {
+        if (!rendered) bitmap.recycle()
     }
 }
 

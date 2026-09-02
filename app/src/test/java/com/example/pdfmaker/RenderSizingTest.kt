@@ -60,4 +60,13 @@ class RenderSizingTest {
         assertNull(RenderSizing.scaleTo(100, 100, PixelSize(0, 50)))
         assertNull(RenderSizing.scaleTo(100, 100, PixelSize(50, -1)))
     }
+
+    @Test
+    fun `render transform maps both source edges onto a rounded fitted bitmap`() {
+        val target = RenderSizing.fitWithin(612, 792, 200, allowUpscale = true)!!
+        val scale = RenderSizing.scaleTo(612, 792, target)!!
+
+        assertEquals(target.width.toFloat(), 612f * scale.scaleX, 0.0001f)
+        assertEquals(target.height.toFloat(), 792f * scale.scaleY, 0.0001f)
+    }
 }

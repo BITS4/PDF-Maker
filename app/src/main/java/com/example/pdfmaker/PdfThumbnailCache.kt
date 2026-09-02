@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.graphics.pdf.PdfRenderer
@@ -62,19 +63,36 @@ object PdfThumbnailCache {
         return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
             PdfRenderer(descriptor).use rendererUse@{ renderer ->
                 if (renderer.pageCount == 0) return@rendererUse null
-                renderer.openPage(0).use pageUse@{ page ->
-                    val target = RenderSizing.fitWithin(
-                        page.width,
-                        page.height,
-                        sizePx,
-                        allowUpscale = true,
-                    ) ?: return@pageUse null
-                    Bitmap.createBitmap(target.width, target.height, Bitmap.Config.ARGB_8888).also { bitmap ->
-                        Canvas(bitmap).drawColor(Color.WHITE)
-                        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                    }
+                renderer.openPage(0).use { page ->
+                    renderPdfPage(page, sizePx)
                 }
             }
+        }
+    }
+
+    private fun renderPdfPage(
+        page: PdfRenderer.Page,
+        sizePx: Int,
+    ): Bitmap? {
+        val target =
+            RenderSizing.fitWithin(
+                page.width,
+                page.height,
+                sizePx,
+                allowUpscale = true,
+            ) ?: return null
+        val scale = RenderSizing.scaleTo(page.width, page.height, target) ?: return null
+        val transform = Matrix()
+        transform.setScale(scale.scaleX, scale.scaleY)
+        val bitmap = Bitmap.createBitmap(target.width, target.height, Bitmap.Config.ARGB_8888)
+        var completed = false
+        try {
+            Canvas(bitmap).drawColor(Color.WHITE)
+            page.render(bitmap, null, transform, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+            completed = true
+            return bitmap
+        } finally {
+            if (!completed) bitmap.recycle()
         }
     }
 

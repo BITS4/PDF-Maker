@@ -202,7 +202,12 @@ internal suspend fun convertPdfToJpg(
                     )
                     try {
                         android.graphics.Canvas(bitmap).drawColor(android.graphics.Color.WHITE)
-                        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                        val scale =
+                            RenderSizing.scaleTo(page.width, page.height, target)
+                                ?: error("PDF page has invalid dimensions")
+                        val transform = android.graphics.Matrix()
+                        transform.setScale(scale.scaleX, scale.scaleY)
+                        page.render(bitmap, null, transform, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                         val outputFile = OutputStore.writeUnique(
                             directory = outputDirectory,
                             requestedBaseName = "${baseName}_page$pageNumber",
@@ -253,7 +258,12 @@ private fun renderRendererPage(
     val bitmap = Bitmap.createBitmap(target.width, target.height, Bitmap.Config.ARGB_8888)
     try {
         android.graphics.Canvas(bitmap).drawColor(android.graphics.Color.WHITE)
-        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+        val scale =
+            RenderSizing.scaleTo(page.width, page.height, target)
+                ?: error("PDF page has invalid dimensions")
+        val transform = android.graphics.Matrix()
+        transform.setScale(scale.scaleX, scale.scaleY)
+        page.render(bitmap, null, transform, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
         bitmap
     } catch (error: Throwable) {
         bitmap.recycle()
