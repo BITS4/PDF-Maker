@@ -44,18 +44,24 @@ object BoundedIo {
     }
 
     /** Wraps an output and rejects writes once the configured byte budget is exhausted. */
-    fun limit(output: OutputStream, maximumBytes: Long): OutputStream {
+    fun limit(
+        output: OutputStream,
+        maximumBytes: Long,
+        beforeWrite: () -> Unit = {},
+    ): OutputStream {
         require(maximumBytes > 0) { "Maximum byte count must be positive" }
-        return LimitedOutputStream(output, maximumBytes)
+        return LimitedOutputStream(output, maximumBytes, beforeWrite)
     }
 
     private class LimitedOutputStream(
         output: OutputStream,
         private val maximumBytes: Long,
+        private val beforeWrite: () -> Unit,
     ) : FilterOutputStream(output) {
         private var writtenBytes = 0L
 
         override fun write(value: Int) {
+            beforeWrite()
             requireCapacity(1)
             out.write(value)
             writtenBytes += 1
@@ -69,6 +75,7 @@ object BoundedIo {
             require(offset >= 0 && length >= 0 && offset <= bytes.size - length) {
                 "Invalid output buffer range"
             }
+            beforeWrite()
             requireCapacity(length)
             out.write(bytes, offset, length)
             writtenBytes += length

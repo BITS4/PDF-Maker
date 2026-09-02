@@ -69,6 +69,7 @@ object OutputStore {
         directory: File,
         requestedBaseName: String?,
         extension: String,
+        beforeCommit: () -> Unit = {},
         writer: (OutputStream) -> Unit,
     ): File {
         val dir = requireDirectory(directory)
@@ -80,6 +81,7 @@ object OutputStore {
                 output.flush()
                 output.fd.sync()
             }
+            beforeCommit()
             moveWithoutReplacing(temporary, target)
             return target
         } catch (error: Throwable) {

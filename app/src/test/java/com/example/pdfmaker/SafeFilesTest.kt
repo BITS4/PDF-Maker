@@ -90,6 +90,25 @@ class OutputStoreTest {
     }
 
     @Test
+    fun failedPreCommitCheckLeavesNeitherOutputNorTemporaryFile() {
+        val root = temporaryFolder.newFolder("cancelled")
+
+        val failure = runCatching {
+            OutputStore.writeUnique(
+                directory = root,
+                requestedBaseName = "cancelled",
+                extension = "pdf",
+                beforeCommit = { error("simulated cancellation") },
+            ) { output ->
+                output.write(byteArrayOf(1, 2, 3))
+            }
+        }
+
+        assertTrue(failure.isFailure)
+        assertTrue(root.listFiles().orEmpty().isEmpty())
+    }
+
+    @Test
     fun atomicReplacementPreservesTargetNameAndContents() {
         val target = temporaryFolder.newFile("locked.pdf").apply { writeBytes(byteArrayOf(1)) }
 

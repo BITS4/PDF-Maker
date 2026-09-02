@@ -14,7 +14,12 @@ object ImagePdfExport {
         if (password != null) {
             require(password.length in 4..128) { "Password must contain 4 to 128 characters" }
         }
-        val output = OutputStore.writeUnique(directory, requestedName, "pdf", pdfWriter)
+        val output = OutputStore.writeUnique(
+            directory = directory,
+            requestedBaseName = requestedName,
+            extension = "pdf",
+            writer = pdfWriter,
+        )
         try {
             if (password != null) {
                 check(SecureDocumentStore.lockInPlace(output, password) == null) {

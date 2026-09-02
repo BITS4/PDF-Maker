@@ -85,4 +85,21 @@ class BoundedIoTest {
         val bounded = BoundedIo.limit(ByteArrayOutputStream(), 10)
         assertTrue(runCatching { bounded.write(byteArrayOf(1, 2), 1, 2) }.isFailure)
     }
+
+    @Test
+    fun boundedOutputChecksCancellationBeforeEveryWrite() {
+        val destination = ByteArrayOutputStream()
+        var writesAllowed = true
+        var checks = 0
+        val bounded = BoundedIo.limit(destination, 10) {
+            checks += 1
+            check(writesAllowed) { "cancelled" }
+        }
+
+        bounded.write(byteArrayOf(1, 2))
+        writesAllowed = false
+        assertTrue(runCatching { bounded.write(3) }.isFailure)
+        assertEquals(2, checks)
+        assertArrayEquals(byteArrayOf(1, 2), destination.toByteArray())
+    }
 }
