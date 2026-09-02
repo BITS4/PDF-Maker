@@ -1,0 +1,15 @@
+{
+  "name": "PDF Maker Android",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": "..",
+    "target": "development"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["fwcd.kotlin", "redhat.java"]
+    }
+  },
+  "remoteUser": "root",
+  "postCreateCommand": "./gradlew tasks --no-daemon"
+}

@@ -1,0 +1,12 @@
+.git
+.github
+.gradle
+.idea
+**/build
+captures
+local.properties
+*.jks
+*.keystore
+*.p12
+keystore.properties
+signing.properties
