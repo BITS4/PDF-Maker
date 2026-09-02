@@ -29,9 +29,9 @@ internal suspend fun FlowCollector<Bitmap>.emitDocxPages(
             when {
                 entry.name == "word/document.xml" -> documentXml = budget.readXml(zip)
                 entry.name == "word/_rels/document.xml.rels" -> relationshipsXml = budget.readXml(zip)
-                entry.name.startsWith("word/media/") && media.size < MAX_VIEWER_MEDIA_ITEMS -> {
+                entry.name.startsWith("word/media/") && media.size < ViewerResourceLimits.MAX_MEDIA_ITEMS -> {
                     media[entry.name.substringAfterLast('/')] =
-                        budget.readEntry(zip, MAX_VIEWER_MEDIA_BYTES)
+                        budget.readEntry(zip, ViewerResourceLimits.MAX_MEDIA_BYTES)
                 }
                 else -> budget.skipEntry(zip)
             }
@@ -54,7 +54,7 @@ internal suspend fun FlowCollector<Bitmap>.emitDocxPages(
     suspend fun flushPage(): Boolean {
         emit(bitmap)
         emittedPages += 1
-        if (emittedPages >= MAX_VIEWER_RENDERED_PAGES) return false
+        if (emittedPages >= ViewerResourceLimits.MAX_RENDERED_PAGES) return false
         bitmap = newViewerPage(width, pageHeight)
         canvas = Canvas(bitmap)
         currentY = margin.toFloat()

@@ -10,6 +10,7 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.ByteArrayInputStream
 import java.io.IOException
+import java.io.InputStream
 import java.io.RandomAccessFile
 
 class ViewerArchiveIOTest {
@@ -68,6 +69,34 @@ class ViewerArchiveIOTest {
     }
 
     @Test
+    fun `archive budget rejects an oversized entry and stalled stream`() {
+        val entryBudget = ViewerArchiveBudget(maximumEntries = 1, maximumExpandedBytes = 8)
+        entryBudget.beginEntry("word/document.xml")
+        assertThrows(IOException::class.java) {
+            entryBudget.readEntry(ByteArrayInputStream(ByteArray(5)), maximumEntryBytes = 4)
+        }
+
+        val stalled =
+            object : InputStream() {
+                override fun read(): Int = 0
+
+                override fun read(
+                    buffer: ByteArray,
+                    offset: Int,
+                    length: Int,
+                ): Int = 0
+            }
+        val stalledBudget = ViewerArchiveBudget(maximumEntries = 1, maximumExpandedBytes = 8)
+        stalledBudget.beginEntry("word/document.xml")
+        assertThrows(IOException::class.java) {
+            stalledBudget.readEntry(stalled, maximumEntryBytes = 4)
+        }
+        assertThrows(IOException::class.java) {
+            readBoundedViewerEntry(stalled, maxBytes = 4)
+        }
+    }
+
+    @Test
     fun `archive budget rejects unsafe paths and active XML content`() {
         listOf("../secret", "/absolute", "word\\document.xml", "C:/secret", "word/./document.xml")
             .forEach { name ->
@@ -91,7 +120,9 @@ class ViewerArchiveIOTest {
         assertEquals("safe preview", readBoundedViewerText(text))
 
         val oversized = temporaryFolder.newFile("oversized.txt")
-        RandomAccessFile(oversized, "rw").use { it.setLength(MAX_VIEWER_TEXT_BYTES.toLong() + 1) }
+        RandomAccessFile(oversized, "rw").use {
+            it.setLength(ViewerResourceLimits.MAX_TEXT_BYTES.toLong() + 1)
+        }
         assertThrows(IllegalArgumentException::class.java) { readBoundedViewerText(oversized) }
     }
 }

@@ -45,9 +45,9 @@ internal suspend fun FlowCollector<Bitmap>.emitPptxPages(
             when {
                 slideNumber != null -> slideXml[slideNumber] = budget.readXml(zip)
                 relationshipNumber != null -> relationshipXml[relationshipNumber] = budget.readXml(zip)
-                name.startsWith("ppt/media/") && media.size < MAX_VIEWER_MEDIA_ITEMS -> {
+                name.startsWith("ppt/media/") && media.size < ViewerResourceLimits.MAX_MEDIA_ITEMS -> {
                     media[name.substringAfterLast('/')] =
-                        budget.readEntry(zip, MAX_VIEWER_MEDIA_BYTES)
+                        budget.readEntry(zip, ViewerResourceLimits.MAX_MEDIA_BYTES)
                 }
                 else -> budget.skipEntry(zip)
             }
@@ -57,7 +57,7 @@ internal suspend fun FlowCollector<Bitmap>.emitPptxPages(
     }
 
     val height = (width * 0.5625f).toInt().coerceAtLeast(1)
-    slideXml.entries.take(MAX_VIEWER_RENDERED_PAGES).forEach { (number, xml) ->
+    slideXml.entries.take(ViewerResourceLimits.MAX_RENDERED_PAGES).forEach { (number, xml) ->
         val relationships = relationshipXml[number]?.let(::parseViewerRelationships).orEmpty()
         emit(renderViewerSlide(xml, relationships, media, width, height))
     }
@@ -143,7 +143,10 @@ private fun parseViewerSlideElements(
         }
 
         var event = parser.eventType
-        while (event != XmlPullParser.END_DOCUMENT && texts.size + images.size < MAX_VIEWER_SLIDE_ELEMENTS) {
+        while (
+            event != XmlPullParser.END_DOCUMENT &&
+            texts.size + images.size < ViewerResourceLimits.MAX_SLIDE_ELEMENTS
+        ) {
             val name = parser.name.orEmpty()
             when (event) {
                 XmlPullParser.START_TAG ->
@@ -163,8 +166,8 @@ private fun parseViewerSlideElements(
                         "blip" -> relationshipId = parser.relationshipId().orEmpty()
                         "t" -> inText = true
                     }
-                XmlPullParser.TEXT -> if (inText && text.length < MAX_VIEWER_CELL_CHARACTERS) {
-                    text.append(parser.text.take(MAX_VIEWER_CELL_CHARACTERS - text.length))
+                XmlPullParser.TEXT -> if (inText && text.length < ViewerResourceLimits.MAX_CELL_CHARACTERS) {
+                    text.append(parser.text.take(ViewerResourceLimits.MAX_CELL_CHARACTERS - text.length))
                 }
                 XmlPullParser.END_TAG ->
                     when (name) {

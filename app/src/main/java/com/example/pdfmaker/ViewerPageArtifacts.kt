@@ -2,6 +2,8 @@ package com.example.pdfmaker
 
 import android.content.Context
 import android.graphics.Bitmap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.Closeable
 import java.io.File
 import java.util.UUID
@@ -13,7 +15,9 @@ internal data class ViewerPageArtifact(
     val height: Int,
 ) {
     init {
-        require(pageNumber in 1..MAX_VIEWER_RENDERED_PAGES) { "Viewer page number exceeds its limit" }
+        require(pageNumber in 1..ViewerResourceLimits.MAX_RENDERED_PAGES) {
+            "Viewer page number exceeds its limit"
+        }
         require(ViewerPageArtifactPolicy.acceptsDimensions(width, height)) {
             "Viewer page dimensions exceed their limit"
         }
@@ -29,7 +33,9 @@ internal object ViewerPageArtifactPolicy {
     )
 
     fun pageBaseName(pageIndex: Int): String {
-        require(pageIndex in 0 until MAX_VIEWER_RENDERED_PAGES) { "Viewer page index exceeds its limit" }
+        require(pageIndex in 0 until ViewerResourceLimits.MAX_RENDERED_PAGES) {
+            "Viewer page index exceeds its limit"
+        }
         return "page-${(pageIndex + 1).toString().padStart(3, '0')}"
     }
 
@@ -98,6 +104,25 @@ internal class ViewerPageArtifactStore private constructor(
             }
             check(directory.mkdir()) { "Unable to create the viewer page cache" }
             return ViewerPageArtifactStore(root, directory)
+        }
+    }
+}
+
+internal suspend fun cacheViewerPageArtifacts(
+    file: PdfFile,
+    kind: ViewerFileKind,
+    targetWidth: Int,
+    store: ViewerPageArtifactStore,
+    onArtifact: (ViewerPageArtifact) -> Unit,
+) {
+    var pageIndex = 0
+    pageStreamForFile(file, kind, targetWidth).collect { bitmap ->
+        try {
+            val artifact = withContext(Dispatchers.IO) { store.persist(bitmap, pageIndex) }
+            onArtifact(artifact)
+            pageIndex += 1
+        } finally {
+            if (!bitmap.isRecycled) bitmap.recycle()
         }
     }
 }

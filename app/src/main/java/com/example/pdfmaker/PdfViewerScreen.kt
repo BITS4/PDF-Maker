@@ -32,8 +32,6 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 @Composable
 fun PdfViewerScreen(
@@ -109,16 +107,9 @@ fun PdfViewerScreen(
                     screenWidthDp = screenWidth,
                     density = context.resources.displayMetrics.density,
                 )
-            pageStreamForFile(viewFile, kind, targetWidth).collect { bitmap ->
-                try {
-                    val artifact = withContext(Dispatchers.IO) {
-                        nextStore.persist(bitmap, loadedCount)
-                    }
-                    pages = pages + artifact
-                    loadedCount += 1
-                } finally {
-                    if (!bitmap.isRecycled) bitmap.recycle()
-                }
+            cacheViewerPageArtifacts(viewFile, kind, targetWidth, nextStore) { artifact ->
+                pages = pages + artifact
+                loadedCount = pages.size
             }
             if (loadedCount == 0) {
                 errorMessage = "This document could not be rendered."

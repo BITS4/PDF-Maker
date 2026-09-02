@@ -50,7 +50,7 @@ class ViewerDelimitedTextTest {
             ),
         )
         assertThrows(IllegalArgumentException::class.java) {
-            parseDelimitedRows("a".repeat(MAX_VIEWER_TEXT_BYTES + 1), ',')
+            parseDelimitedRows("a".repeat(ViewerResourceLimits.MAX_TEXT_BYTES + 1), ',')
         }
     }
 }

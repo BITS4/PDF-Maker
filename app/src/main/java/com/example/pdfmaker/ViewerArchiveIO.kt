@@ -6,22 +6,25 @@ import java.io.IOException
 import java.io.InputStream
 import java.nio.charset.StandardCharsets
 
-internal const val MAX_VIEWER_XML_BYTES = 8 * 1024 * 1024
-internal const val MAX_VIEWER_MEDIA_BYTES = 20 * 1024 * 1024
-internal const val MAX_VIEWER_TEXT_BYTES = 1024 * 1024
-internal const val MAX_VIEWER_SOURCE_BYTES = 100L * 1024L * 1024L
-internal const val MAX_VIEWER_ARCHIVE_ENTRIES = 2_000
-internal const val MAX_VIEWER_ARCHIVE_BYTES = 64L * 1024L * 1024L
-internal const val MAX_VIEWER_ARCHIVE_ENTRY_BYTES = 32 * 1024 * 1024
-internal const val MAX_VIEWER_MEDIA_ITEMS = 64
-internal const val MAX_VIEWER_RENDERED_PAGES = 20
-internal const val MAX_VIEWER_TABLE_ROWS = 500
-internal const val MAX_VIEWER_TABLE_COLUMNS = 64
-internal const val MAX_VIEWER_CELL_CHARACTERS = 8_192
-internal const val MAX_VIEWER_RELATIONSHIPS = 1_000
-internal const val MAX_VIEWER_DOCUMENT_BLOCKS = 2_000
-internal const val MAX_VIEWER_RUNS_PER_PARAGRAPH = 512
-internal const val MAX_VIEWER_SLIDE_ELEMENTS = 512
+internal object ViewerResourceLimits {
+    const val MAX_XML_BYTES = 8 * 1024 * 1024
+    const val MAX_MEDIA_BYTES = 20 * 1024 * 1024
+    const val MAX_TEXT_BYTES = 1024 * 1024
+    const val MAX_SOURCE_BYTES = 100L * 1024L * 1024L
+    const val MAX_ARCHIVE_ENTRIES = 2_000
+    const val MAX_ARCHIVE_BYTES = 64L * 1024L * 1024L
+    const val MAX_ARCHIVE_ENTRY_BYTES = 32 * 1024 * 1024
+    const val MAX_MEDIA_ITEMS = 64
+    const val MAX_RENDERED_PAGES = 20
+    const val MAX_TABLE_ROWS = 500
+    const val MAX_TABLE_COLUMNS = 64
+    const val MAX_CELL_CHARACTERS = 8_192
+    const val MAX_RELATIONSHIPS = 1_000
+    const val MAX_DOCUMENT_BLOCKS = 2_000
+    const val MAX_RUNS_PER_PARAGRAPH = 512
+    const val MAX_SLIDE_ELEMENTS = 512
+    const val MAX_OOXML_COORDINATE = 100_000_000f
+}
 
 internal fun readBoundedViewerEntry(
     input: InputStream,
@@ -29,22 +32,14 @@ internal fun readBoundedViewerEntry(
 ): ByteArray {
     require(maxBytes > 0) { "maxBytes must be positive" }
     val output = ByteArrayOutputStream(minOf(maxBytes, 16 * 1024))
-    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-    var total = 0
-    while (true) {
-        val count = input.read(buffer)
-        if (count < 0) break
-        total += count
-        if (total > maxBytes) throw IOException("Document entry exceeds the preview limit")
-        output.write(buffer, 0, count)
-    }
+    BoundedIo.copy(input, output, maxBytes.toLong())
     return output.toByteArray()
 }
 
 /** Tracks all expanded ZIP data, including entries the preview renderer does not use. */
 internal class ViewerArchiveBudget(
-    private val maximumEntries: Int = MAX_VIEWER_ARCHIVE_ENTRIES,
-    private val maximumExpandedBytes: Long = MAX_VIEWER_ARCHIVE_BYTES,
+    private val maximumEntries: Int = ViewerResourceLimits.MAX_ARCHIVE_ENTRIES,
+    private val maximumExpandedBytes: Long = ViewerResourceLimits.MAX_ARCHIVE_BYTES,
 ) {
     var entryCount: Int = 0
         private set
@@ -69,12 +64,12 @@ internal class ViewerArchiveBudget(
 
     fun readXml(input: InputStream): String =
         SafeDocxInput.decodeXml(
-            readEntry(input, MAX_VIEWER_XML_BYTES),
-            MAX_VIEWER_XML_BYTES.toLong(),
+            readEntry(input, ViewerResourceLimits.MAX_XML_BYTES),
+            ViewerResourceLimits.MAX_XML_BYTES.toLong(),
         )
 
     fun skipEntry(input: InputStream) {
-        consume(input, MAX_VIEWER_ARCHIVE_ENTRY_BYTES, capture = false)
+        consume(input, ViewerResourceLimits.MAX_ARCHIVE_ENTRY_BYTES, capture = false)
     }
 
     private fun consume(
@@ -87,26 +82,50 @@ internal class ViewerArchiveBudget(
         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
         var entryBytes = 0L
         var emptyReads = 0
-        while (true) {
+        var finished = false
+        while (!finished) {
             val count = input.read(buffer)
-            if (count < 0) break
-            if (count == 0) {
-                emptyReads += 1
-                if (emptyReads > 32) throw IOException("Document archive stream made no progress")
-                continue
+            when {
+                count < 0 -> finished = true
+                count == 0 -> {
+                    emptyReads += 1
+                    requireArchiveProgress(emptyReads)
+                }
+                else -> {
+                    emptyReads = 0
+                    requireEntryCapacity(entryBytes, count, maximumEntryBytes)
+                    requireArchiveCapacity(expandedBytes, count, maximumExpandedBytes)
+                    entryBytes += count
+                    expandedBytes += count
+                    output?.write(buffer, 0, count)
+                }
             }
-            emptyReads = 0
-            if (entryBytes > maximumEntryBytes.toLong() - count) {
-                throw IOException("Document archive entry exceeds its preview limit")
-            }
-            if (expandedBytes > maximumExpandedBytes - count) {
-                throw IOException("Document archive expands beyond its preview limit")
-            }
-            entryBytes += count
-            expandedBytes += count
-            output?.write(buffer, 0, count)
         }
         return output?.toByteArray()
+    }
+}
+
+private fun requireArchiveProgress(emptyReads: Int) {
+    if (emptyReads > 32) throw IOException("Document archive stream made no progress")
+}
+
+private fun requireEntryCapacity(
+    currentBytes: Long,
+    incomingBytes: Int,
+    maximumBytes: Int,
+) {
+    if (currentBytes > maximumBytes.toLong() - incomingBytes) {
+        throw IOException("Document archive entry exceeds its preview limit")
+    }
+}
+
+private fun requireArchiveCapacity(
+    currentBytes: Long,
+    incomingBytes: Int,
+    maximumBytes: Long,
+) {
+    if (currentBytes > maximumBytes - incomingBytes) {
+        throw IOException("Document archive expands beyond its preview limit")
     }
 }
 
@@ -122,10 +141,15 @@ internal fun readBoundedViewerFile(file: File, maximumBytes: Long): ByteArray {
 }
 
 internal fun readBoundedViewerText(file: File): String =
-    String(readBoundedViewerFile(file, MAX_VIEWER_TEXT_BYTES.toLong()), StandardCharsets.UTF_8)
+    String(readBoundedViewerFile(file, ViewerResourceLimits.MAX_TEXT_BYTES.toLong()), StandardCharsets.UTF_8)
 
 internal fun isSafeViewerArchiveEntryName(name: String): Boolean {
-    if (name.isBlank() || name.length > 240 || name.startsWith('/') || name.startsWith('\\')) return false
-    if ('\u0000' in name || ':' in name || '\\' in name) return false
-    return name.split('/').none { it == "." || it == ".." }
+    return when {
+        name.isBlank() -> false
+        name.length > 240 -> false
+        name.startsWith('/') || name.startsWith('\\') -> false
+        '\u0000' in name -> false
+        ':' in name || '\\' in name -> false
+        else -> name.split('/').none { it == "." || it == ".." }
+    }
 }

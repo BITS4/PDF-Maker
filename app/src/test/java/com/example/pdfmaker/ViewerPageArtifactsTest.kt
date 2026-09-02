@@ -15,10 +15,15 @@ class ViewerPageArtifactsTest {
     @Test
     fun `creates deterministic bounded page names`() {
         assertEquals("page-001", ViewerPageArtifactPolicy.pageBaseName(0))
-        assertEquals("page-020", ViewerPageArtifactPolicy.pageBaseName(MAX_VIEWER_RENDERED_PAGES - 1))
+        assertEquals(
+            "page-020",
+            ViewerPageArtifactPolicy.pageBaseName(ViewerResourceLimits.MAX_RENDERED_PAGES - 1),
+        )
         assertTrue(runCatching { ViewerPageArtifactPolicy.pageBaseName(-1) }.isFailure)
         assertTrue(
-            runCatching { ViewerPageArtifactPolicy.pageBaseName(MAX_VIEWER_RENDERED_PAGES) }.isFailure,
+            runCatching {
+                ViewerPageArtifactPolicy.pageBaseName(ViewerResourceLimits.MAX_RENDERED_PAGES)
+            }.isFailure,
         )
     }
 

@@ -5,51 +5,82 @@ internal fun delimiterForFileName(fileName: String): Char = if (fileName.substri
 internal fun parseDelimitedRows(
     text: String,
     delimiter: Char,
-    maximumRows: Int = MAX_VIEWER_TABLE_ROWS,
-    maximumColumns: Int = MAX_VIEWER_TABLE_COLUMNS,
-    maximumCellCharacters: Int = MAX_VIEWER_CELL_CHARACTERS,
+    maximumRows: Int = ViewerResourceLimits.MAX_TABLE_ROWS,
+    maximumColumns: Int = ViewerResourceLimits.MAX_TABLE_COLUMNS,
+    maximumCellCharacters: Int = ViewerResourceLimits.MAX_CELL_CHARACTERS,
 ): List<List<String>> {
-    require(text.length <= MAX_VIEWER_TEXT_BYTES) { "Delimited preview exceeds its text limit" }
+    require(text.length <= ViewerResourceLimits.MAX_TEXT_BYTES) { "Delimited preview exceeds its text limit" }
     require(maximumRows > 0 && maximumColumns > 0 && maximumCellCharacters > 0) {
         "Delimited preview limits must be positive"
     }
     if (text.isEmpty()) return emptyList()
 
-    val rows = mutableListOf<List<String>>()
-    var row = mutableListOf<String>()
-    val cell = StringBuilder()
-    var inQuotes = false
+    val accumulator = DelimitedRowAccumulator(maximumRows, maximumColumns, maximumCellCharacters)
     var index = 0
 
-    fun finishCell() {
+    while (index < text.length && accumulator.hasRowCapacity) {
+        index += accumulator.consume(text, index, delimiter)
+    }
+    return accumulator.complete()
+}
+
+private class DelimitedRowAccumulator(
+    private val maximumRows: Int,
+    private val maximumColumns: Int,
+    private val maximumCellCharacters: Int,
+) {
+    private val rows = mutableListOf<List<String>>()
+    private var row = mutableListOf<String>()
+    private val cell = StringBuilder()
+    private var inQuotes = false
+
+    val hasRowCapacity: Boolean
+        get() = rows.size < maximumRows
+
+    fun consume(text: String, index: Int, delimiter: Char): Int {
+        val character = text[index]
+        if (character == '"' && inQuotes && text.getOrNull(index + 1) == '"') {
+            append('"')
+            return 2
+        }
+
+        return when {
+            character == '"' -> {
+                inQuotes = !inQuotes
+                1
+            }
+            character == delimiter && !inQuotes -> {
+                finishCell()
+                1
+            }
+            (character == '\r' || character == '\n') && !inQuotes -> {
+                finishRow()
+                if (character == '\r' && text.getOrNull(index + 1) == '\n') 2 else 1
+            }
+            else -> {
+                append(character)
+                1
+            }
+        }
+    }
+
+    fun complete(): List<List<String>> {
+        if (hasRowCapacity && (cell.isNotEmpty() || row.isNotEmpty())) finishRow()
+        return rows
+    }
+
+    private fun append(character: Char) {
+        if (cell.length < maximumCellCharacters) cell.append(character)
+    }
+
+    private fun finishCell() {
         if (row.size < maximumColumns) row += cell.toString()
         cell.clear()
     }
 
-    fun finishRow() {
+    private fun finishRow() {
         finishCell()
-        if (rows.size < maximumRows) rows += row
+        if (hasRowCapacity) rows += row
         row = mutableListOf()
     }
-
-    while (index < text.length && rows.size < maximumRows) {
-        val char = text[index]
-        when {
-            char == '"' && inQuotes && text.getOrNull(index + 1) == '"' -> {
-                if (cell.length < maximumCellCharacters) cell.append('"')
-                index += 1
-            }
-            char == '"' -> inQuotes = !inQuotes
-            char == delimiter && !inQuotes -> finishCell()
-            (char == '\r' || char == '\n') && !inQuotes -> {
-                finishRow()
-                if (char == '\r' && text.getOrNull(index + 1) == '\n') index += 1
-            }
-            else -> if (cell.length < maximumCellCharacters) cell.append(char)
-        }
-        index += 1
-    }
-
-    if (rows.size < maximumRows && (cell.isNotEmpty() || row.isNotEmpty())) finishRow()
-    return rows
 }

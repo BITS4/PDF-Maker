@@ -7,7 +7,7 @@ import org.xmlpull.v1.XmlPullParserFactory
 internal fun boundedViewerTextFragment(
     currentLength: Int,
     value: String,
-    maximumLength: Int = MAX_VIEWER_CELL_CHARACTERS,
+    maximumLength: Int = ViewerResourceLimits.MAX_CELL_CHARACTERS,
 ): String {
     require(currentLength >= 0 && maximumLength > 0) { "Viewer text limits are invalid" }
     return value.take((maximumLength - currentLength).coerceAtLeast(0))
@@ -18,7 +18,7 @@ internal fun parseViewerRelationships(xml: String): Map<String, String> {
     return try {
         val parser = XmlPullParserFactory.newInstance().newPullParser().also { it.setInput(xml.reader()) }
         var event = parser.eventType
-        while (event != XmlPullParser.END_DOCUMENT && relationships.size < MAX_VIEWER_RELATIONSHIPS) {
+        while (event != XmlPullParser.END_DOCUMENT && relationships.size < ViewerResourceLimits.MAX_RELATIONSHIPS) {
             if (event == XmlPullParser.START_TAG && parser.name == "Relationship") {
                 val id = parser.getAttributeValue(null, "Id").orEmpty()
                 val target = parser.getAttributeValue(null, "Target").orEmpty()
@@ -55,12 +55,12 @@ internal fun parseViewerDocument(
         val runText = StringBuilder()
 
         fun addBlock(block: DocBlock) {
-            if (blocks.size < MAX_VIEWER_DOCUMENT_BLOCKS) blocks += block
+            if (blocks.size < ViewerResourceLimits.MAX_DOCUMENT_BLOCKS) blocks += block
         }
 
         fun flushRun() {
             val text = runText.toString()
-            if (text.isNotEmpty() && paragraphRuns.size < MAX_VIEWER_RUNS_PER_PARAGRAPH) {
+            if (text.isNotEmpty() && paragraphRuns.size < ViewerResourceLimits.MAX_RUNS_PER_PARAGRAPH) {
                 paragraphRuns += DocRun(text, bold, italic, fontSize)
             }
             runText.clear()
@@ -81,7 +81,7 @@ internal fun parseViewerDocument(
         }
 
         var event = parser.eventType
-        while (event != XmlPullParser.END_DOCUMENT && blocks.size < MAX_VIEWER_DOCUMENT_BLOCKS) {
+        while (event != XmlPullParser.END_DOCUMENT && blocks.size < ViewerResourceLimits.MAX_DOCUMENT_BLOCKS) {
             val name = parser.name.orEmpty()
             when (event) {
                 XmlPullParser.START_TAG ->

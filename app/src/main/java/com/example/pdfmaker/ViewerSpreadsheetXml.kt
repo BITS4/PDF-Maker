@@ -15,8 +15,8 @@ internal fun boundedSpreadsheetText(
 
 internal fun parseViewerSharedStrings(
     xml: String,
-    maximumStrings: Int = MAX_VIEWER_TABLE_ROWS * MAX_VIEWER_TABLE_COLUMNS,
-    maximumCellCharacters: Int = MAX_VIEWER_CELL_CHARACTERS,
+    maximumStrings: Int = ViewerResourceLimits.MAX_TABLE_ROWS * ViewerResourceLimits.MAX_TABLE_COLUMNS,
+    maximumCellCharacters: Int = ViewerResourceLimits.MAX_CELL_CHARACTERS,
 ): List<String> {
     require(maximumStrings > 0 && maximumCellCharacters > 0) { "Spreadsheet preview limits must be positive" }
     val strings = mutableListOf<String>()
@@ -50,12 +50,14 @@ internal fun parseViewerSharedStrings(
     }
 }
 
+// Keeping the pull-parser state local makes limits enforceable before any row or cell is allocated.
+@Suppress("CyclomaticComplexMethod", "NestedBlockDepth")
 internal fun parseViewerSheet(
     xml: String,
     sharedStrings: List<String>,
-    maximumRows: Int = MAX_VIEWER_TABLE_ROWS,
-    maximumColumns: Int = MAX_VIEWER_TABLE_COLUMNS,
-    maximumCellCharacters: Int = MAX_VIEWER_CELL_CHARACTERS,
+    maximumRows: Int = ViewerResourceLimits.MAX_TABLE_ROWS,
+    maximumColumns: Int = ViewerResourceLimits.MAX_TABLE_COLUMNS,
+    maximumCellCharacters: Int = ViewerResourceLimits.MAX_CELL_CHARACTERS,
 ): List<List<String>> {
     require(maximumRows > 0 && maximumColumns > 0 && maximumCellCharacters > 0) {
         "Spreadsheet preview limits must be positive"

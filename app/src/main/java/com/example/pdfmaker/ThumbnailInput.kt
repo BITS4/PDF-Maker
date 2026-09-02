@@ -18,8 +18,8 @@ object ThumbnailInput {
     fun isAllowedSource(file: File): Boolean = file.isFile && file.length() in 1..MAX_SOURCE_BYTES
 
     fun readXml(input: InputStream): String = SafeDocxInput.decodeXml(
-        readBoundedViewerEntry(input, MAX_VIEWER_XML_BYTES),
-        MAX_VIEWER_XML_BYTES.toLong(),
+        readBoundedViewerEntry(input, ViewerResourceLimits.MAX_XML_BYTES),
+        ViewerResourceLimits.MAX_XML_BYTES.toLong(),
     )
 
     fun readTextPrefix(file: File): String {
@@ -31,7 +31,7 @@ object ThumbnailInput {
     }
 
     fun validateArchiveEntry(index: Int, name: String) {
-        if (index !in 1..MAX_VIEWER_ARCHIVE_ENTRIES) {
+        if (index !in 1..ViewerResourceLimits.MAX_ARCHIVE_ENTRIES) {
             throw IOException("Document archive contains too many entries")
         }
         if (!isSafeViewerArchiveEntryName(name)) {

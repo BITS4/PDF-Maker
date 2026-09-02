@@ -23,7 +23,9 @@ internal fun pageStreamForFile(
     flow {
         val source = File(file.filePath)
         require(source.isFile) { "Document is unavailable" }
-        require(source.length() in 0..MAX_VIEWER_SOURCE_BYTES) { "Document exceeds the viewer safety limit" }
+        require(source.length() in 0..ViewerResourceLimits.MAX_SOURCE_BYTES) {
+            "Document exceeds the viewer safety limit"
+        }
         val safeWidth = viewerRenderWidth(targetWidth)
 
         when (kind) {
@@ -44,7 +46,7 @@ private suspend fun FlowCollector<Bitmap>.emitPdfPages(
 ) {
     ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
         PdfRenderer(descriptor).use { renderer ->
-            for (index in 0 until minOf(renderer.pageCount, MAX_VIEWER_RENDERED_PAGES)) {
+            for (index in 0 until minOf(renderer.pageCount, ViewerResourceLimits.MAX_RENDERED_PAGES)) {
                 renderer.openPage(index).use pageUse@{ page ->
                     val target = RenderSizing.fitWithin(
                         page.width,
@@ -96,7 +98,7 @@ private suspend fun FlowCollector<Bitmap>.emitTextPages(
     var firstLine = 0
 
     var emittedPages = 0
-    while (firstLine < layout.lineCount && emittedPages < MAX_VIEWER_RENDERED_PAGES) {
+    while (firstLine < layout.lineCount && emittedPages < ViewerResourceLimits.MAX_RENDERED_PAGES) {
         val contentHeight = pageHeight - margin * 2
         var lastLine = firstLine
         while (

@@ -52,7 +52,10 @@ class ThumbnailInputTest {
         assertTrue(runCatching { ThumbnailInput.validateArchiveEntry(1, "word\\document.xml") }.isFailure)
         assertTrue(
             runCatching {
-                ThumbnailInput.validateArchiveEntry(MAX_VIEWER_ARCHIVE_ENTRIES + 1, "word/document.xml")
+                ThumbnailInput.validateArchiveEntry(
+                    ViewerResourceLimits.MAX_ARCHIVE_ENTRIES + 1,
+                    "word/document.xml",
+                )
             }.isFailure,
         )
     }
