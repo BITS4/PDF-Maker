@@ -45,7 +45,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-private data class PageState(
+internal data class PageState(
     val bitmap  : Bitmap,
     val rotation: Int = 0,    // 0, 90, 180, 270
     val deleted : Boolean = false
@@ -74,24 +74,21 @@ fun PageManagerScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit = {}) {
             pickedName = uri.lastPathSegment
                 ?.substringAfterLast("/")?.substringAfterLast("%2F")
                 ?.removeSuffix(".pdf")?.take(40) ?: "document"
-            val list = mutableListOf<PageState>()
-            withContext(Dispatchers.IO) {
-                try {
-                    val fd  = context.contentResolver.openFileDescriptor(uri, "r") ?: return@withContext
-                    val rdr = PdfRenderer(fd)
-                    for (i in 0 until rdr.pageCount) {
-                        val page = rdr.openPage(i)
-                        val w = 160; val h = (w.toFloat()/page.width*page.height).toInt().coerceAtLeast(1)
-                        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-                        Canvas(bmp).drawColor(AndroidColor.WHITE)
-                        page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                        page.close(); list.add(PageState(bmp))
-                    }
-                    rdr.close(); fd.close()
-                } catch (_: Exception) {}
+            val result = withContext(Dispatchers.IO) {
+                runCatching { loadPageStates(context, uri) }
             }
-            pages   = list; loading = false
-            pmState = PmState.EDIT
+            result.fold(
+                onSuccess = { loadedPages ->
+                    pages.forEach { it.bitmap.recycle() }
+                    pages = loadedPages
+                    pmState = PmState.EDIT
+                },
+                onFailure = { error ->
+                    errMsg = error.message ?: "Could not read this PDF"
+                    pmState = PmState.ERROR
+                },
+            )
+            loading = false
         }
     }
 
@@ -279,7 +276,6 @@ fun PageManagerScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit = {}) {
         }
     }
 }
-
 @Composable
 private fun PageCard(
     page           : PageState,
@@ -356,47 +352,3 @@ private fun HintPill(
 }
 
 // ── Save pages logic ──────────────────────────────────────────────────────────
-
-private fun savePages(
-    context  : android.content.Context,
-    uri      : Uri,
-    pages    : List<PageState>,
-    baseName : String
-): Pair<String, String>? = try {
-    val fd   = context.contentResolver.openFileDescriptor(uri, "r") ?: return null
-    val rdr  = PdfRenderer(fd)
-    val doc  = PdfDocument()
-    val w    = 1080
-    var docPageIdx = 0
-
-    pages.forEachIndexed { idx, pg ->
-        if (pg.deleted) return@forEachIndexed
-        if (idx >= rdr.pageCount) return@forEachIndexed
-        val page = rdr.openPage(idx)
-        val h    = (w.toFloat()/page.width*page.height).toInt().coerceAtLeast(1)
-        val bmp  = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        Canvas(bmp).drawColor(AndroidColor.WHITE)
-        page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-        page.close()
-
-        // Apply rotation
-        val finalBmp = if (pg.rotation != 0) {
-            val m = Matrix().apply { postRotate(pg.rotation.toFloat()) }
-            Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, m, true).also { bmp.recycle() }
-        } else bmp
-
-        val pw = finalBmp.width; val ph = finalBmp.height
-        val pi = PdfDocument.PageInfo.Builder(pw, ph, ++docPageIdx).create()
-        val pg2 = doc.startPage(pi)
-        pg2.canvas.drawBitmap(finalBmp, 0f, 0f, null)
-        doc.finishPage(pg2); finalBmp.recycle()
-    }
-
-    rdr.close(); fd.close()
-    val dir     = getPdfMakerDir(context)
-    val outName = "${baseName}_edited.pdf"
-    val outFile = File(dir, outName)
-    outFile.outputStream().use { doc.writeTo(it) }
-    doc.close()
-    Pair(outFile.absolutePath, outName)
-} catch (_: Exception) { null }

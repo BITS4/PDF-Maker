@@ -1,6 +1,8 @@
 package com.example.pdfmaker
 
 internal object PageEditPolicy {
+    const val MAX_EDITABLE_PAGES = 200
+
     fun rotateClockwise(currentDegrees: Int): Int = normalizeRotation(currentDegrees + 90)
 
     fun rotateCounterClockwise(currentDegrees: Int): Int = normalizeRotation(currentDegrees - 90)
@@ -13,4 +15,11 @@ internal object PageEditPolicy {
     fun retainedIndexes(deleted: List<Boolean>): List<Int> = deleted.indices.filter { !deleted[it] }
 
     fun canSave(deleted: List<Boolean>): Boolean = retainedIndexes(deleted).isNotEmpty()
+
+    fun requireSupportedPageCount(pageCount: Int): Int {
+        require(pageCount in 1..MAX_EDITABLE_PAGES) {
+            "PDF must contain between 1 and $MAX_EDITABLE_PAGES pages"
+        }
+        return pageCount
+    }
 }
