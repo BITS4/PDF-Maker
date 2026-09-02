@@ -1,6 +1,7 @@
 package com.example.pdfmaker
 
 import java.security.SecureRandom
+import java.util.Base64
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -41,12 +42,27 @@ class PinCredentialTest {
     @Test
     fun malformedAndTamperedCredentialsFailClosed() {
         val credential = PinCredential.create("98765", iterations = 1_000)
-        val corrupted = credential.dropLast(1) + if (credential.last() == 'A') "B" else "A"
+        val parts = credential.split('$').toMutableList()
+        val tamperedHash = Base64.getDecoder().decode(parts.last())
+        tamperedHash[0] = (tamperedHash[0].toInt() xor 0x01).toByte()
+        parts[4] = Base64.getEncoder().withoutPadding().encodeToString(tamperedHash)
+        val corrupted = parts.joinToString("$")
 
         assertFalse(PinCredential.verify("98765", ""))
         assertFalse(PinCredential.verify("98765", "v1\$5\$1000\$broken\$broken"))
         assertFalse(PinCredential.verify("98765", corrupted))
         assertFalse(PinCredential.verify("9876", credential))
+    }
+
+    @Test
+    fun rejectsCredentialsWithAnUnboundedWorkFactor() {
+        val credential = PinCredential.create("98765", iterations = 1_000)
+        val parts = credential.split('$').toMutableList()
+        parts[2] = Int.MAX_VALUE.toString()
+        val hostileCredential = parts.joinToString("$")
+
+        assertFalse(PinCredential.verify("98765", hostileCredential))
+        assertEquals(null, PinCredential.pinLength(hostileCredential))
     }
 }
 

@@ -10,6 +10,8 @@ import javax.crypto.spec.PBEKeySpec
 object PinCredential {
     private const val VERSION = "v1"
     private const val DEFAULT_ITERATIONS = 210_000
+    private const val MIN_ITERATIONS = 1_000
+    private const val MAX_ITERATIONS = 1_000_000
     private const val SALT_BYTES = 16
     private const val HASH_BITS = 256
 
@@ -21,7 +23,9 @@ object PinCredential {
         iterations: Int = DEFAULT_ITERATIONS,
     ): String {
         require(isValidPin(pin)) { "PIN must contain 4 to 6 digits" }
-        require(iterations >= 1_000) { "PBKDF2 work factor is too low" }
+        require(iterations in MIN_ITERATIONS..MAX_ITERATIONS) {
+            "PBKDF2 work factor is outside the supported range"
+        }
         val salt = ByteArray(SALT_BYTES).also(random::nextBytes)
         val hash = derive(pin, salt, iterations)
         return listOf(
@@ -61,7 +65,12 @@ object PinCredential {
             val iterations = parts[2].toInt()
             val salt = Base64.getDecoder().decode(parts[3])
             val hash = Base64.getDecoder().decode(parts[4])
-            if (pinLength !in 4..6 || iterations < 1_000 || salt.size != SALT_BYTES || hash.size != HASH_BITS / 8) {
+            if (
+                pinLength !in 4..6 ||
+                iterations !in MIN_ITERATIONS..MAX_ITERATIONS ||
+                salt.size != SALT_BYTES ||
+                hash.size != HASH_BITS / 8
+            ) {
                 return null
             }
             ParsedCredential(pinLength, iterations, salt, hash)
