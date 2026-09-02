@@ -119,7 +119,9 @@ fun PageManagerScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit = {}) {
                         Spacer(Modifier.width(8.dp))
                     }
                     if (changed) {
-                        TextButton(onClick = {
+                        TextButton(
+                            enabled = PageEditPolicy.canSave(pages.map { it.deleted }),
+                            onClick = {
                             val uri = pickedUri ?: return@TextButton
                             scope.launch {
                                 pmState = PmState.SAVING
@@ -134,7 +136,8 @@ fun PageManagerScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit = {}) {
                                     pmState = PmState.DONE
                                 } else { errMsg = "Could not save PDF"; pmState = PmState.ERROR }
                             }
-                        }) {
+                            },
+                        ) {
                             Text("Save", color = AccentBlue, fontWeight = FontWeight.Bold)
                         }
                     }
@@ -203,12 +206,16 @@ fun PageManagerScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit = {}) {
                                         pageNum   = idx + 1,
                                         onRotateCW = {
                                             pages = pages.toMutableList().also {
-                                                it[idx] = it[idx].copy(rotation = (it[idx].rotation + 90) % 360)
+                                                it[idx] = it[idx].copy(
+                                                    rotation = PageEditPolicy.rotateClockwise(it[idx].rotation),
+                                                )
                                             }
                                         },
                                         onRotateCCW = {
                                             pages = pages.toMutableList().also {
-                                                it[idx] = it[idx].copy(rotation = (it[idx].rotation + 270) % 360)
+                                                it[idx] = it[idx].copy(
+                                                    rotation = PageEditPolicy.rotateCounterClockwise(it[idx].rotation),
+                                                )
                                             }
                                         },
                                         onToggleDelete = {
