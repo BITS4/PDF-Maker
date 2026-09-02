@@ -27,7 +27,7 @@ fun ImportedPdfViewerScreen(
     val operations = rememberPdfEditorOperationController()
     val state = remember(pdfUri, initialEditMode) { ImportedPdfViewerState(initialEditMode) }
     val density = LocalDensity.current
-    val displayScale = remember(density) { ImportedPdfDisplayScale(density.density, density.density * density.fontScale) }
+    val displayScale = remember(density) { ImportedPdfDisplayScale(density.density * density.fontScale) }
     val latestShareFile = rememberUpdatedState(onShareFile)
     val actions =
         remember(context, state, operations, displayScale) {

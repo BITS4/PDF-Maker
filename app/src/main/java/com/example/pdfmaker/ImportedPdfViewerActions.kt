@@ -7,7 +7,6 @@ import androidx.core.content.FileProvider
 import java.io.File
 
 internal data class ImportedPdfDisplayScale(
-    val density: Float,
     val scaledDensity: Float,
 )
 
@@ -53,7 +52,6 @@ internal class ImportedPdfViewerActions(
                     context,
                     sourceUri,
                     annotationSnapshot,
-                    displayScale.density,
                     displayScale.scaledDensity,
                     pageBoxWidth,
                     pageBoxHeight,

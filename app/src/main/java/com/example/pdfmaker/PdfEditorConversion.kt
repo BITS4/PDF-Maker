@@ -120,7 +120,6 @@ internal suspend fun buildAnnotatedPdf(
     context: Context,
     sourceUri: Uri,
     annotations: List<PageAnnotations>,
-    @Suppress("UNUSED_PARAMETER") density: Float,
     scaledDensity: Float,
     pageBoxW: Int,
     pageBoxH: Int,
