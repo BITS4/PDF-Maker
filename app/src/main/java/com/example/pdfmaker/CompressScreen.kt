@@ -94,12 +94,7 @@ fun CompressScreen(onBack: () -> Unit) {
                         resultFile   = out
                         resultSizeKb = out.length() / 1024
                         // Register immediately so it shows on home/files screen
-                        val pageCount = try {
-                            val fd2 = context.contentResolver.openFileDescriptor(
-                                android.net.Uri.fromFile(out), "r"
-                            )
-                            fd2?.use { android.graphics.pdf.PdfRenderer(it).also { r -> r.close() }.pageCount } ?: 1
-                        } catch (_: Exception) { 1 }
+                        val pageCount = PdfFileMetadata.pageCount(out)
                         FileCache.prependFile(
                             PdfFile(
                                 name         = out.name,
