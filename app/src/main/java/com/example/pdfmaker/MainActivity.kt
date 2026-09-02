@@ -9,6 +9,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.content.IntentCompat
 import com.example.pdfmaker.ui.theme.PDFMakerTheme
 
 class MainActivity : ComponentActivity() {
@@ -46,7 +47,7 @@ class MainActivity : ComponentActivity() {
         incomingDocumentRequest = IncomingDocumentRequest(uri, incomingIntent.type)
     }
 
-    @Suppress("DEPRECATION")
     private fun incomingStream(intent: Intent): Uri? =
-        intent.getParcelableExtra(Intent.EXTRA_STREAM) ?: intent.clipData?.getItemAt(0)?.uri
+        IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
+            ?: intent.clipData?.getItemAt(0)?.uri
 }
