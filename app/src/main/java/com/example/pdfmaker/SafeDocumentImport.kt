@@ -2,8 +2,9 @@ package com.example.pdfmaker
 
 import android.content.Context
 import android.database.Cursor
-import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.CancellationSignal
+import android.os.OperationCanceledException
 import android.provider.OpenableColumns
 import java.io.Closeable
 import java.io.File
@@ -19,6 +20,7 @@ import java.util.zip.ZipFile
 data class IncomingDocumentRequest(
     val uri: Uri,
     val declaredMimeType: String?,
+    val requestId: Long = 0L,
 )
 
 enum class IncomingDocumentKind(val extension: String) {
@@ -46,16 +48,29 @@ internal object SafeDocumentImporter {
         request: IncomingDocumentRequest,
         retention: IncomingImportRetention = IncomingImportRetention.USER_DOCUMENT,
         beforeChunk: () -> Unit = {},
+        providerCancellation: CancellationSignal? = null,
     ): IncomingImportResult =
         try {
             requireSupportedRequest(request)
-            val metadata = readMetadata(context, request, beforeChunk)
+            val metadata = readMetadata(context, request, beforeChunk, providerCancellation)
             requireReportedSize(metadata.reportedSize)
             IncomingImportResult.Imported(
-                importValidatedDocument(context, request, retention, metadata, beforeChunk),
+                importValidatedDocument(
+                    context,
+                    request,
+                    retention,
+                    metadata,
+                    beforeChunk,
+                    providerCancellation,
+                ),
             )
         } catch (cancelled: CancellationException) {
             throw cancelled
+        } catch (cancelled: OperationCanceledException) {
+            if (providerCancellation?.isCanceled == true) {
+                throw cancelled.asCoroutineCancellation()
+            }
+            IncomingImportResult.Rejected("The document provider could not be read")
         } catch (rejection: ImportRejection) {
             IncomingImportResult.Rejected(rejection.safeMessage)
         } catch (error: Exception) {
@@ -77,31 +92,27 @@ internal object SafeDocumentImporter {
         context: Context,
         request: IncomingDocumentRequest,
         beforeChunk: () -> Unit,
+        providerCancellation: CancellationSignal?,
     ): ImportMetadata {
-        try {
-            beforeChunk()
-            var displayName: String? = null
-            var reportedSize = -1L
-            context.contentResolver
-                .query(
-                    request.uri,
-                    arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE),
-                    null,
-                    null,
-                    null,
-                )?.use { cursor ->
-                    if (cursor.moveToFirst()) {
-                        displayName = cursor.stringValue(OpenableColumns.DISPLAY_NAME)
-                        reportedSize = cursor.longValue(OpenableColumns.SIZE) ?: -1L
-                    }
+        beforeChunk()
+        var displayName: String? = null
+        var reportedSize = -1L
+        context.contentResolver
+            .query(
+                request.uri,
+                arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE),
+                null,
+                null,
+                null,
+                providerCancellation,
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    displayName = cursor.stringValue(OpenableColumns.DISPLAY_NAME)
+                    reportedSize = cursor.longValue(OpenableColumns.SIZE) ?: -1L
                 }
-            beforeChunk()
-            return ImportMetadata(displayName, reportedSize, context.contentResolver.getType(request.uri))
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (error: Exception) {
-            throw ImportRejection("The document provider could not be read", error)
-        }
+            }
+        beforeChunk()
+        return ImportMetadata(displayName, reportedSize)
     }
 
     private fun requireReportedSize(reportedSize: Long) {
@@ -116,11 +127,12 @@ internal object SafeDocumentImporter {
         retention: IncomingImportRetention,
         metadata: ImportMetadata,
         beforeChunk: () -> Unit,
+        providerCancellation: CancellationSignal?,
     ): ImportedDocumentArtifact = ImportTransaction().use { transaction ->
         val stagingDirectory = requireStagingDirectory(context.cacheDir)
         val snapshot = transaction.trackSnapshot(File(stagingDirectory, ".incoming-${UUID.randomUUID()}.tmp"))
-        copyProviderSnapshot(context, request.uri, snapshot, beforeChunk)
-        val kind = requireSupportedContent(snapshot, metadata, request.declaredMimeType, beforeChunk)
+        copyProviderSnapshot(context, request.uri, snapshot, beforeChunk, providerCancellation)
+        val kind = requireSupportedContent(snapshot, request.declaredMimeType, beforeChunk)
         val outputDirectory =
             IncomingImportStoragePolicy.destination(
                 kind = kind,
@@ -165,16 +177,20 @@ internal object SafeDocumentImporter {
         uri: Uri,
         snapshot: File,
         beforeChunk: () -> Unit,
+        providerCancellation: CancellationSignal?,
     ) {
-        val stream =
-            context.contentResolver.openInputStream(uri)
+        beforeChunk()
+        val descriptor =
+            context.contentResolver.openAssetFileDescriptor(uri, "r", providerCancellation)
                 ?: throw ImportRejection("The document provider returned no data")
         val copied =
-            stream.use { input ->
-                FileOutputStream(snapshot).use { output ->
-                    BoundedIo.copy(input, output, MAX_IMPORT_BYTES, beforeChunk).also {
-                        output.flush()
-                        output.fd.sync()
+            descriptor.use { openedDescriptor ->
+                openedDescriptor.createInputStream().use { input ->
+                    FileOutputStream(snapshot).use { output ->
+                        BoundedIo.copy(input, output, MAX_IMPORT_BYTES, beforeChunk).also {
+                            output.flush()
+                            output.fd.sync()
+                        }
                     }
                 }
             }
@@ -183,14 +199,13 @@ internal object SafeDocumentImporter {
 
     private fun requireSupportedContent(
         snapshot: File,
-        metadata: ImportMetadata,
         declaredMimeType: String?,
         beforeChunk: () -> Unit,
     ): IncomingDocumentKind {
         val kind =
             ImportedDocumentInspector.inspect(snapshot, beforeChunk)
                 ?: throw ImportRejection("The document content is not a supported PDF, DOCX, or image")
-        if (!ImportedDocumentInspector.mimeTypesMatch(kind, metadata.resolverMime, declaredMimeType)) {
+        if (!ImportedDocumentInspector.mimeTypesMatch(kind, declaredMimeType)) {
             throw ImportRejection("The document type does not match its content")
         }
         return kind
@@ -244,7 +259,6 @@ internal object SafeDocumentImporter {
     private data class ImportMetadata(
         val displayName: String?,
         val reportedSize: Long,
-        val resolverMime: String?,
     )
 
     private class ImportRejection(
@@ -289,9 +303,13 @@ internal object SafeDocumentImporter {
     }
 }
 
+private fun OperationCanceledException.asCoroutineCancellation(): CancellationException =
+    CancellationException("Document import was cancelled").also { cancellation ->
+        cancellation.initCause(this)
+    }
+
 /** Signature and container checks performed after the provider stream is fully bounded. */
 object ImportedDocumentInspector {
-    private const val MAX_IMAGE_PIXELS = 16_000_000L
     private const val MAX_DOCX_ENTRIES = 2_000
     private const val MAX_DOCX_ENTRY_BYTES = 50L * 1024L * 1024L
     private const val MAX_DOCX_EXPANDED_BYTES = 200L * 1024L * 1024L
@@ -302,14 +320,14 @@ object ImportedDocumentInspector {
         beforeChunk()
         val prefix = file.inputStream().use { BoundedIo.readPrefix(it, 64) }
         beforeChunk()
-        return when (signature(prefix)) {
+        return when (val kind = signature(prefix)) {
             IncomingDocumentKind.PDF -> IncomingDocumentKind.PDF
             IncomingDocumentKind.DOCX -> if (isSafeDocx(file, beforeChunk)) IncomingDocumentKind.DOCX else null
             IncomingDocumentKind.JPEG,
             IncomingDocumentKind.PNG,
             IncomingDocumentKind.GIF,
             IncomingDocumentKind.WEBP,
-            IncomingDocumentKind.BMP -> validateImage(file, signature(prefix), beforeChunk)
+            IncomingDocumentKind.BMP -> kind.takeIf { ImportedImageValidator.validate(file, kind, beforeChunk) }
             null -> null
         }
     }
@@ -337,8 +355,9 @@ object ImportedDocumentInspector {
                         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                         "application/zip",
                     )
-                    else -> mime == "image/*" || mime == "image/${kind.extension}" ||
-                        (kind == IncomingDocumentKind.JPEG && mime == "image/jpeg")
+                    IncomingDocumentKind.JPEG -> mime == "image/*" || mime == "image/jpeg" || mime == "image/jpg"
+                    IncomingDocumentKind.BMP -> mime == "image/*" || mime == "image/bmp" || mime == "image/x-ms-bmp"
+                    else -> mime == "image/*" || mime == "image/${kind.extension}"
                 }
             }
 
@@ -423,22 +442,6 @@ object ImportedDocumentInspector {
 
             override fun write(bytes: ByteArray, offset: Int, length: Int) = Unit
         }
-
-    private fun validateImage(
-        file: File,
-        detected: IncomingDocumentKind?,
-        beforeChunk: () -> Unit,
-    ): IncomingDocumentKind? {
-        val kind = detected ?: return null
-        beforeChunk()
-        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeFile(file.absolutePath, options)
-        beforeChunk()
-        val width = options.outWidth
-        val height = options.outHeight
-        if (width <= 0 || height <= 0 || width.toLong() * height.toLong() > MAX_IMAGE_PIXELS) return null
-        return kind
-    }
 
     private fun isSafeZipName(raw: String): Boolean {
         if (raw.isBlank() || raw.length > 240 || raw.startsWith('/') || raw.startsWith('\\')) return false

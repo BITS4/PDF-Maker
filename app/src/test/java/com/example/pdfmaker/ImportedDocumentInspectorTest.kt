@@ -98,6 +98,8 @@ class ImportedDocumentInspectorTest {
         assertTrue(ImportedDocumentInspector.mimeTypesMatch(IncomingDocumentKind.PDF, "application/pdf"))
         assertTrue(ImportedDocumentInspector.mimeTypesMatch(IncomingDocumentKind.PDF, "application/octet-stream", null))
         assertTrue(ImportedDocumentInspector.mimeTypesMatch(IncomingDocumentKind.PNG, "image/*", "image/png"))
+        assertTrue(ImportedDocumentInspector.mimeTypesMatch(IncomingDocumentKind.JPEG, "image/jpg"))
+        assertTrue(ImportedDocumentInspector.mimeTypesMatch(IncomingDocumentKind.BMP, "image/x-ms-bmp"))
         assertFalse(ImportedDocumentInspector.mimeTypesMatch(IncomingDocumentKind.PDF, "image/png"))
         assertFalse(ImportedDocumentInspector.mimeTypesMatch(IncomingDocumentKind.DOCX, "application/pdf"))
         assertFalse(ImportedDocumentInspector.mimeTypesMatch(IncomingDocumentKind.JPEG, "image/png"))

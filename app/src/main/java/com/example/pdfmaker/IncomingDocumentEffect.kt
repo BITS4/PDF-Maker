@@ -1,18 +1,20 @@
 package com.example.pdfmaker
 
 import android.net.Uri
+import android.os.CancellationSignal
 import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.coroutines.resume
 
 @Composable
 internal fun IncomingDocumentEffect(
@@ -25,21 +27,8 @@ internal fun IncomingDocumentEffect(
         val pendingArtifact = AtomicReference<ImportedDocumentArtifact?>()
         try {
             val result =
-                withContext(Dispatchers.IO) {
-                    val operationContext = currentCoroutineContext()
-                    SafeDocumentImporter
-                        .import(
-                            context = activity,
-                            request = activeRequest,
-                            retention = IncomingImportRetention.USER_DOCUMENT,
-                            beforeChunk = { operationContext.ensureActive() },
-                        ).also { importResult ->
-                            if (importResult is IncomingImportResult.Imported) {
-                                pendingArtifact.set(importResult.artifact)
-                            }
-                        }
-                }
-            activity.consumeIncomingDocument(activeRequest)
+                importIncomingDocument(activity, activeRequest, pendingArtifact)
+            if (!activity.claimIncomingDocument(activeRequest.requestId)) return@LaunchedEffect
             when (result) {
                 is IncomingImportResult.Imported ->
                     handleImportedDocument(
@@ -59,6 +48,36 @@ internal fun IncomingDocumentEffect(
         }
     }
 }
+
+private suspend fun importIncomingDocument(
+    activity: MainActivity,
+    request: IncomingDocumentRequest,
+    pendingArtifact: AtomicReference<ImportedDocumentArtifact?>,
+): IncomingImportResult =
+    withContext(Dispatchers.IO) {
+        suspendCancellableCoroutine { continuation ->
+            val providerCancellation = CancellationSignal()
+            continuation.invokeOnCancellation { providerCancellation.cancel() }
+            try {
+                val result =
+                    SafeDocumentImporter
+                        .import(
+                            context = activity,
+                            request = request,
+                            retention = IncomingImportRetention.USER_DOCUMENT,
+                            beforeChunk = { continuation.context.ensureActive() },
+                            providerCancellation = providerCancellation,
+                        ).also { importResult ->
+                            if (importResult is IncomingImportResult.Imported) {
+                                pendingArtifact.set(importResult.artifact)
+                            }
+                        }
+                continuation.resume(result)
+            } catch (cancelled: java.util.concurrent.CancellationException) {
+                continuation.cancel(cancelled)
+            }
+        }
+    }
 
 private fun handleImportedDocument(
     activity: MainActivity,
