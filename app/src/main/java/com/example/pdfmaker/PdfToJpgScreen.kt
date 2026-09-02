@@ -22,7 +22,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -53,35 +52,6 @@ import java.util.zip.ZipOutputStream
 
 // ── Quality options ───────────────────────────────────────────────────────────
 
-enum class JpgQuality(
-    val label      : String,
-    val sub        : String,
-    val jpegQuality: Int,
-    val maxDimPx   : Int,
-    val color      : Color
-) {
-    LOW(
-        label       = "Low",
-        sub         = "72 DPI · small file",
-        jpegQuality = 60,
-        maxDimPx    = 800,
-        color       = Color(0xFF9E9E9E)
-    ),
-    MEDIUM(
-        label       = "Medium",
-        sub         = "150 DPI · balanced",
-        jpegQuality = 82,
-        maxDimPx    = 1600,
-        color       = Color(0xFF2196F3)
-    ),
-    HIGH(
-        label       = "High",
-        sub         = "300 DPI · best quality",
-        jpegQuality = 95,
-        maxDimPx    = 3000,
-        color       = Color(0xFF4CAF50)
-    )
-}
 
 // ── Internal state machine ────────────────────────────────────────────────────
 
@@ -186,64 +156,29 @@ fun PdfToJpgScreen(onBack: () -> Unit) {
     Box(Modifier.fillMaxSize().background(bgDark).statusBarsPadding()) {
         Column(Modifier.fillMaxSize()) {
 
-            // ── Top bar ───────────────────────────────────────────────────────
-            Row(
-                Modifier.fillMaxWidth().background(barBg)
-                    .padding(horizontal = 4.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = textPri)
-                }
-                Text(
-                    "PDF to JPG", color = textPri,
-                    fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f).padding(start = 4.dp)
-                )
-                if (state == JpgConvertState.PREVIEW) {
-                    TextButton(onClick = {
-                        pickedUri = null; previews = emptyList(); state = JpgConvertState.PICK
-                    }) { Text("Change", color = textSec) }
-                }
-            }
+            JpgTopBar(
+                background = barBg,
+                primaryText = textPri,
+                secondaryText = textSec,
+                showChange = state == JpgConvertState.PREVIEW,
+                onBack = onBack,
+                onChange = {
+                    pickedUri = null
+                    previews = emptyList()
+                    state = JpgConvertState.PICK
+                },
+            )
 
             // ── Body ──────────────────────────────────────────────────────────
             when (state) {
 
                 // ── 1. Pick ───────────────────────────────────────────────────
                 JpgConvertState.PICK -> {
-                    Column(
-                        Modifier.fillMaxSize().padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Box(
-                            Modifier.size(100.dp).clip(CircleShape)
-                                .background(Color(0xFF1E1E30))
-                                .border(2.dp, Color(0xFFFF7043).copy(alpha = 0.5f), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.Image, null,
-                                tint = Color(0xFFFF7043), modifier = Modifier.size(44.dp))
-                        }
-                        Spacer(Modifier.height(24.dp))
-                        Text("Select a PDF to convert", color = textPri,
-                            fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                        Spacer(Modifier.height(8.dp))
-                        Text("Each page will be saved as a JPG image",
-                            color = textSec, fontSize = 14.sp, textAlign = TextAlign.Center)
-                        Spacer(Modifier.height(36.dp))
-                        Button(
-                            onClick  = { filePicker.launch(arrayOf("application/pdf")) },
-                            modifier = Modifier.fillMaxWidth(0.7f).height(52.dp),
-                            shape    = RoundedCornerShape(14.dp),
-                            colors   = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF7043))
-                        ) {
-                            Icon(Icons.Default.FileOpen, null, modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("Choose PDF", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                        }
-                    }
+                    JpgPickerPanel(
+                        primaryText = textPri,
+                        secondaryText = textSec,
+                        onPick = { filePicker.launch(arrayOf("application/pdf")) },
+                    )
                 }
 
                 // ── 2. Preview + settings ─────────────────────────────────────
@@ -411,29 +346,12 @@ fun PdfToJpgScreen(onBack: () -> Unit) {
 
                 // ── 3. Converting ─────────────────────────────────────────────
                 JpgConvertState.CONVERTING -> {
-                    Column(
-                        Modifier.fillMaxSize().padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        JpgSpinner(progress = progress, color = Color(0xFFFF7043))
-                        Spacer(Modifier.height(28.dp))
-                        Text("Converting…", color = textPri,
-                            fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                        Spacer(Modifier.height(6.dp))
-                        Text(progressText, color = textSec, fontSize = 13.sp)
-                        Spacer(Modifier.height(6.dp))
-                        Text("$progress%", color = Color(0xFFFF7043),
-                            fontSize = 32.sp, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(20.dp))
-                        LinearProgressIndicator(
-                            progress   = { progress / 100f },
-                            modifier   = Modifier.fillMaxWidth().height(6.dp)
-                                .clip(RoundedCornerShape(3.dp)),
-                            color      = Color(0xFFFF7043),
-                            trackColor = Color(0xFF2A2A40)
-                        )
-                    }
+                    JpgConvertingPanel(
+                        progress = progress,
+                        progressText = progressText,
+                        primaryText = textPri,
+                        secondaryText = textSec,
+                    )
                 }
 
                 // ── 4. Done ───────────────────────────────────────────────────
@@ -563,251 +481,14 @@ fun PdfToJpgScreen(onBack: () -> Unit) {
 
                 // ── 5. Error ──────────────────────────────────────────────────
                 JpgConvertState.ERROR -> {
-                    Column(
-                        Modifier.fillMaxSize().padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Box(
-                            Modifier.size(88.dp).clip(CircleShape)
-                                .background(Color(0xFF2A1010)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.ErrorOutline, null,
-                                tint = Color(0xFFF44336), modifier = Modifier.size(44.dp))
-                        }
-                        Spacer(Modifier.height(18.dp))
-                        Text("Conversion Failed", color = textPri,
-                            fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(8.dp))
-                        Text(errorMsg, color = textSec, fontSize = 13.sp,
-                            textAlign = TextAlign.Center)
-                        Spacer(Modifier.height(28.dp))
-                        Button(
-                            onClick = { state = JpgConvertState.PREVIEW },
-                            modifier = Modifier.fillMaxWidth(0.6f).height(50.dp),
-                            shape    = RoundedCornerShape(14.dp),
-                            colors   = ButtonDefaults.buttonColors(containerColor = AccentBlue)
-                        ) { Text("Try Again", fontWeight = FontWeight.Bold) }
-                    }
+                    JpgErrorPanel(
+                        message = errorMsg,
+                        primaryText = textPri,
+                        secondaryText = textSec,
+                        onRetry = { state = JpgConvertState.PREVIEW },
+                    )
                 }
             }
         }
-    }
-}
-
-// ── Small helper composables ──────────────────────────────────────────────────
-
-@Composable
-private fun PageRangeTab(
-    label    : String,
-    selected : Boolean,
-    accent   : Color,
-    modifier : Modifier = Modifier,
-    onClick  : () -> Unit
-) {
-    Box(
-        modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (selected) accent else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(vertical = 10.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(label, color = if (selected) Color.White else Color(0xFF9999BB),
-            fontSize = 13.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
-    }
-}
-
-@Composable
-private fun PageNumberField(
-    label   : String,
-    value   : Int,
-    range   : IntRange,
-    cardBg  : Color,
-    textPri : Color,
-    textSec : Color,
-    accent  : Color,
-    onValue : (Int) -> Unit
-) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, color = textSec, fontSize = 11.sp)
-        Spacer(Modifier.height(4.dp))
-        Row(
-            Modifier.clip(RoundedCornerShape(10.dp)).background(cardBg)
-                .padding(horizontal = 4.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(
-                onClick  = { if (value > range.first) onValue(value - 1) },
-                modifier = Modifier.size(32.dp)
-            ) { Icon(Icons.Default.Remove, null, tint = if (value > range.first) accent else textSec,
-                    modifier = Modifier.size(16.dp)) }
-            Text("$value", color = textPri,
-                fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.widthIn(min = 28.dp), textAlign = TextAlign.Center)
-            IconButton(
-                onClick  = { if (value < range.last) onValue(value + 1) },
-                modifier = Modifier.size(32.dp)
-            ) { Icon(Icons.Default.Add, null, tint = if (value < range.last) accent else textSec,
-                    modifier = Modifier.size(16.dp)) }
-        }
-    }
-}
-
-@Composable
-private fun JpgSpinner(progress: Int, color: Color) {
-    val inf = rememberInfiniteTransition(label = "spin")
-    val angle by inf.animateFloat(
-        initialValue  = 0f, targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(1200, easing = LinearEasing)),
-        label         = "angle"
-    )
-    Canvas(Modifier.size(110.dp)) {
-        drawArc(Color(0xFF2A2A40), 0f, 360f, false,
-            style = Stroke(10.dp.toPx(), cap = StrokeCap.Round))
-        drawArc(color, angle - 90f, (progress * 3.6f).coerceAtLeast(10f), false,
-            style = Stroke(10.dp.toPx(), cap = StrokeCap.Round))
-    }
-}
-
-// ── Core conversion logic ──────────────────────────────────────────────────────
-
-private fun convertPdfToJpg(
-    context  : Context,
-    uri      : Uri,
-    baseName : String,
-    quality  : JpgQuality,
-    fromPage : Int,
-    toPage   : Int,
-    onProg   : (Int, String) -> Unit
-): List<File> {
-    val fd  = context.contentResolver.openFileDescriptor(uri, "r") ?: return emptyList()
-    val rdr = PdfRenderer(fd)
-    val outFiles = mutableListOf<File>()
-    val dir = getPdfMakerDir(context)
-    val total = toPage - fromPage + 1
-
-    try {
-        for (i in fromPage..toPage) {
-            val pageNum = i + 1
-            onProg(
-                ((i - fromPage) * 95 / total.coerceAtLeast(1)),
-                "Converting page $pageNum of ${rdr.pageCount}…"
-            )
-            val page  = rdr.openPage(i)
-            val scale = quality.maxDimPx.toFloat() / maxOf(page.width, page.height).coerceAtLeast(1)
-            val w     = (page.width  * scale).toInt().coerceAtLeast(1)
-            val h     = (page.height * scale).toInt().coerceAtLeast(1)
-
-            val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-            android.graphics.Canvas(bmp).drawColor(android.graphics.Color.WHITE)
-            page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-            page.close()
-
-            val fileName = "${baseName}_page${pageNum}.jpg"
-            val file     = File(dir, fileName)
-            file.outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, quality.jpegQuality, it) }
-            bmp.recycle()
-            outFiles += file
-        }
-    } finally {
-        rdr.close()
-        fd.close()
-    }
-
-    onProg(100, "Done!")
-    return outFiles
-}
-
-// ── Share all JPGs as a ZIP ────────────────────────────────────────────────────
-
-private fun shareAllAsZip(context: Context, files: List<File>, baseName: String) {
-    if (files.isEmpty()) return
-    try {
-        if (files.size == 1) {
-            // Single image — share directly
-            val uri = FileProvider.getUriForFile(
-                context, "${context.packageName}.provider", files.first()
-            )
-            context.startActivity(
-                android.content.Intent.createChooser(
-                    android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                        type = "image/jpeg"
-                        putExtra(android.content.Intent.EXTRA_STREAM, uri)
-                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }, "Share JPG"
-                )
-            )
-        } else {
-            // Multiple images — zip them
-            val zipFile = File(context.cacheDir, "${baseName}_pages.zip")
-            ZipOutputStream(zipFile.outputStream()).use { zos ->
-                files.forEach { f ->
-                    zos.putNextEntry(ZipEntry(f.name))
-                    f.inputStream().use { it.copyTo(zos) }
-                    zos.closeEntry()
-                }
-            }
-            val zipUri = FileProvider.getUriForFile(
-                context, "${context.packageName}.provider", zipFile
-            )
-            context.startActivity(
-                android.content.Intent.createChooser(
-                    android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                        type = "application/zip"
-                        putExtra(android.content.Intent.EXTRA_STREAM, zipUri)
-                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }, "Share JPG images"
-                )
-            )
-        }
-    } catch (_: Exception) {}
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-private fun jpgFormatSize(kb: Long): String = when {
-    kb >= 1024 -> "%.1f MB".format(kb / 1024f)
-    else       -> "$kb KB"
-}
-
-// ── Save JPGs to device gallery (Pictures/PDFMaker) ───────────────────────────
-
-private fun saveJpgsToGallery(context: Context, files: List<File>) {
-    val resolver = context.contentResolver
-    files.forEach { file ->
-        try {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                // Android 10+ — insert via MediaStore (no WRITE_EXTERNAL_STORAGE needed)
-                val values = android.content.ContentValues().apply {
-                    put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, file.name)
-                    put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-                    put(android.provider.MediaStore.Images.Media.RELATIVE_PATH,
-                        "${android.os.Environment.DIRECTORY_PICTURES}/PDFMaker")
-                    put(android.provider.MediaStore.Images.Media.IS_PENDING, 1)
-                }
-                val uri = resolver.insert(
-                    android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values
-                ) ?: return@forEach
-                resolver.openOutputStream(uri)?.use { out ->
-                    file.inputStream().copyTo(out)
-                }
-                values.clear()
-                values.put(android.provider.MediaStore.Images.Media.IS_PENDING, 0)
-                resolver.update(uri, values, null, null)
-            } else {
-                // Android 9 and below — copy to Pictures directory + broadcast
-                val picturesDir = android.os.Environment.getExternalStoragePublicDirectory(
-                    android.os.Environment.DIRECTORY_PICTURES
-                )
-                val dest = java.io.File(java.io.File(picturesDir, "PDFMaker").also { it.mkdirs() }, file.name)
-                file.copyTo(dest, overwrite = true)
-                // Notify gallery
-                android.media.MediaScannerConnection.scanFile(
-                    context, arrayOf(dest.absolutePath), arrayOf("image/jpeg"), null
-                )
-            }
-        } catch (_: Exception) {}
     }
 }
