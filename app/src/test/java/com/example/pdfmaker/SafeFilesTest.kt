@@ -57,7 +57,7 @@ class OutputStoreTest {
         val first = OutputStore.writeUnique(root, "report", "pdf") { it.write(byteArrayOf(1)) }
         val second = OutputStore.writeUnique(root, "report", "pdf") { it.write(byteArrayOf(2)) }
 
-        assertEquals(root.canonicalFile, first.parentFile.canonicalFile)
+        assertEquals(root.canonicalFile, requireNotNull(first.parentFile).canonicalFile)
         assertEquals("report.pdf", first.name)
         assertEquals("report (1).pdf", second.name)
         assertArrayEquals(byteArrayOf(1), first.readBytes())
@@ -69,7 +69,7 @@ class OutputStoreTest {
         val root = temporaryFolder.newFolder("safe")
         val output = OutputStore.writeUnique(root, "../../outside", "pdf") { it.write(7) }
 
-        assertEquals(root.canonicalFile, output.parentFile.canonicalFile)
+        assertEquals(root.canonicalFile, requireNotNull(output.parentFile).canonicalFile)
         assertFalse(File(root.parentFile, "outside.pdf").exists())
     }
 
@@ -123,7 +123,7 @@ class OutputStoreTest {
         val root = temporaryFolder.newFolder("rename")
         val source = File(root, "source.pdf").apply { writeText("source") }
         val renamed = OutputStore.renameWithinParent(source, "../renamed").getOrThrow()
-        assertEquals(root.canonicalFile, renamed.parentFile.canonicalFile)
+        assertEquals(root.canonicalFile, requireNotNull(renamed.parentFile).canonicalFile)
         assertTrue(renamed.name.endsWith("renamed.pdf"))
 
         val other = File(root, "other.pdf").apply { writeText("keep") }
