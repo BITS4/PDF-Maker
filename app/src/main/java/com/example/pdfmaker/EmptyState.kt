@@ -21,8 +21,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-enum class EmptyKind { ALL_FILES, PDF, DOCS, IMAGES, SEARCH }
-
 private data class EmptyConfig(
     val icon        : ImageVector,
     val iconBg      : Color,

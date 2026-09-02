@@ -133,3 +133,37 @@ class OutputStoreTest {
         assertNotEquals(other.canonicalFile, renamed.canonicalFile)
     }
 }
+
+class FailureCleanupTest {
+    @Test
+    fun cleanupRunsOnlyWhenBlockDoesNotComplete() {
+        var cleanupCount = 0
+        val value = withFailureCleanup(cleanup = { cleanupCount += 1 }) { "complete" }
+
+        assertEquals("complete", value)
+        assertEquals(0, cleanupCount)
+
+        val failure = runCatching {
+            withFailureCleanup(cleanup = { cleanupCount += 1 }) {
+                throw AssertionError("fatal failure")
+            }
+        }
+        assertTrue(failure.exceptionOrNull() is AssertionError)
+        assertEquals(1, cleanupCount)
+    }
+
+    @Test
+    fun cleanupFailureDoesNotHideThePrimaryFailure() {
+        val failure =
+            runCatching {
+                withFailureCleanup(cleanup = { throw IllegalStateException("cleanup") }) {
+                    throw AssertionError("primary")
+                }
+            }.exceptionOrNull()
+
+        assertTrue(failure is AssertionError)
+        assertEquals("primary", failure?.message)
+        assertEquals(1, failure?.suppressed?.size)
+        assertTrue(failure?.suppressed?.single() is IllegalStateException)
+    }
+}

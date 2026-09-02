@@ -49,7 +49,7 @@ object SafePdfInput {
             "Could not create the PDF staging directory"
         }
         val temporary = File(directory, ".source-${UUID.randomUUID()}.pdf")
-        try {
+        return withFailureCleanup(cleanup = temporary::delete) {
             input.use { source ->
                 FileOutputStream(temporary).use { output ->
                     val copied =
@@ -68,10 +68,7 @@ object SafePdfInput {
             require(ImportedDocumentInspector.signature(prefix) == IncomingDocumentKind.PDF) {
                 "The selected content is not a PDF"
             }
-            return temporary
-        } catch (error: Throwable) {
-            temporary.delete()
-            throw error
+            temporary
         }
     }
 }

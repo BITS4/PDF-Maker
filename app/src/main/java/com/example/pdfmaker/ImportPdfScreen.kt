@@ -34,14 +34,6 @@ import kotlinx.coroutines.withContext
 
 // ── Device PDF model ──────────────────────────────────────────────────────────
 
-data class DevicePdf(
-    val uri          : Uri,
-    val name         : String,
-    val sizeFmt      : String,
-    val dateFmt      : String,
-    val lastModified : Long
-)
-
 // ── Scan MediaStore for PDFs ──────────────────────────────────────────────────
 
 private suspend fun scanDevicePdfs(context: Context): List<DevicePdf> =
@@ -129,15 +121,15 @@ fun ImportPdfScreen(
         else devicePdfs.filter { it.name.contains(searchQuery, ignoreCase = true) }
     }
 
-    val CardBg  = Color(0xFF1A1A2A)
-    val Surface = Color(0xFF0D0D16)
-    val TextPri = Color.White
-    val TextSec = Color(0xFF9999BB)
+    val cardBg = Color(0xFF1A1A2A)
+    val surface = Color(0xFF0D0D16)
+    val textPri = Color.White
+    val textSec = Color(0xFF9999BB)
 
     Column(
         Modifier
             .fillMaxSize()
-            .background(Surface)
+            .background(surface)
             .statusBarsPadding()
     ) {
         // ── Top bar ───────────────────────────────────────────────────────────
@@ -148,10 +140,10 @@ fun ImportPdfScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = TextPri)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = textPri)
             }
             Text(
-                "Import PDF", color = TextPri,
+                "Import PDF", color = textPri,
                 fontSize = 20.sp, fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f).padding(start = 4.dp)
             )
@@ -165,7 +157,7 @@ fun ImportPdfScreen(
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             cloudSources.take(4).forEach { src ->
-                CloudSourceItem(src, TextSec) { filePicker.launch(arrayOf("application/pdf")) }
+                CloudSourceItem(src, textSec) { filePicker.launch(arrayOf("application/pdf")) }
             }
         }
         // 5th item (Files) on second row
@@ -175,7 +167,7 @@ fun ImportPdfScreen(
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 8.dp)
         ) {
-            CloudSourceItem(cloudSources[4], TextSec) { filePicker.launch(arrayOf("application/pdf")) }
+            CloudSourceItem(cloudSources[4], textSec) { filePicker.launch(arrayOf("application/pdf")) }
         }
 
         // ── From Device section ───────────────────────────────────────────────
@@ -183,7 +175,7 @@ fun ImportPdfScreen(
             Modifier
                 .fillMaxSize()
                 .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
-                .background(CardBg)
+                .background(cardBg)
         ) {
             Column(Modifier.fillMaxSize()) {
                 // Header
@@ -211,23 +203,23 @@ fun ImportPdfScreen(
                                 onValueChange = { searchQuery = it },
                                 singleLine = true,
                                 textStyle = androidx.compose.ui.text.TextStyle(
-                                    color = TextPri, fontSize = 14.sp
+                                    color = textPri, fontSize = 14.sp
                                 ),
                                 cursorBrush = SolidColor(AccentBlue),
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
                         IconButton(onClick = { isSearching = false; searchQuery = "" }) {
-                            Icon(Icons.Default.Close, null, tint = TextSec)
+                            Icon(Icons.Default.Close, null, tint = textSec)
                         }
                     } else {
                         Text(
-                            "From Device", color = TextPri,
+                            "From Device", color = textPri,
                             fontSize = 18.sp, fontWeight = FontWeight.Bold,
                             modifier = Modifier.weight(1f)
                         )
                         IconButton(onClick = { isSearching = true }) {
-                            Icon(Icons.Default.Search, null, tint = TextSec)
+                            Icon(Icons.Default.Search, null, tint = textSec)
                         }
                     }
                 }
@@ -237,17 +229,17 @@ fun ImportPdfScreen(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             CircularProgressIndicator(color = AccentBlue, modifier = Modifier.size(36.dp))
                             Spacer(Modifier.height(12.dp))
-                            Text("Scanning device…", color = TextSec, fontSize = 14.sp)
+                            Text("Scanning device…", color = textSec, fontSize = 14.sp)
                         }
                     }
                 } else if (filtered.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("No PDFs found", color = TextSec, fontSize = 15.sp)
+                        Text("No PDFs found", color = textSec, fontSize = 15.sp)
                     }
                 } else {
                     LazyColumn(Modifier.fillMaxSize()) {
                         items(filtered) { pdf ->
-                            DevicePdfRow(pdf, TextPri, TextSec) { onPdfPicked(pdf.uri) }
+                            DevicePdfRow(pdf, textPri, textSec) { onPdfPicked(pdf.uri) }
                         }
                     }
                 }

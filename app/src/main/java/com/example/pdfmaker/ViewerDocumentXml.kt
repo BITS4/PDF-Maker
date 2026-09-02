@@ -1,6 +1,8 @@
 package com.example.pdfmaker
 
+import java.io.IOException
 import org.xmlpull.v1.XmlPullParser
+import org.xmlpull.v1.XmlPullParserException
 import org.xmlpull.v1.XmlPullParserFactory
 import timber.log.Timber
 
@@ -13,140 +15,218 @@ internal fun boundedViewerTextFragment(
     return value.take((maximumLength - currentLength).coerceAtLeast(0))
 }
 
-internal fun parseViewerRelationships(xml: String): Map<String, String> {
-    val relationships = mutableMapOf<String, String>()
-    return try {
-        val parser = XmlPullParserFactory.newInstance().newPullParser().also { it.setInput(xml.reader()) }
-        var event = parser.eventType
-        while (event != XmlPullParser.END_DOCUMENT && relationships.size < ViewerResourceLimits.MAX_RELATIONSHIPS) {
-            if (event == XmlPullParser.START_TAG && parser.name == "Relationship") {
-                val id = parser.getAttributeValue(null, "Id").orEmpty()
-                val target = parser.getAttributeValue(null, "Target").orEmpty()
-                if (id.isNotEmpty() && (target.contains("media/") || target.contains("image"))) {
-                    viewerMediaName(target)?.let { relationships[id] = it }
-                }
-            }
-            event = parser.next()
-        }
-        relationships
-    } catch (ignoredError: Exception) {
-        Timber.tag("PdfViewer").w(ignoredError, "event=document_relationship_parse_failed")
-        emptyMap()
+internal fun parseViewerRelationships(xml: String): Map<String, String> =
+    try {
+        parseViewerRelationshipsOrThrow(xml)
+    } catch (error: XmlPullParserException) {
+        failedRelationshipParse(error)
+    } catch (error: IOException) {
+        failedRelationshipParse(error)
+    } catch (error: IllegalArgumentException) {
+        failedRelationshipParse(error)
     }
+
+private fun parseViewerRelationshipsOrThrow(xml: String): Map<String, String> {
+    val relationships = mutableMapOf<String, String>()
+    val parser = XmlPullParserFactory.newInstance().newPullParser().also { it.setInput(xml.reader()) }
+    var event = parser.eventType
+    while (event != XmlPullParser.END_DOCUMENT && relationships.size < ViewerResourceLimits.MAX_RELATIONSHIPS) {
+        readViewerRelationship(parser, event)?.let { (id, mediaName) -> relationships[id] = mediaName }
+        event = parser.next()
+    }
+    return relationships
+}
+
+private fun readViewerRelationship(parser: XmlPullParser, event: Int): Pair<String, String>? {
+    if (event != XmlPullParser.START_TAG || parser.name != "Relationship") return null
+    val id = parser.getAttributeValue(null, "Id").orEmpty()
+    val target = parser.getAttributeValue(null, "Target").orEmpty()
+    val referencesMedia = target.contains("media/") || target.contains("image")
+    return if (id.isNotEmpty() && referencesMedia) {
+        viewerMediaName(target)?.let { mediaName -> id to mediaName }
+    } else {
+        null
+    }
+}
+
+private fun failedRelationshipParse(error: Exception): Map<String, String> {
+    Timber.tag("PdfViewer").w(error, "event=document_relationship_parse_failed")
+    return emptyMap()
 }
 
 internal fun parseViewerDocument(
     xml: String,
     relationships: Map<String, String>,
+): List<DocBlock> =
+    try {
+        parseViewerDocumentOrThrow(xml, relationships)
+    } catch (error: XmlPullParserException) {
+        failedDocumentParse(error)
+    } catch (error: IOException) {
+        failedDocumentParse(error)
+    } catch (error: IllegalArgumentException) {
+        failedDocumentParse(error)
+    }
+
+private fun parseViewerDocumentOrThrow(
+    xml: String,
+    relationships: Map<String, String>,
 ): List<DocBlock> {
-    val blocks = mutableListOf<DocBlock>()
-    return try {
-        val parser = XmlPullParserFactory.newInstance().apply { isNamespaceAware = true }.newPullParser()
-        parser.setInput(xml.reader())
-        var inBody = false
-        var inParagraph = false
-        var inRun = false
-        var inRunProperties = false
-        var bold = false
-        var italic = false
-        var fontSize = 11f
-        var paragraphStyle = ""
-        var paragraphRuns = mutableListOf<DocRun>()
-        val runText = StringBuilder()
+    val parser =
+        XmlPullParserFactory
+            .newInstance()
+            .apply { isNamespaceAware = true }
+            .newPullParser()
+            .also { it.setInput(xml.reader()) }
+    val state = ViewerDocumentState(relationships)
+    var event = parser.eventType
+    while (event != XmlPullParser.END_DOCUMENT && state.canAcceptBlocks) {
+        state.consume(parser, event)
+        event = parser.next()
+    }
+    return state.blocks
+}
 
-        fun addBlock(block: DocBlock) {
-            if (blocks.size < ViewerResourceLimits.MAX_DOCUMENT_BLOCKS) blocks += block
-        }
+private fun failedDocumentParse(error: Exception): List<DocBlock> {
+    Timber.tag("PdfViewer").w(error, "event=word_document_parse_failed")
+    return emptyList()
+}
 
-        fun flushRun() {
-            val text = runText.toString()
-            if (text.isNotEmpty() && paragraphRuns.size < ViewerResourceLimits.MAX_RUNS_PER_PARAGRAPH) {
-                paragraphRuns += DocRun(text, bold, italic, fontSize)
-            }
-            runText.clear()
-        }
+private class ViewerDocumentState(
+    private val relationships: Map<String, String>,
+) {
+    private val mutableBlocks = mutableListOf<DocBlock>()
+    private var inBody = false
+    private var inParagraph = false
+    private var inRun = false
+    private var inRunProperties = false
+    private var bold = false
+    private var italic = false
+    private var fontSize = 11f
+    private var paragraphStyle = ""
+    private var paragraphRuns = mutableListOf<DocRun>()
+    private val runText = StringBuilder()
 
-        fun flushParagraph() {
-            val heading =
-                when {
-                    paragraphStyle.contains("Heading1", ignoreCase = true) -> 1
-                    paragraphStyle.contains("Heading2", ignoreCase = true) -> 2
-                    paragraphStyle.contains("Heading3", ignoreCase = true) -> 3
-                    paragraphStyle.equals("Title", ignoreCase = true) -> 1
-                    else -> 0
-                }
-            addBlock(DocBlock.Paragraph(paragraphRuns.toList(), heading))
-            paragraphRuns = mutableListOf()
-            paragraphStyle = ""
-        }
+    val blocks: List<DocBlock> get() = mutableBlocks
+    val canAcceptBlocks: Boolean get() = mutableBlocks.size < ViewerResourceLimits.MAX_DOCUMENT_BLOCKS
 
-        var event = parser.eventType
-        while (event != XmlPullParser.END_DOCUMENT && blocks.size < ViewerResourceLimits.MAX_DOCUMENT_BLOCKS) {
-            val name = parser.name.orEmpty()
-            when (event) {
-                XmlPullParser.START_TAG ->
-                    when (name) {
-                        "body" -> inBody = true
-                        "p" -> if (inBody) inParagraph = true
-                        "r" ->
-                            if (inParagraph) {
-                                inRun = true
-                                bold = false
-                                italic = false
-                            }
-                        "rPr" -> inRunProperties = true
-                        "pStyle" -> if (inParagraph) paragraphStyle = parser.attributeByLocalName("val")
-                        "b" -> if (inRunProperties) bold = true
-                        "i" -> if (inRunProperties) italic = true
-                        "sz" ->
-                            if (inRunProperties) {
-                                parser.attributeByLocalName("val").toFloatOrNull()?.let {
-                                    fontSize = (it / 2f).coerceIn(7f, 72f)
-                                }
-                            }
-                        "br" -> {
-                            if (parser.attributeByLocalName("type") == "page") {
-                                flushRun()
-                                flushParagraph()
-                                addBlock(DocBlock.PageBreak)
-                            } else {
-                                runText.append(boundedViewerTextFragment(runText.length, "\n"))
-                            }
-                        }
-                        "blip" ->
-                            parser.relationshipId()?.let(relationships::get)?.let { imageName ->
-                                flushRun()
-                                if (paragraphRuns.isNotEmpty()) addBlock(DocBlock.Paragraph(paragraphRuns.toList()))
-                                paragraphRuns = mutableListOf()
-                                addBlock(DocBlock.ImageBlock(imageName))
-                            }
-                    }
-                XmlPullParser.TEXT -> if (inRun && inParagraph && !inRunProperties) {
-                    runText.append(boundedViewerTextFragment(runText.length, parser.text))
-                }
-                XmlPullParser.END_TAG ->
-                    when (name) {
-                        "rPr" -> inRunProperties = false
-                        "r" -> {
-                            flushRun()
-                            inRun = false
-                        }
-                        "p" -> {
-                            flushRun()
-                            if (inParagraph) flushParagraph()
-                            inParagraph = false
-                        }
-                        "body" -> inBody = false
-                    }
-            }
-            event = parser.next()
+    fun consume(parser: XmlPullParser, event: Int) {
+        when (event) {
+            XmlPullParser.START_TAG -> handleStartTag(parser, parser.name.orEmpty())
+            XmlPullParser.TEXT -> handleText(parser.text)
+            XmlPullParser.END_TAG -> handleEndTag(parser.name.orEmpty())
         }
-        blocks
-    } catch (ignoredError: Exception) {
-        Timber.tag("PdfViewer").w(ignoredError, "event=word_document_parse_failed")
-        emptyList()
+    }
+
+    private fun handleStartTag(parser: XmlPullParser, name: String) {
+        when (name) {
+            "body" -> inBody = true
+            "p" -> if (inBody) inParagraph = true
+            "r" -> beginRun()
+            "rPr" -> inRunProperties = true
+            "pStyle" -> if (inParagraph) paragraphStyle = parser.attributeByLocalName("val")
+            else -> handleRunContentTag(parser, name)
+        }
+    }
+
+    private fun handleRunContentTag(parser: XmlPullParser, name: String) {
+        when (name) {
+            "b" -> if (inRunProperties) bold = true
+            "i" -> if (inRunProperties) italic = true
+            "sz" -> updateFontSize(parser)
+            "br" -> handleBreak(parser)
+            "blip" -> handleImage(parser)
+        }
+    }
+
+    private fun beginRun() {
+        if (inParagraph) {
+            inRun = true
+            bold = false
+            italic = false
+        }
+    }
+
+    private fun updateFontSize(parser: XmlPullParser) {
+        if (!inRunProperties) return
+        parser.attributeByLocalName("val").toFloatOrNull()?.let { halfPoints ->
+            fontSize = (halfPoints / 2f).coerceIn(7f, 72f)
+        }
+    }
+
+    private fun handleBreak(parser: XmlPullParser) {
+        if (parser.attributeByLocalName("type") == "page") {
+            flushRun()
+            flushParagraph()
+            addBlock(DocBlock.PageBreak)
+        } else {
+            appendRunText("\n")
+        }
+    }
+
+    private fun handleImage(parser: XmlPullParser) {
+        val imageName = parser.relationshipId()?.let(relationships::get) ?: return
+        flushRun()
+        if (paragraphRuns.isNotEmpty()) addBlock(DocBlock.Paragraph(paragraphRuns.toList()))
+        paragraphRuns = mutableListOf()
+        addBlock(DocBlock.ImageBlock(imageName))
+    }
+
+    private fun handleText(value: String) {
+        if (inRun && inParagraph && !inRunProperties) appendRunText(value)
+    }
+
+    private fun handleEndTag(name: String) {
+        when (name) {
+            "rPr" -> inRunProperties = false
+            "r" -> endRun()
+            "p" -> endParagraph()
+            "body" -> inBody = false
+        }
+    }
+
+    private fun endRun() {
+        flushRun()
+        inRun = false
+    }
+
+    private fun endParagraph() {
+        flushRun()
+        if (inParagraph) flushParagraph()
+        inParagraph = false
+    }
+
+    private fun appendRunText(value: String) {
+        runText.append(boundedViewerTextFragment(runText.length, value))
+    }
+
+    private fun flushRun() {
+        val value = runText.toString()
+        if (value.isNotEmpty() && paragraphRuns.size < ViewerResourceLimits.MAX_RUNS_PER_PARAGRAPH) {
+            paragraphRuns += DocRun(value, bold, italic, fontSize)
+        }
+        runText.clear()
+    }
+
+    private fun flushParagraph() {
+        addBlock(DocBlock.Paragraph(paragraphRuns.toList(), viewerHeadingLevel(paragraphStyle)))
+        paragraphRuns = mutableListOf()
+        paragraphStyle = ""
+    }
+
+    private fun addBlock(block: DocBlock) {
+        if (canAcceptBlocks) mutableBlocks += block
     }
 }
+
+internal fun viewerHeadingLevel(style: String): Int =
+    when {
+        style.equals("Heading1", ignoreCase = true) -> 1
+        style.equals("Heading2", ignoreCase = true) -> 2
+        style.equals("Heading3", ignoreCase = true) -> 3
+        style.equals("Title", ignoreCase = true) -> 1
+        else -> 0
+    }
 
 internal fun XmlPullParser.attributeByLocalName(localName: String): String {
     repeat(attributeCount) { index ->

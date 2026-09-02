@@ -40,11 +40,14 @@ object BoundedIo {
         require(maximumBytes > 0) { "Maximum byte count must be positive" }
         val result = ByteArray(maximumBytes)
         var offset = 0
-        while (offset < result.size) {
+        var finished = false
+        while (offset < result.size && !finished) {
             val read = input.read(result, offset, result.size - offset)
-            if (read < 0) break
-            if (read == 0) break
-            offset += read
+            if (read <= 0) {
+                finished = true
+            } else {
+                offset += read
+            }
         }
         return result.copyOf(offset)
     }

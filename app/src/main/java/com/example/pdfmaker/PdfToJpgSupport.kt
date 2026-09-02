@@ -33,6 +33,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import timber.log.Timber
 import java.io.File
+import java.io.IOException
 
 enum class JpgQuality(
     val label      : String,
@@ -149,14 +150,13 @@ internal fun loadPdfToJpgPreview(source: StagedPdfSource): PdfToJpgPreview =
     withStagedPdfRenderer(source) { renderer ->
         val pageCount = PdfToJpgPolicy.requirePageCount(renderer.pageCount)
         val previews = mutableListOf<Bitmap>()
-        try {
+        withFailureCleanup(
+            cleanup = { previews.forEach { bitmap -> if (!bitmap.isRecycled) bitmap.recycle() } },
+        ) {
             repeat(minOf(pageCount, PdfToJpgPolicy.PREVIEW_COUNT)) { pageIndex ->
                 previews += renderRendererPage(renderer, pageIndex, PdfToJpgPolicy.PREVIEW_EDGE)
             }
             PdfToJpgPreview(pageCount, previews)
-        } catch (error: Throwable) {
-            previews.forEach { bitmap -> if (!bitmap.isRecycled) bitmap.recycle() }
-            throw error
         }
     }
 
@@ -179,7 +179,7 @@ internal suspend fun convertPdfToJpg(
         val total = toPage - fromPage + 1
         var totalBytes = 0L
 
-        try {
+        withFailureCleanup(cleanup = { outputFiles.forEach(File::delete) }) {
             for (pageIndex in fromPage..toPage) {
                 callingContext.ensureActive()
                 val pageNumber = pageIndex + 1
@@ -219,9 +219,6 @@ internal suspend fun convertPdfToJpg(
                     }
                 }
             }
-        } catch (error: Throwable) {
-            outputFiles.forEach(File::delete)
-            throw error
         }
 
         onProg(100, "Done!")
@@ -234,11 +231,8 @@ private inline fun <T> withStagedPdfRenderer(
     block: (PdfRenderer) -> T,
 ): T {
     val descriptor = source.openDescriptor()
-    val renderer = try {
+    val renderer = withFailureCleanup(cleanup = descriptor::close) {
         PdfRenderer(descriptor)
-    } catch (error: Throwable) {
-        descriptor.close()
-        throw error
     }
     return renderer.use(block)
 }
@@ -251,7 +245,7 @@ private fun renderRendererPage(
     val target = PdfToJpgPolicy.renderSize(page.width, page.height, maximumEdge)
         ?: error("PDF page has invalid dimensions")
     val bitmap = Bitmap.createBitmap(target.width, target.height, Bitmap.Config.ARGB_8888)
-    try {
+    withFailureCleanup(cleanup = bitmap::recycle) {
         android.graphics.Canvas(bitmap).drawColor(android.graphics.Color.WHITE)
         val scale =
             RenderSizing.scaleTo(page.width, page.height, target)
@@ -260,9 +254,6 @@ private fun renderRendererPage(
         transform.setScale(scale.scaleX, scale.scaleY)
         page.render(bitmap, null, transform, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
         bitmap
-    } catch (error: Throwable) {
-        bitmap.recycle()
-        throw error
     }
 }
 
@@ -318,7 +309,7 @@ internal fun jpgFormatSize(kb: Long): String = when {
 
 // ── Save JPGs to device gallery (Pictures/PDFMaker) ───────────────────────────
 
-@Suppress("TooGenericExceptionCaught") // Each provider failure is recorded so remaining images can still be saved.
+@Suppress("TooGenericExceptionCaught") // MediaStore implementations may surface provider-specific RuntimeExceptions.
 internal fun saveJpgsToGallery(context: Context, files: List<File>): GallerySaveReport {
     if (files.isEmpty()) return GallerySavePolicy.report(0, 0, emptyList())
     if (!GallerySavePolicy.supportsGalleryWrite(Build.VERSION.SDK_INT)) {
@@ -363,11 +354,31 @@ internal fun saveJpgsToGallery(context: Context, files: List<File>): GallerySave
                 "Gallery storage could not publish the image"
             }
             savedCount += 1
-        } catch (error: Exception) {
-            insertedUri?.let { uri -> runCatching { resolver.delete(uri, null, null) } }
-            Timber.tag("GalleryExport").w(error, "event=gallery_image_save_failed")
-            errors += GallerySavePolicy.failureMessage(error)
+        } catch (error: IOException) {
+            recordGalleryFailure(context, insertedUri, error, errors)
+        } catch (error: RuntimeException) {
+            recordGalleryFailure(context, insertedUri, error, errors)
         }
     }
     return GallerySavePolicy.report(files.size, savedCount, errors)
+}
+
+private fun recordGalleryFailure(
+    context: Context,
+    insertedUri: Uri?,
+    error: Exception,
+    errors: MutableList<String>,
+) {
+    insertedUri?.let { uri -> deletePendingGalleryEntry(context, uri) }
+    Timber.tag("GalleryExport").w(error, "event=gallery_image_save_failed")
+    errors += GallerySavePolicy.failureMessage(error)
+}
+
+@Suppress("TooGenericExceptionCaught") // Cleanup must tolerate provider-specific RuntimeExceptions without catching fatal Errors.
+private fun deletePendingGalleryEntry(context: Context, uri: Uri) {
+    try {
+        context.contentResolver.delete(uri, null, null)
+    } catch (cleanupFailure: RuntimeException) {
+        Timber.tag("GalleryExport").w(cleanupFailure, "event=pending_gallery_cleanup_failed")
+    }
 }

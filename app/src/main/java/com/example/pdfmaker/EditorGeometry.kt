@@ -1,11 +1,5 @@
 package com.example.pdfmaker
 
-internal data class NormalizedSignaturePlacement(
-    val x: Float,
-    val y: Float,
-    val width: Float,
-)
-
 /** Converts a signature's screen-space placement to bounded page coordinates. */
 internal fun normalizeSignaturePlacement(
     x: Float,

@@ -32,11 +32,8 @@ internal suspend fun mergePdfs(
             )
             SafePdfInput.fromUri(context, uri).use { source ->
                 val descriptor = source.openDescriptor()
-                val renderer = try {
+                val renderer = withFailureCleanup(cleanup = descriptor::close) {
                     PdfRenderer(descriptor)
-                } catch (error: Exception) {
-                    descriptor.close()
-                    throw error
                 }
                 try {
                     MergePdfPolicy.updatedTotalPages(pageNum - 1, renderer.pageCount)

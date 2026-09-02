@@ -8,7 +8,9 @@ import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.ParcelFileDescriptor
+import com.google.mlkit.common.MlKitException
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognizer
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.CancellationException
@@ -19,6 +21,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.IOException
 import java.util.concurrent.atomic.AtomicReference
 
 internal suspend fun runOcr(
@@ -30,90 +33,124 @@ internal suspend fun runOcr(
 ) {
     val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     val pendingArtifact = AtomicReference<ImportedDocumentArtifact?>()
-    val results = mutableListOf<Pair<Int, String>>()
-    var recognizedCharacters = 0
     try {
-        val imported = withContext(Dispatchers.IO) {
-            val operationContext = currentCoroutineContext()
-            SafeDocumentImporter
-                .import(
-                    context = context,
-                    request = IncomingDocumentRequest(uri, context.contentResolver.getType(uri)),
-                    retention = IncomingImportRetention.OPERATION_TEMPORARY,
-                    beforeChunk = { operationContext.ensureActive() },
-                ).also { importResult ->
-                    if (importResult is IncomingImportResult.Imported) {
-                        pendingArtifact.set(importResult.artifact)
-                    }
-                }
-        }
-        val document = when (imported) {
-            is IncomingImportResult.Imported -> imported.artifact
-            is IncomingImportResult.Rejected -> error(imported.message)
-        }
+        val document = importOcrDocument(context, uri, pendingArtifact)
         currentCoroutineContext().ensureActive()
-        try {
-            if (document.kind == IncomingDocumentKind.PDF) {
-                ParcelFileDescriptor.open(document.file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
-                    PdfRenderer(descriptor).use { renderer ->
-                        val total = OcrResourcePolicy.requirePdfPageCount(renderer.pageCount)
-                        var renderedPixels = 0L
-                        withContext(Dispatchers.Main) { onProgress(0, total) }
-                        for (index in 0 until total) {
-                            currentCoroutineContext().ensureActive()
-                            val pageResult = recognizePdfPage(
-                                renderer = renderer,
-                                index = index,
-                                recognizer = recognizer,
-                                currentCharacters = recognizedCharacters,
-                                renderedPixels = renderedPixels,
-                            )
-                            recognizedCharacters = pageResult.totalCharacters
-                            renderedPixels = pageResult.totalRenderedPixels
-                            results.add(index + 1 to pageResult.text)
-                            withContext(Dispatchers.Main) { onProgress(index + 1, total) }
-                        }
-                    }
-                }
-            } else {
-                require(document.kind != IncomingDocumentKind.DOCX) { "Choose a PDF or image for OCR" }
-                currentCoroutineContext().ensureActive()
-                withContext(Dispatchers.Main) { onProgress(0, 1) }
-                val bitmap = withContext(Dispatchers.IO) { decodeBoundedOcrImage(document.file) }
-                    ?: error("The image could not be decoded safely")
-                try {
-                    currentCoroutineContext().ensureActive()
-                    val recognizedText = recognizeBitmapText(bitmap, recognizer)
-                    currentCoroutineContext().ensureActive()
-                    val accepted = OcrResourcePolicy.acceptRecognizedText(
-                        pageNumber = 1,
-                        recognizedText = recognizedText,
-                        currentCharacters = recognizedCharacters,
-                    )
-                    results.add(1 to accepted.text)
-                } finally {
-                    bitmap.recycle()
-                }
-                withContext(Dispatchers.Main) { onProgress(1, 1) }
-            }
-        } finally {
-            withContext(NonCancellable + Dispatchers.IO) {
-                document.close()
-            }
-        }
+        val results = recognizeOcrDocument(document, recognizer, onProgress)
         currentCoroutineContext().ensureActive()
-        withContext(Dispatchers.Main) { onDone(results.toList()) }
+        withContext(Dispatchers.Main) { onDone(results) }
     } catch (error: CancellationException) {
         throw error
-    } catch (error: Exception) {
-        val message = UserVisibleFailureReporter.message(UserFailureStage.OCR, error)
-        withContext(Dispatchers.Main) { onError(message) }
+    } catch (error: IOException) {
+        reportOcrFailure(error, onError)
+    } catch (error: SecurityException) {
+        reportOcrFailure(error, onError)
+    } catch (error: IllegalArgumentException) {
+        reportOcrFailure(error, onError)
+    } catch (error: IllegalStateException) {
+        reportOcrFailure(error, onError)
+    } catch (error: MlKitException) {
+        reportOcrFailure(error, onError)
     } finally {
         withContext(NonCancellable + Dispatchers.IO) {
             pendingArtifact.getAndSet(null)?.close()
         }
         recognizer.close()
     }
+}
+
+private suspend fun importOcrDocument(
+    context: Context,
+    uri: Uri,
+    pendingArtifact: AtomicReference<ImportedDocumentArtifact?>,
+): ImportedDocumentArtifact =
+    withContext(Dispatchers.IO) {
+        val operationContext = currentCoroutineContext()
+        when (
+            val imported =
+                SafeDocumentImporter.import(
+                    context = context,
+                    // The imported bytes, not provider-controlled metadata, determine the accepted format.
+                    request = IncomingDocumentRequest(uri, declaredMimeType = null),
+                    retention = IncomingImportRetention.OPERATION_TEMPORARY,
+                    beforeChunk = { operationContext.ensureActive() },
+                )
+        ) {
+            is IncomingImportResult.Imported ->
+                imported.artifact.also(pendingArtifact::set)
+            is IncomingImportResult.Rejected -> error(imported.message)
+        }
+    }
+
+private suspend fun recognizeOcrDocument(
+    document: ImportedDocumentArtifact,
+    recognizer: TextRecognizer,
+    onProgress: (Int, Int) -> Unit,
+): List<Pair<Int, String>> =
+    try {
+        when (document.kind) {
+            IncomingDocumentKind.PDF -> recognizePdfDocument(document.file, recognizer, onProgress)
+            IncomingDocumentKind.DOCX -> error("Choose a PDF or image for OCR")
+            else -> recognizeImageDocument(document.file, recognizer, onProgress)
+        }
+    } finally {
+        withContext(NonCancellable + Dispatchers.IO) { document.close() }
+    }
+
+private suspend fun recognizePdfDocument(
+    file: File,
+    recognizer: TextRecognizer,
+    onProgress: (Int, Int) -> Unit,
+): List<Pair<Int, String>> =
+    ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
+        PdfRenderer(descriptor).use { renderer ->
+            val total = OcrResourcePolicy.requirePdfPageCount(renderer.pageCount)
+            val results = ArrayList<Pair<Int, String>>(total)
+            var recognizedCharacters = 0
+            var renderedPixels = 0L
+            withContext(Dispatchers.Main) { onProgress(0, total) }
+            for (index in 0 until total) {
+                currentCoroutineContext().ensureActive()
+                val pageResult =
+                    recognizePdfPage(renderer, index, recognizer, recognizedCharacters, renderedPixels)
+                recognizedCharacters = pageResult.totalCharacters
+                renderedPixels = pageResult.totalRenderedPixels
+                results += index + 1 to pageResult.text
+                withContext(Dispatchers.Main) { onProgress(index + 1, total) }
+            }
+            results
+        }
+    }
+
+private suspend fun recognizeImageDocument(
+    file: File,
+    recognizer: TextRecognizer,
+    onProgress: (Int, Int) -> Unit,
+): List<Pair<Int, String>> {
+    currentCoroutineContext().ensureActive()
+    withContext(Dispatchers.Main) { onProgress(0, 1) }
+    val bitmap =
+        withContext(Dispatchers.IO) { decodeBoundedOcrImage(file) }
+            ?: error("The image could not be decoded safely")
+    val text =
+        try {
+            currentCoroutineContext().ensureActive()
+            val recognizedText = recognizeBitmapText(bitmap, recognizer)
+            currentCoroutineContext().ensureActive()
+            OcrResourcePolicy.acceptRecognizedText(1, recognizedText, 0).text
+        } finally {
+            bitmap.recycle()
+        }
+    withContext(Dispatchers.Main) { onProgress(1, 1) }
+    return listOf(1 to text)
+}
+
+private suspend fun reportOcrFailure(
+    error: Exception,
+    onError: (String) -> Unit,
+) {
+    val message = UserVisibleFailureReporter.message(UserFailureStage.OCR, error)
+    withContext(Dispatchers.Main) { onError(message) }
 }
 
 private data class OcrPageResult(
@@ -125,7 +162,7 @@ private data class OcrPageResult(
 private suspend fun recognizePdfPage(
     renderer: PdfRenderer,
     index: Int,
-    recognizer: com.google.mlkit.vision.text.TextRecognizer,
+    recognizer: TextRecognizer,
     currentCharacters: Int,
     renderedPixels: Long,
 ): OcrPageResult {
@@ -167,7 +204,7 @@ private suspend fun recognizePdfPage(
 
 private suspend fun recognizeBitmapText(
     bitmap: Bitmap,
-    recognizer: com.google.mlkit.vision.text.TextRecognizer,
+    recognizer: TextRecognizer,
 ): String = withContext(Dispatchers.IO) {
     val task = recognizer.process(InputImage.fromBitmap(bitmap, 0))
     // ML Kit does not expose cancellation for this task. Finish the active page before

@@ -10,12 +10,8 @@ internal fun <T> withSafePdfRenderer(
     block: (PdfRenderer) -> T,
 ): T = SafePdfInput.fromUri(context, uri).use { source ->
     val descriptor = source.openDescriptor()
-    val renderer = try {
+    val renderer = withFailureCleanup(cleanup = descriptor::close) {
         PdfRenderer(descriptor)
-    } catch (error: Throwable) {
-        descriptor.close()
-        throw error
     }
     renderer.use(block)
 }
-

@@ -113,10 +113,59 @@ class ImageProcessingInstrumentedTest {
         }
     }
 
-    private fun bitmap(width: Int, height: Int): Bitmap =
+    @Test
+    fun blankImageFallsBackToConservativeDocumentBounds() {
+        val source = bitmap(width = 100, height = 120)
+        try {
+            val detected = autoDetectQuad(source)
+
+            assertPoint(detected.tl.x, detected.tl.y, expectedX = 0.05f, expectedY = 0.05f)
+            assertPoint(detected.tr.x, detected.tr.y, expectedX = 0.95f, expectedY = 0.05f)
+            assertPoint(detected.br.x, detected.br.y, expectedX = 0.95f, expectedY = 0.95f)
+            assertPoint(detected.bl.x, detected.bl.y, expectedX = 0.05f, expectedY = 0.95f)
+            assertTrue(detected.points().all { point -> point.x in 0f..1f && point.y in 0f..1f })
+        } finally {
+            source.recycle()
+        }
+    }
+
+    @Test
+    fun perspectiveWarpCreatesABoundedCallerOwnedBitmap() {
+        val source = bitmap(width = 100, height = 120)
+        var warped: Bitmap? = null
+        try {
+            warped = perspectiveWarp(source, Quad())
+
+            assertNotSame(source, warped)
+            assertTrue(warped.width in 79..80)
+            assertTrue(warped.height in 95..96)
+            assertTrue(warped.width <= ImageInputPolicy.MAX_DECODE_EDGE_PX)
+            assertTrue(warped.height <= ImageInputPolicy.MAX_DECODE_EDGE_PX)
+            assertTrue(warped.width.toLong() * warped.height <= ImageInputPolicy.MAX_DECODE_PIXELS)
+            assertFalse(source.isRecycled)
+        } finally {
+            warped?.takeUnless(Bitmap::isRecycled)?.recycle()
+            source.takeUnless(Bitmap::isRecycled)?.recycle()
+        }
+    }
+
+    private fun bitmap(
+        width: Int,
+        height: Int,
+    ): Bitmap =
         Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { bitmap ->
             bitmap.eraseColor(Color.rgb(64, 96, 128))
         }
+
+    private fun assertPoint(
+        actualX: Float,
+        actualY: Float,
+        expectedX: Float,
+        expectedY: Float,
+    ) {
+        assertEquals(expectedX, actualX, 0.001f)
+        assertEquals(expectedY, actualY, 0.001f)
+    }
 
     private fun request(
         source: Bitmap,

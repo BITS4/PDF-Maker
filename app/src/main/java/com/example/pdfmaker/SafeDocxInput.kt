@@ -26,7 +26,7 @@ object SafeDocxInput {
             "Could not create the DOCX staging directory"
         }
         val temporary = File(directory, ".docx-${UUID.randomUUID()}.tmp")
-        try {
+        return withFailureCleanup(cleanup = { OwnedImportCleanup.erase(temporary) }) {
             input.use { source ->
                 FileOutputStream(temporary).use { output ->
                     val copied = BoundedIo.copy(source, output, maximumBytes, beforeChunk)
@@ -38,10 +38,7 @@ object SafeDocxInput {
             require(ImportedDocumentInspector.inspect(temporary, beforeChunk) == IncomingDocumentKind.DOCX) {
                 "The selected content is not a safe DOCX"
             }
-            return temporary
-        } catch (error: Throwable) {
-            OwnedImportCleanup.erase(temporary)
-            throw error
+            temporary
         }
     }
 

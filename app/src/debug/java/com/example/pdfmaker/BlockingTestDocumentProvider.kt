@@ -35,6 +35,7 @@ class BlockingTestDocumentProvider : ContentProvider() {
         cancellationSignal: CancellationSignal?,
     ): Cursor {
         queryCount.incrementAndGet()
+        queryFailure?.let { failure -> throw failure }
         while (blocking) {
             if (cancellationSignal?.isCanceled == true) {
                 cancellationCount.incrementAndGet()
@@ -81,13 +82,22 @@ class BlockingTestDocumentProvider : ContentProvider() {
         @Volatile
         private var blocking = true
 
+        @Volatile
+        private var queryFailure: RuntimeException? = null
+
         fun reset() {
             blocking = true
+            queryFailure = null
             queryCount.set(0)
             cancellationCount.set(0)
         }
 
         fun release() {
+            blocking = false
+        }
+
+        fun failQueriesWith(failure: RuntimeException) {
+            queryFailure = failure
             blocking = false
         }
 

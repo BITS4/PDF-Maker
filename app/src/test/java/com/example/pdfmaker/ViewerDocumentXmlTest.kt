@@ -17,4 +17,15 @@ class ViewerDocumentXmlTest {
         assertTrue(runCatching { boundedViewerTextFragment(-1, "text") }.isFailure)
         assertTrue(runCatching { boundedViewerTextFragment(0, "text", maximumLength = 0) }.isFailure)
     }
+
+    @Test
+    fun `maps supported heading styles without partial matches`() {
+        assertEquals(1, viewerHeadingLevel("Title"))
+        assertEquals(1, viewerHeadingLevel("heading1"))
+        assertEquals(2, viewerHeadingLevel("Heading2"))
+        assertEquals(3, viewerHeadingLevel("Heading3"))
+        assertEquals(0, viewerHeadingLevel("Subtitle"))
+        assertEquals(0, viewerHeadingLevel("Heading10"))
+        assertEquals(0, viewerHeadingLevel("NotHeading1"))
+    }
 }

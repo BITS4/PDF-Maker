@@ -9,6 +9,24 @@ import java.nio.file.StandardCopyOption
 import java.text.Normalizer
 import java.util.UUID
 
+/** Runs cleanup for every unsuccessful exit, including cancellation and fatal VM failures. */
+@Suppress("TooGenericExceptionCaught") // Both throwables are observed only to preserve and rethrow the primary failure.
+internal inline fun <T> withFailureCleanup(
+    crossinline cleanup: () -> Unit,
+    crossinline block: () -> T,
+): T {
+    try {
+        return block()
+    } catch (error: Throwable) {
+        try {
+            cleanup()
+        } catch (cleanupFailure: Throwable) {
+            if (cleanupFailure !== error) error.addSuppressed(cleanupFailure)
+        }
+        throw error
+    }
+}
+
 /** Central validation for every user- or provider-controlled output name. */
 object SafeFileName {
     private const val MAX_BASE_LENGTH = 80
@@ -75,7 +93,7 @@ object OutputStore {
         val dir = requireDirectory(directory)
         val target = nextAvailableFile(dir, requestedBaseName, extension)
         val temporary = containedChild(dir, ".pdfmaker-${UUID.randomUUID()}.tmp")
-        try {
+        return withFailureCleanup(cleanup = temporary::delete) {
             FileOutputStream(temporary).use { output ->
                 writer(output)
                 output.flush()
@@ -83,10 +101,7 @@ object OutputStore {
             }
             beforeCommit()
             moveWithoutReplacing(temporary, target)
-            return target
-        } catch (error: Throwable) {
-            temporary.delete()
-            throw error
+            target
         }
     }
 
@@ -110,16 +125,13 @@ object OutputStore {
         requireDirectory(parent)
         requireContained(parent, target)
         val temporary = containedChild(parent, ".pdfmaker-${UUID.randomUUID()}.tmp")
-        try {
+        withFailureCleanup(cleanup = temporary::delete) {
             FileOutputStream(temporary).use { output ->
                 output.write(bytes)
                 output.flush()
                 output.fd.sync()
             }
             moveReplacing(temporary, target.canonicalFile)
-        } catch (error: Throwable) {
-            temporary.delete()
-            throw error
         }
     }
 

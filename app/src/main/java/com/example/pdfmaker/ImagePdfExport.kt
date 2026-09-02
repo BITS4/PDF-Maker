@@ -20,16 +20,13 @@ object ImagePdfExport {
             extension = "pdf",
             writer = pdfWriter,
         )
-        try {
+        withFailureCleanup(cleanup = output::delete) {
             if (password != null) {
                 check(SecureDocumentStore.lockInPlace(output, password) == null) {
                     "The PDF could not be password-protected"
                 }
             }
             output
-        } catch (error: Throwable) {
-            output.delete()
-            throw error
         }
     }
 }

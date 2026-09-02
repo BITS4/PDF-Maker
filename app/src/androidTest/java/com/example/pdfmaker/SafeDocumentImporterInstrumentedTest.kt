@@ -1,6 +1,7 @@
 package com.example.pdfmaker
 
 import android.content.Context
+import android.database.StaleDataException
 import android.net.Uri
 import androidx.core.content.FileProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -113,6 +114,20 @@ class SafeDocumentImporterInstrumentedTest {
         }
 
         assertTrue(matchingOutputs(outputDirectory, uniqueName).isEmpty())
+    }
+
+    @Test
+    fun providerRuntimeFailureIsReturnedAsARejectedImport() {
+        BlockingTestDocumentProvider.reset()
+        BlockingTestDocumentProvider.failQueriesWith(StaleDataException("stale provider cursor"))
+
+        val result =
+            SafeDocumentImporter.import(
+                context = context,
+                request = IncomingDocumentRequest(BlockingTestDocumentProvider.documentUri, "application/pdf"),
+            )
+
+        assertTrue(result is IncomingImportResult.Rejected)
     }
 
     private fun import(source: File, retention: IncomingImportRetention): IncomingImportResult =

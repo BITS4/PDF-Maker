@@ -2,6 +2,7 @@ package com.example.pdfmaker
 
 import android.content.Context
 import android.database.Cursor
+import android.database.SQLException
 import android.net.Uri
 import android.os.CancellationSignal
 import android.os.OperationCanceledException
@@ -43,6 +44,7 @@ internal sealed interface IncomingImportResult {
 internal object SafeDocumentImporter {
     const val MAX_IMPORT_BYTES = 100L * 1024L * 1024L
 
+    @Suppress("TooGenericExceptionCaught") // An exported provider may throw any RuntimeException; cancellation is rethrown first.
     fun import(
         context: Context,
         request: IncomingDocumentRequest,
@@ -73,14 +75,26 @@ internal object SafeDocumentImporter {
             IncomingImportResult.Rejected("The document provider could not be read")
         } catch (rejection: ImportRejection) {
             IncomingImportResult.Rejected(rejection.safeMessage)
-        } catch (error: Exception) {
-            IncomingImportResult.Rejected(
-                UserVisibleFailureReporter.message(
-                    UserFailureStage.DOCUMENT_IMPORT,
-                    error,
-                ),
-            )
+        } catch (error: IOException) {
+            rejectedImport(error)
+        } catch (error: SecurityException) {
+            rejectedImport(error)
+        } catch (error: IllegalArgumentException) {
+            rejectedImport(error)
+        } catch (error: IllegalStateException) {
+            rejectedImport(error)
+        } catch (error: UnsupportedOperationException) {
+            rejectedImport(error)
+        } catch (error: SQLException) {
+            rejectedImport(error)
+        } catch (error: RuntimeException) {
+            rejectedImport(error)
         }
+
+    private fun rejectedImport(error: Exception): IncomingImportResult.Rejected =
+        IncomingImportResult.Rejected(
+            UserVisibleFailureReporter.message(UserFailureStage.DOCUMENT_IMPORT, error),
+        )
 
     private fun requireSupportedRequest(request: IncomingDocumentRequest) {
         if (request.uri.scheme != "content" || request.uri.authority.isNullOrBlank()) {
@@ -444,7 +458,8 @@ object ImportedDocumentInspector {
         }
 
     private fun isSafeZipName(raw: String): Boolean {
-        if (raw.isBlank() || raw.length > 240 || raw.startsWith('/') || raw.startsWith('\\')) return false
+        val hasUnsafeRoot = raw.startsWith('/') || raw.startsWith('\\')
+        if (raw.isBlank() || raw.length > 240 || hasUnsafeRoot) return false
         val normalized = raw.replace('\\', '/')
         return normalized.split('/').none { it == "." || it == ".." } && ':' !in normalized
     }
