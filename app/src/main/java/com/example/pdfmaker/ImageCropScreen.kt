@@ -404,4 +404,3 @@ fun ImageCropScreen(
 private operator fun Offset.plus(o:Offset)  = Offset(x+o.x, y+o.y)
 private operator fun Offset.div(s:Float)    = Offset(x/s, y/s)
 private operator fun Offset.minus(o:Offset) = Offset(x-o.x, y-o.y)
-private fun Offset.getDistance()            = sqrt((x*x+y*y).toDouble()).toFloat()
