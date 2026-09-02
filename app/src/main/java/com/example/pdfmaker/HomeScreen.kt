@@ -227,15 +227,20 @@ fun HomeScreen(
                     val newName = renameText.trim()
                     if (newName.isNotEmpty()) {
                         val old = java.io.File(fileToRename.filePath)
-                        val ext = old.extension
-                        val newFile = java.io.File(old.parent ?: "", "$newName.$ext")
-                        if (old.renameTo(newFile)) {
-                            FileCache.renameFile(fileToRename.filePath, newFile.absolutePath, newName)
-                            PdfThumbnailCache.invalidate(fileToRename.filePath)
-                            Toast.makeText(context, "Renamed", Toast.LENGTH_SHORT).show()
-                        } else {
-                            Toast.makeText(context, "Rename failed", Toast.LENGTH_SHORT).show()
-                        }
+                        OutputStore.renameWithinParent(old, newName).fold(
+                            onSuccess = { renamed ->
+                                FileCache.renameFile(
+                                    fileToRename.filePath,
+                                    renamed.absolutePath,
+                                    renamed.nameWithoutExtension,
+                                )
+                                PdfThumbnailCache.invalidate(fileToRename.filePath)
+                                Toast.makeText(context, "Renamed", Toast.LENGTH_SHORT).show()
+                            },
+                            onFailure = {
+                                Toast.makeText(context, "Rename failed", Toast.LENGTH_SHORT).show()
+                            },
+                        )
                     }
                     showRenameFor = null
                 }) { Text("Rename", color = AccentBlue, fontWeight = FontWeight.Bold) }
