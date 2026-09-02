@@ -10,6 +10,7 @@ import android.os.OperationCanceledException
 import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.provider.OpenableColumns
+import androidx.core.net.toUri
 import java.io.File
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -83,7 +84,7 @@ class BlockingTestDocumentProvider : ContentProvider() {
 
     companion object {
         const val AUTHORITY = "com.example.pdfmaker.debug.blocking-documents"
-        val documentUri: Uri = Uri.parse("content://$AUTHORITY/document.pdf")
+        val documentUri: Uri = "content://$AUTHORITY/document.pdf".toUri()
 
         private const val POLL_INTERVAL_MILLIS = 5L
         private val queryCount = AtomicInteger()

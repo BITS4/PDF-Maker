@@ -15,6 +15,8 @@ import android.text.SpannableStringBuilder
 import android.text.StaticLayout
 import android.text.TextPaint
 import android.text.style.StyleSpan
+import androidx.core.graphics.toColorInt
+import androidx.core.graphics.withTranslation
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import java.io.File
@@ -87,14 +89,13 @@ internal suspend fun renderDocxPdf(
                         val layout = buildDocxLayout(text, paint, contentWidth.toInt())
                         val blockHeight = layout.height.toFloat() + if (block.headingLevel > 0) 8f else 4f
                         ensureSpace(blockHeight)
-                        canvas.save()
-                        canvas.translate(leftMargin, currentY)
-                        layout.draw(canvas)
-                        canvas.restore()
+                        canvas.withTranslation(leftMargin, currentY) {
+                            layout.draw(this)
+                        }
                         if (block.headingLevel == 1) {
                             val linePaint =
                                 Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                                    color = Color.parseColor("#CCCCCC")
+                                    color = "#CCCCCC".toColorInt()
                                     strokeWidth = 0.5f
                                 }
                             canvas.drawLine(
@@ -203,17 +204,12 @@ private fun buildDocxLayout(
     paint: TextPaint,
     width: Int,
 ): StaticLayout =
-    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-        StaticLayout.Builder
-            .obtain(text, 0, text.length, paint, width)
-            .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-            .setLineSpacing(2f, 1.2f)
-            .setIncludePad(false)
-            .build()
-    } else {
-        @Suppress("DEPRECATION")
-        StaticLayout(text, paint, width, Layout.Alignment.ALIGN_NORMAL, 1.2f, 2f, false)
-    }
+    StaticLayout.Builder
+        .obtain(text, 0, text.length, paint, width)
+        .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+        .setLineSpacing(2f, 1.2f)
+        .setIncludePad(false)
+        .build()
 
 private fun decodeBoundedDocxImage(file: File): Bitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }

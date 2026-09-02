@@ -29,6 +29,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.scale
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import timber.log.Timber
@@ -229,11 +231,7 @@ internal suspend fun convertPdfToJpg(
                         PdfToJpgPolicy.renderSize(page.width, page.height, quality.maxDimPx)
                             ?: error("PDF page has invalid dimensions")
                     val bitmap =
-                        Bitmap.createBitmap(
-                            target.width,
-                            target.height,
-                            Bitmap.Config.ARGB_8888,
-                        )
+                        createBitmap(target.width, target.height)
                     try {
                         android.graphics.Canvas(bitmap).drawColor(android.graphics.Color.WHITE)
                         val scale =
@@ -287,7 +285,7 @@ private fun renderRendererPage(
         val target =
             PdfToJpgPolicy.renderSize(page.width, page.height, maximumEdge)
                 ?: error("PDF page has invalid dimensions")
-        val bitmap = Bitmap.createBitmap(target.width, target.height, Bitmap.Config.ARGB_8888)
+        val bitmap = createBitmap(target.width, target.height)
         withFailureCleanup(cleanup = bitmap::recycle) {
             android.graphics.Canvas(bitmap).drawColor(android.graphics.Color.WHITE)
             val scale =
@@ -335,7 +333,7 @@ internal fun decodeJpgResultThumbnail(file: File): Result<Bitmap> =
                     ),
                 ) { "Converted image has invalid dimensions" }
             if (fitted.width != owned.width || fitted.height != owned.height) {
-                val scaled = Bitmap.createScaledBitmap(owned, fitted.width, fitted.height, true)
+                val scaled = owned.scale(fitted.width, fitted.height)
                 if (scaled !== owned) owned.recycle()
                 owned = scaled
             }

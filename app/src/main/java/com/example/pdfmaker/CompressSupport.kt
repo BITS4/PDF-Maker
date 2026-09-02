@@ -9,6 +9,7 @@ import android.graphics.Matrix
 import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
+import androidx.core.graphics.createBitmap
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import java.io.ByteArrayOutputStream
@@ -76,7 +77,7 @@ private fun appendCompressedPage(
                 pageHeight = sourcePage.height,
                 maximumDimension = level.maxDimensionPx,
             )
-        val sourceBitmap = Bitmap.createBitmap(target.width, target.height, Bitmap.Config.ARGB_8888)
+        val sourceBitmap = createBitmap(target.width, target.height)
         try {
             Canvas(sourceBitmap).drawColor(Color.WHITE)
             sourcePage.render(

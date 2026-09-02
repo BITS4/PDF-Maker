@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.withSave
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -129,7 +130,7 @@ fun ImageCropScreen(
     // By computing it fresh inside the DrawScope using DrawScope.size (always current),
     // we guarantee imageRect is valid on the very first non-null bitmap frame.
     var imageRect = Rect.Zero // updated every draw; read by touch handlers
-    var dragIndex by remember { mutableStateOf(-1) }
+    var dragIndex by remember { mutableIntStateOf(-1) }
     val hrDp = 20.dp
     val hrPx = with(LocalDensity.current) { hrDp.toPx() }
 
@@ -294,18 +295,18 @@ fun ImageCropScreen(
                 // Semi-transparent mask outside the crop quad
                 drawIntoCanvas { c ->
                     val paint = android.graphics.Paint().apply { color = 0xAA000000.toInt() }
-                    val saved = c.nativeCanvas.save()
-                    c.nativeCanvas.clipOutPath(
-                        android.graphics.Path().apply {
-                            moveTo(pts[0].x, pts[0].y)
-                            lineTo(pts[1].x, pts[1].y)
-                            lineTo(pts[2].x, pts[2].y)
-                            lineTo(pts[3].x, pts[3].y)
-                            close()
-                        },
-                    )
-                    c.nativeCanvas.drawRect(imageRect.left, imageRect.top, imageRect.right, imageRect.bottom, paint)
-                    c.nativeCanvas.restoreToCount(saved)
+                    c.nativeCanvas.withSave {
+                        c.nativeCanvas.clipOutPath(
+                            android.graphics.Path().apply {
+                                moveTo(pts[0].x, pts[0].y)
+                                lineTo(pts[1].x, pts[1].y)
+                                lineTo(pts[2].x, pts[2].y)
+                                lineTo(pts[3].x, pts[3].y)
+                                close()
+                            },
+                        )
+                        c.nativeCanvas.drawRect(imageRect.left, imageRect.top, imageRect.right, imageRect.bottom, paint)
+                    }
                 }
 
                 // Quad border

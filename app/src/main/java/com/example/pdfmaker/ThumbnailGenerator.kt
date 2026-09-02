@@ -6,6 +6,9 @@ import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.scale
+import androidx.core.graphics.toColorInt
 import java.io.File
 
 /** Selects a bounded renderer for one validated source file. */
@@ -54,7 +57,7 @@ internal object ThumbnailGenerator {
         val target = RenderSizing.fitWithin(page.width, page.height, sizePx, allowUpscale = true) ?: return null
         val scale = RenderSizing.scaleTo(page.width, page.height, target) ?: return null
         val transform = Matrix().apply { setScale(scale.scaleX, scale.scaleY) }
-        val bitmap = Bitmap.createBitmap(target.width, target.height, Bitmap.Config.ARGB_8888)
+        val bitmap = createBitmap(target.width, target.height)
         var completed = false
         try {
             Canvas(bitmap).drawColor(Color.WHITE)
@@ -80,7 +83,7 @@ internal object ThumbnailGenerator {
                 keepSource = true
                 return source
             }
-            Bitmap.createScaledBitmap(source, target.width, target.height, true)
+            source.scale(target.width, target.height)
         } finally {
             if (!keepSource) source.recycle()
         }
@@ -121,7 +124,7 @@ internal object ThumbnailGenerator {
         return ThumbnailCanvasRenderer.document(
             sizePx = sizePx,
             badgeLabel = "TXT",
-            badgeColor = Color.parseColor("#37474F"),
+            badgeColor = "#37474F".toColorInt(),
             texts = lines,
             image = null,
         )

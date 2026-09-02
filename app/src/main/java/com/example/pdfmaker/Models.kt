@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.Choreographer
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import java.util.IdentityHashMap
@@ -135,10 +136,10 @@ class ImageEditState internal constructor(
     var isRendering by mutableStateOf(false)
 
     var filter by mutableStateOf(ImageFilter.ORIGINAL)
-    var brightness by mutableStateOf(0f)
-    var contrast by mutableStateOf(0f)
-    var details by mutableStateOf(0f)
-    var totalRotation by mutableStateOf(0f)
+    var brightness by mutableFloatStateOf(0f)
+    var contrast by mutableFloatStateOf(0f)
+    var details by mutableFloatStateOf(0f)
+    var totalRotation by mutableFloatStateOf(0f)
 
     var cropRect by mutableStateOf(RectF(0f, 0f, 1f, 1f))
     var cropApplied by mutableStateOf(false)

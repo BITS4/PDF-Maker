@@ -6,6 +6,8 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.toColorInt
 
 /** Draws already-bounded preview data and owns any input bitmap passed to it. */
 internal object ThumbnailCanvasRenderer {
@@ -20,7 +22,7 @@ internal object ThumbnailCanvasRenderer {
         var completed = false
         try {
             val height = (sizePx * DOCUMENT_ASPECT).toInt().coerceAtLeast(1)
-            val bitmap = Bitmap.createBitmap(sizePx, height, Bitmap.Config.ARGB_8888)
+            val bitmap = createBitmap(sizePx, height)
             output = bitmap
             val canvas = Canvas(bitmap).apply { drawColor(Color.WHITE) }
             drawPageRules(canvas, sizePx, height)
@@ -44,11 +46,11 @@ internal object ThumbnailCanvasRenderer {
         var completed = false
         try {
             val height = (sizePx * PRESENTATION_ASPECT).toInt().coerceAtLeast(1)
-            val bitmap = Bitmap.createBitmap(sizePx, height, Bitmap.Config.ARGB_8888)
+            val bitmap = createBitmap(sizePx, height)
             output = bitmap
-            val canvas = Canvas(bitmap).apply { drawColor(Color.parseColor("#1A1A2E")) }
+            val canvas = Canvas(bitmap).apply { drawColor("#1A1A2E".toColorInt()) }
             drawPresentationImage(canvas, image, sizePx, height)
-            drawBadge(canvas, "PPTX", Color.parseColor("#E65100"), 6f, 6f, sizePx * BADGE_TEXT)
+            drawBadge(canvas, "PPTX", "#E65100".toColorInt(), 6f, 6f, sizePx * BADGE_TEXT)
             drawPresentationText(canvas, texts, sizePx, height)
             completed = true
             return bitmap
@@ -62,14 +64,14 @@ internal object ThumbnailCanvasRenderer {
         sizePx: Int,
         rows: List<List<String>>,
         badgeLabel: String = "CSV",
-        headerColor: Int = Color.parseColor("#6A1B9A"),
-        badgeColor: Int = Color.parseColor("#4A148C"),
+        headerColor: Int = "#6A1B9A".toColorInt(),
+        badgeColor: Int = "#4A148C".toColorInt(),
     ): Bitmap {
         var output: Bitmap? = null
         var completed = false
         try {
             val height = (sizePx * TABLE_ASPECT).toInt().coerceAtLeast(1)
-            val bitmap = Bitmap.createBitmap(sizePx, height, Bitmap.Config.ARGB_8888)
+            val bitmap = createBitmap(sizePx, height)
             output = bitmap
             val canvas = Canvas(bitmap).apply { drawColor(Color.WHITE) }
             if (rows.isNotEmpty()) drawTableRows(canvas, rows, sizePx, height, headerColor)
@@ -88,7 +90,7 @@ internal object ThumbnailCanvasRenderer {
     ) {
         val paint =
             Paint().apply {
-                color = Color.parseColor("#F0F0F0")
+                color = "#F0F0F0".toColorInt()
                 strokeWidth = 1f
             }
         val step = height * 0.07f
@@ -187,11 +189,11 @@ internal object ThumbnailCanvasRenderer {
         val rowHeight = height / (visibleRows.size + 1).coerceAtLeast(4).toFloat()
         val columnWidth = width.toFloat() / columnCount
         val header = Paint().apply { color = headerColor }
-        val even = Paint().apply { color = Color.parseColor("#F8FFF8") }
+        val even = Paint().apply { color = "#F8FFF8".toColorInt() }
         val odd = Paint().apply { color = Color.WHITE }
         val border =
             Paint().apply {
-                color = Color.parseColor("#CCDDCC")
+                color = "#CCDDCC".toColorInt()
                 strokeWidth = 0.5f
             }
         val bodyText =

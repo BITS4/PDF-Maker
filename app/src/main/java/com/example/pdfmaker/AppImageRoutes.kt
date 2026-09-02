@@ -8,19 +8,19 @@ internal fun AppImageRoute(
     screen: Screen,
 ) {
     when (screen) {
-        Screen.SMART_SCAN -> smartScanRoute(navigation)
-        Screen.IMAGE_SELECTION -> imageSelectionRoute(navigation)
-        Screen.IMAGE_EDIT -> imageEditRoute(navigation)
-        Screen.IMAGE_CROP -> imageCropRoute(navigation)
-        Screen.IMAGE_REVIEW -> imageReviewRoute(navigation)
-        Screen.CONVERT_RESULT -> conversionResultRoute(navigation)
+        Screen.SMART_SCAN -> SmartScanRoute(navigation)
+        Screen.IMAGE_SELECTION -> ImageSelectionRoute(navigation)
+        Screen.IMAGE_EDIT -> ImageEditRoute(navigation)
+        Screen.IMAGE_CROP -> ImageCropRoute(navigation)
+        Screen.IMAGE_REVIEW -> ImageReviewRoute(navigation)
+        Screen.CONVERT_RESULT -> ConversionResultRoute(navigation)
         Screen.ID_CARD_RESULT -> navigation.navigate(Screen.HOME)
         else -> error("Screen $screen is not an image route")
     }
 }
 
 @Composable
-private fun smartScanRoute(navigation: AppNavigationState) {
+private fun SmartScanRoute(navigation: AppNavigationState) {
     SmartScanScreen(
         onBack = navigation::navigateBackToOrigin,
         onDocsDone = { uris ->
@@ -49,7 +49,7 @@ private fun prepareScanImages(
 }
 
 @Composable
-private fun imageSelectionRoute(navigation: AppNavigationState) {
+private fun ImageSelectionRoute(navigation: AppNavigationState) {
     ImageSelectionScreen(
         preSelected =
             if (navigation.addingMoreImages) {
@@ -83,7 +83,7 @@ private fun imageSelectionRoute(navigation: AppNavigationState) {
 }
 
 @Composable
-private fun imageEditRoute(navigation: AppNavigationState) {
+private fun ImageEditRoute(navigation: AppNavigationState) {
     val states = ImageToPdfState.editStates.toList()
     if (states.isEmpty()) {
         navigation.navigate(Screen.HOME)
@@ -116,7 +116,7 @@ private fun imageEditRoute(navigation: AppNavigationState) {
 }
 
 @Composable
-private fun imageCropRoute(navigation: AppNavigationState) {
+private fun ImageCropRoute(navigation: AppNavigationState) {
     val states = ImageToPdfState.editStates.toList()
     val index = ImageToPdfState.currentEditIndex
     val editState = states.getOrNull(index)
@@ -164,7 +164,7 @@ private fun imageCropRoute(navigation: AppNavigationState) {
 }
 
 @Composable
-private fun imageReviewRoute(navigation: AppNavigationState) {
+private fun ImageReviewRoute(navigation: AppNavigationState) {
     val states = ImageToPdfState.editStates.toList()
     if (states.isEmpty()) {
         navigation.navigate(Screen.HOME)
@@ -186,7 +186,7 @@ private fun imageReviewRoute(navigation: AppNavigationState) {
 }
 
 @Composable
-private fun conversionResultRoute(navigation: AppNavigationState) {
+private fun ConversionResultRoute(navigation: AppNavigationState) {
     ConvertResultScreen(
         filePath = navigation.resultFilePath,
         fileName = navigation.resultFileName,

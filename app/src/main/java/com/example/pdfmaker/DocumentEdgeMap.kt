@@ -1,6 +1,7 @@
 package com.example.pdfmaker
 
 import android.graphics.Bitmap
+import androidx.core.graphics.scale
 import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.min
@@ -68,7 +69,7 @@ private fun sampleForEdgeDetection(bitmap: Bitmap): SampledImage {
     val scale = min(1f, EDGE_PROCESSING_LIMIT.toFloat() / maxOf(bitmap.width, bitmap.height))
     val width = (bitmap.width * scale).toInt().coerceAtLeast(1)
     val height = (bitmap.height * scale).toInt().coerceAtLeast(1)
-    val sampled = Bitmap.createScaledBitmap(bitmap, width, height, true)
+    val sampled = bitmap.scale(width, height)
     val pixels = IntArray(width * height)
     try {
         sampled.getPixels(pixels, 0, width, 0, 0, width, height)

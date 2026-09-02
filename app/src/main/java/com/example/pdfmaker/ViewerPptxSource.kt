@@ -6,6 +6,9 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
 import android.text.TextPaint
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.toColorInt
+import androidx.core.graphics.withSave
 import kotlinx.coroutines.flow.FlowCollector
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserException
@@ -100,9 +103,9 @@ private fun renderViewerSlide(
     width: Int,
     height: Int,
 ): Bitmap {
-    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    val bitmap = createBitmap(width, height)
     val canvas = Canvas(bitmap)
-    canvas.drawColor(Color.parseColor("#F5F5F5"))
+    canvas.drawColor("#F5F5F5".toColorInt())
     val elements = parseViewerSlideElements(xml, width, height)
     elements.images.forEach { image -> drawSlideImage(canvas, image, relationships, media, width, height) }
     elements.texts.forEach { text -> drawSlideText(canvas, text, width) }
@@ -147,12 +150,9 @@ private fun drawSlideText(
             textSize = fontSize
         }
     val layout = buildViewerStaticLayout(text.text, paint, text.bounds.width().toInt())
-    canvas.save()
-    try {
-        canvas.translate(text.bounds.left, text.bounds.top + (text.bounds.height() - layout.height) / 2f)
-        layout.draw(canvas)
-    } finally {
-        canvas.restore()
+    canvas.withSave {
+        translate(text.bounds.left, text.bounds.top + (text.bounds.height() - layout.height) / 2f)
+        layout.draw(this)
     }
 }
 

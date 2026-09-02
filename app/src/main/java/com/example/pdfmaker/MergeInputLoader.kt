@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
+import androidx.core.graphics.createBitmap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -79,7 +80,7 @@ private fun renderMergeInputPreview(renderer: PdfRenderer): Bitmap =
                 300,
                 allowUpscale = true,
             ) ?: error("PDF page has invalid dimensions")
-        val bitmap = Bitmap.createBitmap(size.width, size.height, Bitmap.Config.ARGB_8888)
+        val bitmap = createBitmap(size.width, size.height)
         var completed = false
         try {
             Canvas(bitmap).drawColor(Color.WHITE)

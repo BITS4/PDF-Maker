@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.PointF
+import androidx.core.graphics.createBitmap
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sqrt
@@ -31,7 +32,7 @@ fun perspectiveWarp(
         requireNotNull(ImageInputPolicy.fitWithinLimits(measuredWidth, measuredHeight)) {
             "Crop output dimensions are invalid"
         }
-    val result = Bitmap.createBitmap(output.width, output.height, Bitmap.Config.ARGB_8888)
+    val result = createBitmap(output.width, output.height)
     Canvas(result).apply {
         drawColor(android.graphics.Color.WHITE)
         drawBitmap(source, perspectiveMatrix(topLeft, topRight, bottomRight, bottomLeft, output), warpPaint())

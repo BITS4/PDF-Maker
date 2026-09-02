@@ -10,6 +10,7 @@ import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.TextPaint
 import android.text.style.StyleSpan
+import androidx.core.graphics.withSave
 import kotlinx.coroutines.flow.FlowCollector
 import java.io.File
 import java.util.zip.ZipInputStream
@@ -108,12 +109,9 @@ private class DocxPageRenderer(
         val layout = buildViewerStaticLayout(text, paint, contentWidth)
         val blockHeight = layout.height + width * 0.01f
         if (!ensureVerticalSpace(blockHeight)) return false
-        canvas.save()
-        try {
-            canvas.translate(margin.toFloat(), currentY)
-            layout.draw(canvas)
-        } finally {
-            canvas.restore()
+        canvas.withSave {
+            translate(margin.toFloat(), currentY)
+            layout.draw(this)
         }
         currentY += blockHeight + paragraphSpacing(block.headingLevel)
         return true

@@ -8,6 +8,9 @@ import android.graphics.Paint
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import android.text.TextPaint
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.scale
+import androidx.core.graphics.withClip
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
@@ -72,7 +75,7 @@ private fun renderViewerPdfPage(
             ?: error("PDF page has invalid dimensions")
     val transform = Matrix()
     transform.setScale(scale.scaleX, scale.scaleY)
-    val bitmap = Bitmap.createBitmap(target.width, target.height, Bitmap.Config.ARGB_8888)
+    val bitmap = createBitmap(target.width, target.height)
     var rendered = false
     try {
         Canvas(bitmap).drawColor(Color.WHITE)
@@ -99,7 +102,7 @@ private suspend fun FlowCollector<Bitmap>.emitImagePage(
             width.coerceIn(1, 2_048),
             allowUpscale = true,
         ) ?: error("Image dimensions are invalid")
-    val bitmap = Bitmap.createScaledBitmap(source, target.width, target.height, true)
+    val bitmap = source.scale(target.width, target.height)
     if (bitmap !== source) source.recycle()
     emit(bitmap)
 }
@@ -129,14 +132,13 @@ private suspend fun FlowCollector<Bitmap>.emitTextPages(
         ) {
             lastLine += 1
         }
-        val bitmap = Bitmap.createBitmap(width, pageHeight, Bitmap.Config.ARGB_8888)
+        val bitmap = createBitmap(width, pageHeight)
         val canvas = Canvas(bitmap)
         canvas.drawColor(Color.WHITE)
-        canvas.save()
-        canvas.clipRect(margin, margin, width - margin, pageHeight - margin)
-        canvas.translate(margin.toFloat(), margin.toFloat() - layout.getLineTop(firstLine))
-        layout.draw(canvas)
-        canvas.restore()
+        canvas.withClip(margin, margin, width - margin, pageHeight - margin) {
+            translate(margin.toFloat(), margin.toFloat() - layout.getLineTop(firstLine))
+            layout.draw(this)
+        }
         emit(bitmap)
         emittedPages += 1
         firstLine = lastLine + 1

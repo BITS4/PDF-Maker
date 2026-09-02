@@ -50,7 +50,7 @@ fun PdfToJpgScreen(onBack: () -> Unit) {
 
     var state by remember { mutableStateOf(JpgConvertState.PICK) }
     var pickedName by remember { mutableStateOf("") }
-    var pickedSizeKb by remember { mutableStateOf(0L) }
+    var pickedSizeKb by remember { mutableLongStateOf(0L) }
     var pageCount by remember { mutableIntStateOf(0) }
     var quality by remember { mutableStateOf(JpgQuality.HIGH) }
     var progress by remember { mutableIntStateOf(0) }

@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
+import androidx.core.graphics.createBitmap
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 
@@ -22,11 +23,7 @@ internal suspend fun loadSplitPdfPreview(source: StagedPdfSource): SplitPdfPrevi
                 renderer.openPage(pageIndex).use { page ->
                     val plan = SplitPreviewPolicy.plan(pageCount, page.width, page.height)
                     val bitmap =
-                        Bitmap.createBitmap(
-                            plan.thumbnailSize.width,
-                            plan.thumbnailSize.height,
-                            Bitmap.Config.ARGB_8888,
-                        )
+                        createBitmap(plan.thumbnailSize.width, plan.thumbnailSize.height)
                     try {
                         Canvas(bitmap).drawColor(Color.WHITE)
                         val transform =
@@ -86,11 +83,7 @@ internal suspend fun doSplitPdf(
                                 allowUpscale = true,
                             ) ?: error("PDF page has invalid dimensions")
                         val bitmap =
-                            Bitmap.createBitmap(
-                                target.width,
-                                target.height,
-                                Bitmap.Config.ARGB_8888,
-                            )
+                            createBitmap(target.width, target.height)
                         try {
                             Canvas(bitmap).drawColor(Color.WHITE)
                             val transform =

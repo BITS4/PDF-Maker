@@ -8,6 +8,7 @@ import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.ParcelFileDescriptor
+import androidx.core.graphics.createBitmap
 import com.google.mlkit.common.MlKitException
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
@@ -175,7 +176,7 @@ private suspend fun recognizePdfPage(
     try {
         val size = OcrResourcePolicy.pdfRenderSize(page.width, page.height)
         val updatedPixels = OcrResourcePolicy.updatedRenderedPixels(renderedPixels, size.pixelCount)
-        val bitmap = Bitmap.createBitmap(size.width, size.height, Bitmap.Config.ARGB_8888)
+        val bitmap = createBitmap(size.width, size.height)
         try {
             Canvas(bitmap).drawColor(Color.WHITE)
             val matrix =

@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
+import androidx.core.graphics.createBitmap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -71,7 +72,7 @@ private fun renderPreviewPage(
         val target =
             RenderSizing.fitWithin(page.width, page.height, 200)
                 ?: error("PDF page has invalid dimensions")
-        val bitmap = Bitmap.createBitmap(target.width, target.height, Bitmap.Config.ARGB_8888)
+        val bitmap = createBitmap(target.width, target.height)
         var completed = false
         try {
             Canvas(bitmap).drawColor(Color.WHITE)
@@ -197,7 +198,7 @@ private fun appendEditedPage(
                     allowUpscale = true,
                 ),
             ) { "PDF page has invalid dimensions" }
-        val sourceBitmap = Bitmap.createBitmap(target.width, target.height, Bitmap.Config.ARGB_8888)
+        val sourceBitmap = createBitmap(target.width, target.height)
         var outputBitmap = sourceBitmap
         try {
             Canvas(sourceBitmap).drawColor(Color.WHITE)

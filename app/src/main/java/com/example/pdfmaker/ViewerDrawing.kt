@@ -8,6 +8,8 @@ import android.graphics.Typeface
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.toColorInt
 import kotlinx.coroutines.flow.FlowCollector
 
 private data class TablePaints(
@@ -115,12 +117,12 @@ private class TablePageRenderer(
 
 private fun tablePaints(textSize: Float): TablePaints =
     TablePaints(
-        headerBackground = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#1565C0") },
-        evenBackground = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#F5F8FF") },
+        headerBackground = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = "#1565C0".toColorInt() },
+        evenBackground = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = "#F5F8FF".toColorInt() },
         oddBackground = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE },
         border =
             Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.parseColor("#DDDDEE")
+                color = "#DDDDEE".toColorInt()
                 strokeWidth = 1f
             },
         text =
@@ -140,7 +142,7 @@ internal fun newViewerPage(
     width: Int,
     height: Int,
 ): Bitmap =
-    Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also {
+    createBitmap(width, height).also {
         Canvas(it).drawColor(Color.WHITE)
     }
 

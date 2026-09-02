@@ -11,6 +11,8 @@ import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import androidx.compose.ui.graphics.toArgb
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.scale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -64,7 +66,7 @@ private fun renderScaledPdfPage(
     page: PdfRenderer.Page,
     target: PixelSize,
 ): Bitmap {
-    val bitmap = Bitmap.createBitmap(target.width, target.height, Bitmap.Config.ARGB_8888)
+    val bitmap = createBitmap(target.width, target.height)
     var completed = false
     try {
         Canvas(bitmap).drawColor(android.graphics.Color.WHITE)
@@ -183,7 +185,7 @@ private fun PdfDocument.appendAnnotatedPage(
     pageBoxWidth: Int,
     pageBoxHeight: Int,
 ) {
-    val combined = Bitmap.createBitmap(base.width, base.height, Bitmap.Config.ARGB_8888)
+    val combined = createBitmap(base.width, base.height)
     try {
         val canvas = Canvas(combined).also { it.drawBitmap(base, 0f, 0f, null) }
         annotations?.let {
@@ -237,7 +239,7 @@ private fun drawAnnotations(
         val width = (signature.width * bitmap.width).toInt().coerceAtLeast(1)
         val sourceWidth = signature.bitmap.width.coerceAtLeast(1)
         val height = (width.toFloat() / sourceWidth * signature.bitmap.height).toInt().coerceAtLeast(1)
-        val scaled = Bitmap.createScaledBitmap(signature.bitmap, width, height, true)
+        val scaled = signature.bitmap.scale(width, height)
         canvas.drawBitmap(scaled, signature.x * bitmap.width, signature.y * bitmap.height, null)
         if (scaled !== signature.bitmap) scaled.recycle()
     }

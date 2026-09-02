@@ -27,15 +27,15 @@ internal fun AppDocumentRoute(
         }
 
         Screen.DOCX_TO_PDF -> {
-            docxToPdfRoute(navigation)
+            DocxToPdfRoute(navigation)
         }
 
         Screen.IMPORT_PDF -> {
-            importPdfRoute(navigation)
+            ImportPdfRoute(navigation)
         }
 
         Screen.IMPORTED_PDF_VIEWER -> {
-            importedPdfViewerRoute(activity, navigation)
+            ImportedPdfViewerRoute(activity, navigation)
         }
 
         Screen.SIGNATURE_PAD -> {
@@ -43,13 +43,13 @@ internal fun AppDocumentRoute(
         }
 
         else -> {
-            supportingDocumentRoute(navigation, screen)
+            SupportingDocumentRoute(navigation, screen)
         }
     }
 }
 
 @Composable
-private fun supportingDocumentRoute(
+private fun SupportingDocumentRoute(
     navigation: AppNavigationState,
     screen: Screen,
 ) {
@@ -101,7 +101,7 @@ private fun supportingDocumentRoute(
 }
 
 @Composable
-private fun docxToPdfRoute(navigation: AppNavigationState) {
+private fun DocxToPdfRoute(navigation: AppNavigationState) {
     DocxToPdfScreen(
         onBack = {
             navigation.clearImportedDocx()
@@ -117,7 +117,7 @@ private fun docxToPdfRoute(navigation: AppNavigationState) {
 }
 
 @Composable
-private fun importPdfRoute(navigation: AppNavigationState) {
+private fun ImportPdfRoute(navigation: AppNavigationState) {
     ImportPdfScreen(
         onBack = navigation::navigateBackToOrigin,
         onPdfPicked = { uri ->
@@ -128,7 +128,7 @@ private fun importPdfRoute(navigation: AppNavigationState) {
 }
 
 @Composable
-private fun importedPdfViewerRoute(
+private fun ImportedPdfViewerRoute(
     activity: MainActivity,
     navigation: AppNavigationState,
 ) {

@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import java.io.File
 
 @Composable
@@ -27,6 +28,9 @@ fun ImportedPdfViewerScreen(
     val operations = rememberPdfEditorOperationController()
     val state = remember(pdfUri, initialEditMode) { ImportedPdfViewerState(initialEditMode) }
     val density = LocalDensity.current
+    val displayWidth =
+        LocalWindowInfo.current.containerSize.width
+            .coerceAtLeast(1)
     val displayScale = remember(density) { ImportedPdfDisplayScale(density.density * density.fontScale) }
     val latestShareFile = rememberUpdatedState(onShareFile)
     val actions =
@@ -45,9 +49,7 @@ fun ImportedPdfViewerScreen(
     ImportedPdfPageCacheEffect(
         context = context,
         state = state,
-        displayWidth =
-            context.resources.displayMetrics.widthPixels
-                .coerceAtLeast(1),
+        displayWidth = displayWidth,
     )
 
     val backAction = state.backAction(operations.target)

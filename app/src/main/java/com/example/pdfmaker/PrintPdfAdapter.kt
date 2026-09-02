@@ -21,6 +21,7 @@ import android.print.PrintAttributes
 import android.print.PrintDocumentAdapter
 import android.print.PrintDocumentInfo
 import android.print.pdf.PrintedPdfDocument
+import androidx.core.graphics.createBitmap
 import java.io.FileInputStream
 import java.io.IOException
 import java.util.concurrent.ExecutorService
@@ -366,7 +367,7 @@ internal class PrintPdfAdapter(
                     contentBottom = content.bottom,
                 ) ?: throw PrintPipelineException("The selected paper margins leave no printable area.")
 
-            bitmap = Bitmap.createBitmap(bitmapSize.width, bitmapSize.height, Bitmap.Config.ARGB_8888)
+            bitmap = createBitmap(bitmapSize.width, bitmapSize.height)
             Canvas(bitmap).drawColor(Color.WHITE)
             val transform =
                 Matrix().apply {

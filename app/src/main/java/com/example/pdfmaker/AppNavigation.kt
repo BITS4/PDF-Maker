@@ -3,6 +3,7 @@ package com.example.pdfmaker
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.core.content.edit
 
 private const val PREFERENCES_NAME = "pdfmaker_prefs"
 private const val ONBOARDING_DONE_KEY = "onboarding_done"
@@ -37,9 +38,9 @@ fun AppNavigation(activity: MainActivity) {
             onDone = {
                 activity
                     .getSharedPreferences(PREFERENCES_NAME, 0)
-                    .edit()
-                    .putBoolean(ONBOARDING_DONE_KEY, true)
-                    .apply()
+                    .edit {
+                        putBoolean(ONBOARDING_DONE_KEY, true)
+                    }
                 navigation.showOnboarding = false
             },
         )

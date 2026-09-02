@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -82,7 +83,7 @@ fun PinScreen(onUnlocked: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Column(
-            Modifier.fillMaxWidth().padding(32.dp).offset(x = shakeOffset.dp),
+            Modifier.fillMaxWidth().padding(32.dp).offset { IntOffset(shakeOffset.dp.roundToPx(), 0) },
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             // Lock icon

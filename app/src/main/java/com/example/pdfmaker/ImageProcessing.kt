@@ -7,6 +7,7 @@ import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
+import androidx.core.graphics.createBitmap
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlin.math.abs
@@ -248,7 +249,7 @@ object ImageProcessing {
         checkpoint: () -> Unit,
     ): Bitmap {
         checkpoint()
-        val result = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
+        val result = createBitmap(source.width, source.height)
         var completed = false
         try {
             Canvas(result).drawBitmap(
@@ -286,7 +287,7 @@ object ImageProcessing {
         width: Int,
         height: Int,
     ): Bitmap =
-        Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { bitmap ->
+        createBitmap(width, height).also { bitmap ->
             bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
         }
 
@@ -294,7 +295,7 @@ object ImageProcessing {
         source: Bitmap,
         edge: Int,
     ): Bitmap =
-        Bitmap.createBitmap(edge, edge, Bitmap.Config.ARGB_8888).also { bitmap ->
+        createBitmap(edge, edge).also { bitmap ->
             Canvas(bitmap).drawBitmap(
                 source,
                 null,

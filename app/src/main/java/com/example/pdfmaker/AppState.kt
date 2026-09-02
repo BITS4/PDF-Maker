@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -31,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.core.content.edit
 
 // ── App-wide colour tokens ────────────────────────────────────────────────────
 
@@ -56,7 +58,7 @@ enum class ScanMode { DOCS, ID_CARD }
 
 object ImageToPdfState {
     val editStates = mutableStateListOf<ImageEditState>()
-    var currentEditIndex by mutableStateOf(0)
+    var currentEditIndex by mutableIntStateOf(0)
     var isIdCardScan by mutableStateOf(false)
 
     fun addUris(uris: List<Uri>): Int {
@@ -132,10 +134,10 @@ object SettingsManager {
         require(PinCredential.isValidPin(pin)) { "PIN must contain 4 to 6 digits" }
         context
             .getSharedPreferences(PREFS, 0)
-            .edit()
-            .putString(PIN_CREDENTIAL, PinCredential.create(pin))
-            .remove(LEGACY_PIN)
-            .apply()
+            .edit {
+                putString(PIN_CREDENTIAL, PinCredential.create(pin))
+                    .remove(LEGACY_PIN)
+            }
         clearPinFailures(context)
     }
 
@@ -189,9 +191,9 @@ object SettingsManager {
         val safeValue = enabled && hasPin(context)
         context
             .getSharedPreferences(PREFS, 0)
-            .edit()
-            .putBoolean("security_enabled", safeValue)
-            .apply()
+            .edit {
+                putBoolean("security_enabled", safeValue)
+            }
     }
 
     private fun currentAttemptState(context: Context): PinAttemptState {
@@ -218,10 +220,10 @@ object SettingsManager {
     ) {
         context
             .getSharedPreferences(PREFS, 0)
-            .edit()
-            .putInt(PIN_FAILURES, state.failedAttempts)
-            .putLong(PIN_LOCKED_UNTIL, state.lockedUntilEpochMillis)
-            .apply()
+            .edit {
+                putInt(PIN_FAILURES, state.failedAttempts)
+                    .putLong(PIN_LOCKED_UNTIL, state.lockedUntilEpochMillis)
+            }
     }
 }
 

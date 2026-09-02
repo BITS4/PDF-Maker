@@ -12,9 +12,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import kotlinx.coroutines.CancellationException
+import kotlin.math.roundToInt
 
 @Composable
 fun PdfViewerScreen(
@@ -23,7 +25,9 @@ fun PdfViewerScreen(
     onShare: () -> Unit = {},
 ) {
     val context = LocalContext.current
-    val screenWidth = LocalConfiguration.current.screenWidthDp
+    val density = LocalDensity.current
+    val screenWidthPx = LocalWindowInfo.current.containerSize.width
+    val screenWidth = (screenWidthPx / density.density).roundToInt()
     val kind = remember(file.filePath, file.name) { detectViewerFileKind(file.filePath, file.name) }
     val listState = rememberLazyListState()
 
@@ -88,7 +92,7 @@ fun PdfViewerScreen(
             val targetWidth =
                 viewerTargetWidth(
                     screenWidthDp = screenWidth,
-                    density = context.resources.displayMetrics.density,
+                    density = density.density,
                 )
             cacheViewerPageArtifacts(viewFile, kind, targetWidth, nextStore) { artifact ->
                 pages = pages + artifact

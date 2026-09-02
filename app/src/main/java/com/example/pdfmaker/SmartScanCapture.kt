@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.scale
 import androidx.exifinterface.media.ExifInterface
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -92,7 +93,7 @@ internal suspend fun normalizeCapturedImage(
             ownedBitmap =
                 replaceOwnedBitmap(
                     ownedBitmap,
-                    Bitmap.createScaledBitmap(ownedBitmap, fitted.width, fitted.height, true),
+                    ownedBitmap.scale(fitted.width, fitted.height),
                 )
         }
         checkpoint()
@@ -163,7 +164,7 @@ internal suspend fun createCaptureThumbnail(
             ownedBitmap =
                 replaceOwnedBitmap(
                     ownedBitmap,
-                    Bitmap.createScaledBitmap(ownedBitmap, fitted.width, fitted.height, true),
+                    ownedBitmap.scale(fitted.width, fitted.height),
                 )
         }
         checkpoint()

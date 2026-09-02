@@ -60,7 +60,7 @@ fun ImageEditScreen(
         ) { editStates.size }
 
     var showAdjust by remember { mutableStateOf(false) }
-    var adjustTab by remember { mutableStateOf(0) }
+    var adjustTab by remember { mutableIntStateOf(0) }
     val renderMutex = remember { Mutex() }
     val renderVersions = remember { mutableMapOf<ImageEditState, Int>() }
 

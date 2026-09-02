@@ -1,7 +1,7 @@
 package com.example.pdfmaker
 
 import android.graphics.Bitmap
-import android.graphics.Color
+import androidx.core.graphics.toColorInt
 import java.io.File
 import java.io.FilterInputStream
 import java.io.InputStream
@@ -38,7 +38,7 @@ internal object ThumbnailOfficeSource {
             return ThumbnailCanvasRenderer.document(
                 sizePx = sizePx,
                 badgeLabel = "DOCX",
-                badgeColor = Color.parseColor("#1565C0"),
+                badgeColor = "#1565C0".toColorInt(),
                 texts = texts,
                 image = image,
             )
@@ -113,8 +113,8 @@ internal object ThumbnailOfficeSource {
             sizePx = sizePx,
             rows = rows,
             badgeLabel = "XLSX",
-            headerColor = Color.parseColor("#2E7D32"),
-            badgeColor = Color.parseColor("#1B5E20"),
+            headerColor = "#2E7D32".toColorInt(),
+            badgeColor = "#1B5E20".toColorInt(),
         )
     }
 

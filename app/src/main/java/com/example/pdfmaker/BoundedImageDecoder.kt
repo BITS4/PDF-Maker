@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.net.Uri
+import androidx.core.graphics.scale
 import androidx.exifinterface.media.ExifInterface
 import java.io.File
 import java.io.FileOutputStream
@@ -61,7 +62,7 @@ object BoundedImageDecoder {
                         ImageInputPolicy.fitWithinLimits(owned.width, owned.height),
                     ) { "The decoded image has invalid dimensions" }
                 if (fitted.width != owned.width || fitted.height != owned.height) {
-                    val scaled = Bitmap.createScaledBitmap(owned, fitted.width, fitted.height, true)
+                    val scaled = owned.scale(fitted.width, fitted.height)
                     if (scaled !== owned) owned.recycle()
                     owned = scaled
                 }
