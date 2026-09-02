@@ -3,6 +3,7 @@ package com.example.pdfmaker
 import android.Manifest
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.security.NetworkSecurityPolicy
 import androidx.core.content.FileProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -47,6 +48,32 @@ class SecurityConfigurationInstrumentedTest {
 
         assertTrue(Manifest.permission.POST_NOTIFICATIONS in permissions)
         assertEquals(0, packageInfo.applicationInfo!!.flags and ApplicationInfo.FLAG_ALLOW_BACKUP)
+    }
+
+    @Test
+    fun cleartextNetworkTrafficIsBlockedByThePackagedPolicy() {
+        assertFalse(NetworkSecurityPolicy.getInstance().isCleartextTrafficPermitted)
+    }
+
+    @Test
+    fun onlyTheIntentHandlingActivityIsExported() {
+        @Suppress("DEPRECATION")
+        val packageInfo =
+            context.packageManager.getPackageInfo(
+                context.packageName,
+                PackageManager.GET_ACTIVITIES or PackageManager.GET_PROVIDERS,
+            )
+        val exportedActivities = packageInfo.activities.orEmpty().filter { activity -> activity.exported }
+        val fileProvider =
+            requireNotNull(
+                packageInfo.providers.orEmpty().singleOrNull { provider ->
+                    provider.authority == "${context.packageName}.provider"
+                },
+            )
+
+        assertEquals(listOf(MainActivity::class.java.name), exportedActivities.map { activity -> activity.name })
+        assertFalse(fileProvider.exported)
+        assertTrue(fileProvider.grantUriPermissions)
     }
 
     @Test
