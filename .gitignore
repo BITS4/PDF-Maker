@@ -1,15 +1,22 @@
 *.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
+*.jks
+*.keystore
+*.p12
+*.properties.local
 .DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+.gradle/
+.idea/
+.kotlin/
+.externalNativeBuild/
+.cxx/
+**/build/
+captures/
 local.properties
+
+# Generated quality and security reports
+dependency-check-data/
+reports/
+
+# Release credentials must never enter source control
+keystore.properties
+signing.properties
