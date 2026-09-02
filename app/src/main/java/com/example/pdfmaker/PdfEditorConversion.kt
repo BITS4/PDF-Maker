@@ -3,6 +3,7 @@ package com.example.pdfmaker
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.pdf.PdfDocument
@@ -52,17 +53,28 @@ private fun renderPageOrThrow(
             renderer.openPage(pageIndex).use { page ->
                 val target = PdfEditorRenderPolicy.targetSize(page.width, page.height, widthPx)
                     ?: error("PDF page has invalid dimensions")
-                val bitmap = Bitmap.createBitmap(target.width, target.height, Bitmap.Config.ARGB_8888)
-                try {
-                    Canvas(bitmap).drawColor(android.graphics.Color.WHITE)
-                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                    bitmap
-                } catch (error: Throwable) {
-                    bitmap.recycle()
-                    throw error
-                }
+                renderScaledPdfPage(page, target)
             }
         }
+    }
+}
+
+private fun renderScaledPdfPage(page: PdfRenderer.Page, target: PixelSize): Bitmap {
+    val bitmap = Bitmap.createBitmap(target.width, target.height, Bitmap.Config.ARGB_8888)
+    var completed = false
+    try {
+        Canvas(bitmap).drawColor(android.graphics.Color.WHITE)
+        val renderScale = requireNotNull(
+            RenderSizing.scaleTo(page.width, page.height, target),
+        ) { "PDF page has invalid render dimensions" }
+        val transform = Matrix().apply {
+            setScale(renderScale.scaleX, renderScale.scaleY)
+        }
+        page.render(bitmap, null, transform, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+        completed = true
+        return bitmap
+    } finally {
+        if (!completed) bitmap.recycle()
     }
 }
 
