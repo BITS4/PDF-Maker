@@ -1,7 +1,6 @@
 package com.example.pdfmaker
 
 import android.content.Context
-import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,9 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.FileProvider
 import java.io.File
-import timber.log.Timber
 
 @Composable
 internal fun ViewerUnsupportedView(
@@ -154,22 +151,16 @@ private fun ViewerStatusView(
 internal fun openWithExternalApp(
     context: Context,
     file: PdfFile,
-): Boolean =
-    try {
-        val source = File(file.filePath)
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", source)
-        val kind = detectViewerFileKind(file.filePath, file.name)
-        val intent =
-            Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, viewerMimeType(kind))
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-        context.startActivity(Intent.createChooser(intent, "Open with"))
-        true
-    } catch (ignoredError: Exception) {
-        Timber.tag("PdfViewer").w(ignoredError, "event=external_viewer_unavailable")
-        false
-    }
+): Boolean {
+    val kind = detectViewerFileKind(file.filePath, file.name)
+    val requestedMimeType = viewerMimeType(kind).takeUnless { mimeType -> '*' in mimeType }
+    return DocumentShareAdapter.open(
+        context = context,
+        file = File(file.filePath),
+        chooserTitle = "Open with",
+        requestedMimeType = requestedMimeType,
+    )
+}
 
 internal fun viewerErrorMessage(error: Exception): String =
     when (error) {

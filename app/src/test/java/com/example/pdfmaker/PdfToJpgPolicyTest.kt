@@ -3,6 +3,7 @@ package com.example.pdfmaker
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -87,6 +88,21 @@ class PdfToJpgPolicyTest {
                 assertFalse(message.contains(privateDetail))
                 assertFalse(message.contains("customer-report"))
             }
+        }
+    }
+
+    @Test
+    fun `exposes fixed messages only for share failure stages`() {
+        assertEquals(
+            "The images are saved, but a secure share package could not be prepared.",
+            PdfToJpgPolicy.shareFailureMessage(PdfToJpgFailureStage.SHARE_PREPARE),
+        )
+        assertEquals(
+            "The images are saved, but no compatible sharing app could be opened.",
+            PdfToJpgPolicy.shareFailureMessage(PdfToJpgFailureStage.SHARE_LAUNCH),
+        )
+        assertThrows(IllegalArgumentException::class.java) {
+            PdfToJpgPolicy.shareFailureMessage(PdfToJpgFailureStage.LOAD)
         }
     }
 }

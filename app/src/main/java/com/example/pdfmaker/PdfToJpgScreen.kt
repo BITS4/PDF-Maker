@@ -379,28 +379,34 @@ fun PdfToJpgScreen(onBack: () -> Unit) {
                                 sharing = true
                                 shareMessage = null
                                 scope.launch {
-                                    val prepared = withContext(Dispatchers.IO) {
-                                        prepareJpgShareIntent(context, resultFiles, pickedName)
-                                    }
-                                    prepared.fold(
-                                        onSuccess = { intent ->
-                                            runCatching { context.startActivity(intent) }
-                                                .onFailure { error ->
-                                                    shareMessage =
-                                                        PdfToJpgPolicy.failureMessage(
-                                                            PdfToJpgFailureStage.SHARE_LAUNCH,
-                                                            error,
-                                                        )
-                                                }
-                                        },
-                                        onFailure = { error ->
-                                            shareMessage =
-                                                PdfToJpgPolicy.failureMessage(
+                                    val shareFiles =
+                                        withContext(Dispatchers.IO) {
+                                            prepareJpgShareFiles(context, resultFiles)
+                                        }
+                                    shareMessage =
+                                        when {
+                                            shareFiles == null -> {
+                                                PdfToJpgPolicy.shareFailureMessage(
                                                     PdfToJpgFailureStage.SHARE_PREPARE,
-                                                    error,
                                                 )
-                                        },
-                                    )
+                                            }
+
+                                            !DocumentShareAdapter.share(
+                                                context = context,
+                                                files = shareFiles,
+                                                chooserTitle =
+                                                    if (shareFiles.size == 1) "Share JPG" else "Share JPG images",
+                                                requestedMimeType = "image/jpeg",
+                                            ) -> {
+                                                PdfToJpgPolicy.shareFailureMessage(
+                                                    PdfToJpgFailureStage.SHARE_LAUNCH,
+                                                )
+                                            }
+
+                                            else -> {
+                                                null
+                                            }
+                                        }
                                     sharing = false
                                 }
                             }

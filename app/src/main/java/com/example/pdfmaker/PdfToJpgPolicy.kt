@@ -122,10 +122,21 @@ internal object PdfToJpgPolicy {
                     else -> "This PDF could not be converted safely. Try another file or quality setting."
                 }
 
-            PdfToJpgFailureStage.SHARE_PREPARE ->
-                "The images are saved, but a secure share package could not be prepared."
-
-            PdfToJpgFailureStage.SHARE_LAUNCH ->
-                "The images are saved, but no compatible sharing app could be opened."
+            PdfToJpgFailureStage.SHARE_PREPARE,
+            PdfToJpgFailureStage.SHARE_LAUNCH,
+            -> {
+                shareFailureMessage(stage)
+            }
         }
+
+    fun shareFailureMessage(stage: PdfToJpgFailureStage): String {
+        require(stage == PdfToJpgFailureStage.SHARE_PREPARE || stage == PdfToJpgFailureStage.SHARE_LAUNCH) {
+            "Only share failures have a fixed share message"
+        }
+        return if (stage == PdfToJpgFailureStage.SHARE_PREPARE) {
+            "The images are saved, but a secure share package could not be prepared."
+        } else {
+            "The images are saved, but no compatible sharing app could be opened."
+        }
+    }
 }

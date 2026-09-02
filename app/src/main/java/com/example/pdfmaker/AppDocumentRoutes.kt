@@ -101,9 +101,9 @@ private fun importedPdfViewerRoute(
         onShareFile = { file ->
             val shared =
                 DocumentShareAdapter.share(
-                    activity = activity,
+                    context = activity,
                     file = file,
-                    chooserTitle = "Share ${file.name}",
+                    chooserTitle = "Share document",
                 )
             if (!shared) {
                 Toast

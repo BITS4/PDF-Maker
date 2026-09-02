@@ -1,16 +1,12 @@
 package com.example.pdfmaker
 
-import android.content.ActivityNotFoundException
-import android.content.ClipData
 import android.content.ContentResolver
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.FileProvider
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -78,16 +74,15 @@ internal class CompressActions(
 
     fun shareResult() {
         val file = state.result?.file ?: return
-        try {
-            shareCompressedFile(context, file)
-        } catch (error: ActivityNotFoundException) {
-            rejectShare(error)
-        } catch (error: SecurityException) {
-            rejectShare(error)
-        } catch (error: IllegalArgumentException) {
-            rejectShare(error)
-        } catch (error: IllegalStateException) {
-            rejectShare(error)
+        val shared =
+            DocumentShareAdapter.share(
+                context = context,
+                file = file,
+                chooserTitle = "Share compressed PDF",
+                requestedMimeType = "application/pdf",
+            )
+        if (!shared) {
+            state.shareFailed("The compressed PDF is saved, but it could not be shared. Try another compatible app.")
         }
     }
 
@@ -168,11 +163,6 @@ internal class CompressActions(
         state.compressionFailed(operationGeneration, CompressionPolicy.failureMessage(stage, error))
     }
 
-    private fun rejectShare(error: Exception) {
-        logFailure("share_failed", error)
-        state.shareFailed(CompressionPolicy.failureMessage(CompressionFailureStage.SHARE, error))
-    }
-
     private fun launchTracked(operation: suspend () -> Unit) {
         activeJob?.cancel()
         lateinit var launchedJob: Job
@@ -242,22 +232,6 @@ private suspend fun deleteUnclaimedOutput(file: File) {
             Timber.tag("CompressPdf").w("event=unclaimed_output_delete_failed")
         }
     }
-}
-
-private fun shareCompressedFile(
-    context: Context,
-    file: File,
-) {
-    require(file.isFile && file.length() > 0L) { "Compressed PDF output is unavailable" }
-    val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-    val intent =
-        Intent(Intent.ACTION_SEND).apply {
-            type = "application/pdf"
-            clipData = ClipData.newRawUri("Compressed PDF", uri)
-            putExtra(Intent.EXTRA_STREAM, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-    context.startActivity(Intent.createChooser(intent, "Share compressed PDF"))
 }
 
 private fun logFailure(

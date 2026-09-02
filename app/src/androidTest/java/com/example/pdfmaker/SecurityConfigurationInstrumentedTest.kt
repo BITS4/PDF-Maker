@@ -11,12 +11,12 @@ import androidx.core.content.FileProvider
 import androidx.core.content.IntentCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.File
 
 @RunWith(AndroidJUnit4::class)
 class SecurityConfigurationInstrumentedTest {
@@ -145,7 +145,15 @@ class SecurityConfigurationInstrumentedTest {
     fun jpgSharingUsesAContentUriWithReadOnlyTemporaryAccess() {
         val image = File(getPdfMakerDir(context), "share-contract.jpg").apply { writeBytes(byteArrayOf(1, 2, 3)) }
         try {
-            val chooser = prepareJpgShareIntent(context, listOf(image), "share-contract").getOrThrow()
+            val chooser =
+                requireNotNull(
+                    DocumentShareAdapter.buildShareChooser(
+                        context = context,
+                        files = listOf(image),
+                        chooserTitle = "Share JPG",
+                        requestedMimeType = "image/jpeg",
+                    ),
+                )
             val shareIntent =
                 requireNotNull(
                     IntentCompat.getParcelableExtra(chooser, Intent.EXTRA_INTENT, Intent::class.java),
@@ -161,9 +169,58 @@ class SecurityConfigurationInstrumentedTest {
             assertEquals("${context.packageName}.provider", stream.authority)
             assertTrue(shareIntent.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
             assertEquals(0, shareIntent.flags and Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            assertEquals(1, shareIntent.clipData?.itemCount)
             assertEquals(stream, shareIntent.clipData?.getItemAt(0)?.uri)
         } finally {
             image.delete()
+        }
+    }
+
+    @Test
+    fun multipleJpgsUseReadOnlyContentUrisWithoutCreatingAZip() {
+        val images =
+            listOf(
+                File(getPdfMakerDir(context), "share-contract-1.jpg"),
+                File(getPdfMakerDir(context), "share-contract-2.jpg"),
+            ).onEach { image -> image.writeBytes(byteArrayOf(1, 2, 3)) }
+        try {
+            val chooser =
+                requireNotNull(
+                    DocumentShareAdapter.buildShareChooser(
+                        context = context,
+                        files = images,
+                        chooserTitle = "Share JPG images",
+                        requestedMimeType = "image/jpeg",
+                    ),
+                )
+            val shareIntent =
+                requireNotNull(
+                    IntentCompat.getParcelableExtra(chooser, Intent.EXTRA_INTENT, Intent::class.java),
+                )
+            val streams =
+                requireNotNull(
+                    IntentCompat.getParcelableArrayListExtra(
+                        shareIntent,
+                        Intent.EXTRA_STREAM,
+                        Uri::class.java,
+                    ),
+                )
+            val clipData = requireNotNull(shareIntent.clipData)
+
+            assertEquals(Intent.ACTION_SEND_MULTIPLE, shareIntent.action)
+            assertEquals("image/jpeg", shareIntent.type)
+            assertEquals(images.size, streams.size)
+            assertEquals(images.size, clipData.itemCount)
+            assertTrue(shareIntent.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
+            assertEquals(0, shareIntent.flags and Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            streams.forEachIndexed { index, stream ->
+                assertEquals("content", stream.scheme)
+                assertEquals("${context.packageName}.provider", stream.authority)
+                assertEquals(stream, clipData.getItemAt(index).uri)
+                assertFalse(stream.lastPathSegment.orEmpty().endsWith(".zip", ignoreCase = true))
+            }
+        } finally {
+            images.forEach(File::delete)
         }
     }
 }

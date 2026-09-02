@@ -5,7 +5,6 @@ import android.graphics.Bitmap
 import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
-import androidx.core.content.FileProvider
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import java.io.File
@@ -93,24 +92,6 @@ internal suspend fun mergePdfs(
         pdfDocument.close()
     }
 }
-
-// ── Share merged file ─────────────────────────────────────────────────────────
-
-internal fun shareMergedFile(context: Context, file: File): Result<Unit> =
-    runCatching {
-        val uri = androidx.core.content.FileProvider.getUriForFile(
-            context, "${context.packageName}.provider", file
-        )
-        context.startActivity(
-            android.content.Intent.createChooser(
-                android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                    type = "application/pdf"
-                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
-                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }, "Share merged PDF"
-            )
-        )
-    }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

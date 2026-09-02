@@ -1,21 +1,16 @@
 package com.example.pdfmaker
 
-import android.content.ActivityNotFoundException
-import android.content.ClipData
 import android.content.Context
-import android.content.Intent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.FileProvider
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import timber.log.Timber
 import java.io.File
 import java.io.IOException
 
@@ -58,8 +53,16 @@ internal fun rememberMergePdfActions(
             },
             shareResult = {
                 val file = state.resultFile
-                if (file != null) {
-                    shareMergedPdf(context, file)?.let(state::reject)
+                if (
+                    file != null &&
+                    !DocumentShareAdapter.share(
+                        context = context,
+                        file = file,
+                        chooserTitle = "Share merged PDF",
+                        requestedMimeType = "application/pdf",
+                    )
+                ) {
+                    state.reject("The merged PDF is saved, but it could not be shared.")
                 }
             },
             removeItem = { index ->
@@ -120,42 +123,4 @@ private fun File.toPdfFile(totalPages: Int): PdfFile =
 
 private fun mergeFailureMessage(error: Exception): String {
     return UserVisibleFailureReporter.message(UserFailureStage.PDF_MERGE, error)
-}
-
-private fun shareMergedPdf(
-    context: Context,
-    file: File,
-): String? =
-    try {
-        val uri =
-            FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.provider",
-                file,
-            )
-        val sendIntent =
-            Intent(Intent.ACTION_SEND).apply {
-                type = "application/pdf"
-                clipData = ClipData.newRawUri("Merged PDF", uri)
-                putExtra(Intent.EXTRA_STREAM, uri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-        context.startActivity(Intent.createChooser(sendIntent, "Share merged PDF"))
-        null
-    } catch (error: ActivityNotFoundException) {
-        reportShareFailure(error, "No compatible app is available to share this PDF.")
-    } catch (error: IllegalArgumentException) {
-        reportShareFailure(error, "The merged PDF could not be shared safely.")
-    } catch (error: SecurityException) {
-        reportShareFailure(error, "Permission to share the merged PDF was denied.")
-    }
-
-private fun reportShareFailure(
-    error: RuntimeException,
-    message: String,
-): String {
-    Timber
-        .tag("MergePdf")
-        .w("Merged PDF share failed (%s)", error.javaClass.simpleName)
-    return message
 }

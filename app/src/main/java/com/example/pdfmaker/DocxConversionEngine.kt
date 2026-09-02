@@ -2,7 +2,6 @@ package com.example.pdfmaker
 
 import android.content.Context
 import android.net.Uri
-import androidx.core.content.FileProvider
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import java.io.File
@@ -44,16 +43,16 @@ internal suspend fun docxToPdf(
     }
 }
 
-internal fun shareDocxPdf(context: Context, file: File): Result<Unit> =
-    runCatching {
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-            type = "application/pdf"
-            putExtra(android.content.Intent.EXTRA_STREAM, uri)
-            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(android.content.Intent.createChooser(intent, "Share PDF"))
-    }
+internal fun shareDocxPdf(
+    context: Context,
+    file: File,
+): Boolean =
+    DocumentShareAdapter.share(
+        context = context,
+        file = file,
+        chooserTitle = "Share PDF",
+        requestedMimeType = "application/pdf",
+    )
 
 internal fun docxFormatSize(kb: Long): String =
     if (kb >= 1024) "%.1f MB".format(kb / 1024f) else "$kb KB"

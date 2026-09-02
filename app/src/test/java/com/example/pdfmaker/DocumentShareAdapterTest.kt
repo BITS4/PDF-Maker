@@ -15,6 +15,11 @@ class DocumentShareAdapterTest {
             "application/vnd.openxmlformats-officedocument.presentationml.presentation",
             DocumentShareAdapter.mimeType("slides.PPTX"),
         )
+        assertEquals(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            DocumentShareAdapter.mimeType("sheet.XLSX"),
+        )
+        assertEquals("image/jpeg", DocumentShareAdapter.mimeType("scan.JPEG"))
     }
 
     @Test
@@ -25,5 +30,6 @@ class DocumentShareAdapterTest {
         assertEquals(fallback, DocumentShareAdapter.mimeType("document."))
         assertEquals(fallback, DocumentShareAdapter.mimeType("document.exe"))
         assertEquals(fallback, DocumentShareAdapter.mimeType(""))
+        assertEquals(fallback, DocumentShareAdapter.mimeType("report.pdf.exe"))
     }
 }

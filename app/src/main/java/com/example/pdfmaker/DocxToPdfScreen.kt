@@ -343,12 +343,8 @@ fun DocxToPdfScreen(
                             Button(
                                 onClick = {
                                     if (file != null) {
-                                        shareDocxPdf(context, file).onFailure { error ->
-                                            errorMsg =
-                                                UserVisibleFailureReporter.message(
-                                                    UserFailureStage.CONVERTED_PDF_SHARE,
-                                                    error,
-                                                )
+                                        if (!shareDocxPdf(context, file)) {
+                                            errorMsg = "The converted PDF is saved, but it could not be shared."
                                             state = DocxState.ERROR
                                         }
                                     }

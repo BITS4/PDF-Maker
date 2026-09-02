@@ -85,7 +85,7 @@ private fun sharePdf(
 ) {
     val shared =
         DocumentShareAdapter.share(
-            activity = activity,
+            context = activity,
             file = File(file.filePath),
             chooserTitle = activity.getString(R.string.share_pdf_via),
         )

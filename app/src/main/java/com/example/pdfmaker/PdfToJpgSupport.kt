@@ -1,9 +1,7 @@
 package com.example.pdfmaker
 
 import android.content.ContentValues
-import android.content.ClipData
 import android.content.Context
-import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.pdf.PdfRenderer
@@ -31,15 +29,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.FileProvider
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import java.io.File
-import java.io.FilterOutputStream
-import java.io.OutputStream
-import java.util.zip.ZipEntry
-import java.util.zip.ZipOutputStream
 import timber.log.Timber
+import java.io.File
+import java.io.IOException
 
 enum class JpgQuality(
     val label      : String,
@@ -314,73 +308,42 @@ internal fun decodeJpgResultThumbnail(file: File): Result<Bitmap> = runCatching 
     }
 }
 
-// ── Share all JPGs as a ZIP ────────────────────────────────────────────────────
+// ── Validate JPGs before sharing ───────────────────────────────────────────────
 
-internal fun prepareJpgShareIntent(
+internal fun prepareJpgShareFiles(
     context: Context,
     files: List<File>,
-    baseName: String,
-): Result<Intent> = runCatching {
-    val exportDirectory = getPdfMakerDir(context).canonicalFile
-    val safeFiles = files.map { file ->
-        file.canonicalFile.also { canonical ->
-            require(canonical.isFile && canonical.parentFile == exportDirectory) {
-                "Only converted JPG files can be shared"
-            }
-        }
-    }
-    PdfToJpgPolicy.requireShareBatch(safeFiles.map(File::length))
-
-    val sendIntent =
-        if (files.size == 1) {
-            val uri = FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.provider",
-                safeFiles.first(),
-            )
-            Intent(Intent.ACTION_SEND).apply {
-                type = "image/jpeg"
-                clipData = ClipData.newRawUri("Shared image", uri)
-                putExtra(Intent.EXTRA_STREAM, uri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-        } else {
-            val shareDirectory = File(context.cacheDir, "pdfmaker")
-            val zipFile = OutputStore.writeUnique(
-                directory = shareDirectory,
-                requestedBaseName = "${baseName}_pages",
-                extension = "zip",
-            ) { output ->
-                ZipOutputStream(NonClosingOutputStream(output)).use { zip ->
-                    safeFiles.forEach { file ->
-                        zip.putNextEntry(ZipEntry("${SafeFileName.baseName(file.nameWithoutExtension)}.jpg"))
-                        try {
-                            file.inputStream().use { source ->
-                                BoundedIo.copy(source, zip, PdfToJpgPolicy.MAX_JPEG_BYTES)
-                            }
-                        } finally {
-                            zip.closeEntry()
-                        }
-                    }
+): List<File>? =
+    try {
+        val exportDirectory = getPdfMakerDir(context).canonicalFile
+        val safeFiles =
+            files.map { file ->
+                file.canonicalFile.also { canonical ->
+                    require(
+                        canonical.isFile &&
+                            canonical.parentFile == exportDirectory &&
+                            canonical.extension.equals("jpg", ignoreCase = true),
+                    ) { "Only converted JPG files can be shared" }
                 }
             }
-            val zipUri = FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.provider",
-                zipFile,
-            )
-            Intent(Intent.ACTION_SEND).apply {
-                type = "application/zip"
-                clipData = ClipData.newRawUri("Shared images", zipUri)
-                putExtra(Intent.EXTRA_STREAM, zipUri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-        }
-    Intent.createChooser(sendIntent, if (safeFiles.size == 1) "Share JPG" else "Share JPG images")
-}
+        PdfToJpgPolicy.requireShareBatch(safeFiles.map(File::length))
+        safeFiles
+    } catch (_: IllegalArgumentException) {
+        logJpgSharePreparationFailure()
+        null
+    } catch (_: IOException) {
+        logJpgSharePreparationFailure()
+        null
+    } catch (_: IllegalStateException) {
+        logJpgSharePreparationFailure()
+        null
+    } catch (_: SecurityException) {
+        logJpgSharePreparationFailure()
+        null
+    }
 
-private class NonClosingOutputStream(output: OutputStream) : FilterOutputStream(output) {
-    override fun close() = flush()
+private fun logJpgSharePreparationFailure() {
+    Timber.tag("PdfToJpg").w("event=share_prepare_rejected")
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
