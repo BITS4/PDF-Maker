@@ -1,12 +1,6 @@
 package com.example.pdfmaker
 
 import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Color as AndroidColor
-import androidx.compose.ui.graphics.Color
-import android.graphics.Matrix
-import android.graphics.pdf.PdfDocument
-import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -33,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -66,6 +61,15 @@ fun PageManagerScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit = {}) {
     var outPath    by remember { mutableStateOf("") }
     var outName    by remember { mutableStateOf("") }
     var errMsg     by remember { mutableStateOf("") }
+    val latestPages by rememberUpdatedState(pages)
+
+    DisposableEffect(Unit) {
+        onDispose {
+            latestPages.forEach { page ->
+                if (!page.bitmap.isRecycled) page.bitmap.recycle()
+            }
+        }
+    }
 
     fun loadPdf(uri: Uri) {
         scope.launch {
@@ -79,11 +83,17 @@ fun PageManagerScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit = {}) {
             }
             result.fold(
                 onSuccess = { loadedPages ->
-                    pages.forEach { it.bitmap.recycle() }
+                    pages.forEach { page ->
+                        if (!page.bitmap.isRecycled) page.bitmap.recycle()
+                    }
                     pages = loadedPages
                     pmState = PmState.EDIT
                 },
                 onFailure = { error ->
+                    pages.forEach { page ->
+                        if (!page.bitmap.isRecycled) page.bitmap.recycle()
+                    }
+                    pages = emptyList()
                     errMsg = error.message ?: "Could not read this PDF"
                     pmState = PmState.ERROR
                 },
