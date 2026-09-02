@@ -3,8 +3,6 @@ package com.example.pdfmaker
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color as AndroidColor
-import androidx.compose.ui.graphics.Color
-import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -30,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -38,6 +37,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -64,9 +66,19 @@ fun SplitPdfScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit = {}) {
     var outName       by remember { mutableStateOf("") }
     var errMsg        by remember { mutableStateOf("") }
     var loadingThumbs by remember { mutableStateOf(false) }
+    var previewJob    by remember { mutableStateOf<Job?>(null) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            previewJob?.cancel()
+            thumbs.forEach { bitmap -> if (!bitmap.isRecycled) bitmap.recycle() }
+        }
+    }
 
     fun loadPdf(uri: Uri) {
-        scope.launch {
+        previewJob?.cancel()
+        previewJob = scope.launch {
+            val activeJob = coroutineContext[Job]
             loadingThumbs = true
             pickedUri  = uri
             pickedName = uri.lastPathSegment
@@ -78,24 +90,63 @@ fun SplitPdfScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit = {}) {
                 bytes < 1024*1024   -> "${bytes/1024} KB"
                 else                -> "${"%.1f".format(bytes/(1024.0*1024))} MB"
             }
-            withContext(Dispatchers.IO) {
-                try {
-                    val fd  = context.contentResolver.openFileDescriptor(uri, "r") ?: return@withContext
-                    val rdr = PdfRenderer(fd)
-                    totalPages = rdr.pageCount; rangeTo = rdr.pageCount
-                    val list = mutableListOf<Bitmap>()
-                    for (i in 0 until rdr.pageCount) {
-                        val page = rdr.openPage(i)
-                        val w = 140; val h = (w.toFloat()/page.width*page.height).toInt().coerceAtLeast(1)
-                        val b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-                        Canvas(b).drawColor(AndroidColor.WHITE)
-                        page.render(b, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                        page.close(); list.add(b)
+            try {
+                val loadedThumbs = withContext(Dispatchers.IO) {
+                    val loadingContext = coroutineContext
+                    withSafePdfRenderer(context, uri) { renderer ->
+                        val pageCount = renderer.pageCount
+                        require(pageCount in 1..SplitPreviewPolicy.MAX_PREVIEW_PAGES) {
+                            "PDF must contain between 1 and ${SplitPreviewPolicy.MAX_PREVIEW_PAGES} pages"
+                        }
+                        val list = mutableListOf<Bitmap>()
+                        try {
+                            for (index in 0 until pageCount) {
+                                loadingContext.ensureActive()
+                                renderer.openPage(index).use { page ->
+                                    val plan = SplitPreviewPolicy.plan(pageCount, page.width, page.height)
+                                    val bitmap = Bitmap.createBitmap(
+                                        plan.thumbnailSize.width,
+                                        plan.thumbnailSize.height,
+                                        Bitmap.Config.ARGB_8888,
+                                    )
+                                    try {
+                                        Canvas(bitmap).drawColor(AndroidColor.WHITE)
+                                        page.render(
+                                            bitmap,
+                                            null,
+                                            null,
+                                            PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY,
+                                        )
+                                        list += bitmap
+                                    } catch (error: Throwable) {
+                                        bitmap.recycle()
+                                        throw error
+                                    }
+                                }
+                            }
+                            list
+                        } catch (error: Throwable) {
+                            list.forEach { bitmap -> if (!bitmap.isRecycled) bitmap.recycle() }
+                            throw error
+                        }
                     }
-                    rdr.close(); fd.close(); thumbs = list
-                } catch (_: Exception) {}
+                }
+                val previousThumbs = thumbs
+                thumbs = loadedThumbs
+                previousThumbs.forEach { bitmap -> if (!bitmap.isRecycled) bitmap.recycle() }
+                totalPages = loadedThumbs.size
+                rangeFrom = 1
+                rangeTo = loadedThumbs.size
+                selPages = emptySet()
+                state = SplitState.CONFIGURE
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                errMsg = error.message ?: "The PDF preview could not be loaded safely."
+                state = SplitState.ERROR
+            } finally {
+                if (previewJob === activeJob) loadingThumbs = false
             }
-            loadingThumbs = false; state = SplitState.CONFIGURE
         }
     }
 
