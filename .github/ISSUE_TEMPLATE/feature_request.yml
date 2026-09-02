@@ -1,38 +1,33 @@
 name: Feature request
 description: Propose a focused improvement to PDF Maker.
 title: "feat: "
-labels: [enhancement]
+labels:
+  - enhancement
 body:
   - type: textarea
     id: problem
     attributes:
       label: Problem
-      description: What document workflow is difficult today?
+      description: What user problem should this solve?
     validations:
       required: true
   - type: textarea
-    id: outcome
+    id: proposal
     attributes:
-      label: Desired outcome
-      description: Describe the result rather than a specific implementation.
+      label: Proposed behavior
+      description: Describe the smallest useful outcome, including failure and cancellation behavior.
     validations:
       required: true
-  - type: dropdown
-    id: area
+  - type: textarea
+    id: alternatives
     attributes:
-      label: Area
+      label: Alternatives considered
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Project constraints
       options:
-        - PDF viewing
-        - PDF editing
-        - Scan and OCR
-        - Conversion
-        - File management
-        - Accessibility
-        - Build and tooling
-    validations:
-      required: true
-  - type: textarea
-    id: acceptance
-    attributes:
-      label: Acceptance examples
-      description: Include edge cases and expected failure behavior.
+        - label: The proposal can work without uploading documents to an external service.
+          required: true
+        - label: I am willing to add or update tests with the change.
+          required: true

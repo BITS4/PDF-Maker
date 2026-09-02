@@ -1,15 +1,15 @@
-## Summary
+## Purpose
 
-Describe the user-visible or engineering outcome and why it is needed.
+Describe one focused behavior change and why it is needed.
 
 ## Verification
 
-- [ ] New behavior is covered by focused tests.
-- [ ] `ktlintCheck`, Detekt, and Android lint pass.
-- [ ] Unit tests and Kover verification pass.
-- [ ] The debug APK builds from a clean checkout.
-- [ ] Documentation or release notes are updated where relevant.
+- [ ] Tests cover success, failure, boundary, and cancellation behavior where applicable.
+- [ ] `verify` passes from the repository root.
+- [ ] No production Kotlin source file exceeds 500 lines.
+- [ ] No secret, document content, personal path, or generated artifact is committed.
+- [ ] User-visible or operational changes are documented.
 
 ## Risk and rollback
 
-Describe affected data, permissions, compatibility, and the safest rollback path.
+Describe affected data or resources, cleanup behavior, and how the change can be safely reverted.

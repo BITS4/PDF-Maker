@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Report a security vulnerability
+  - name: Report a security vulnerability privately
     url: https://github.com/BITS4/PDF-Maker/security/advisories/new
-    about: Share vulnerabilities privately without attaching sensitive documents.
+    about: Do not disclose vulnerabilities or sensitive documents in a public issue.
