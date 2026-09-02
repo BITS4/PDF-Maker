@@ -93,10 +93,12 @@ private class ConversionDocumentHandler(
     }
 
     override fun characters(characters: CharArray, start: Int, length: Int) {
-        if (inText && inRun && inParagraph && !inRunProperties && length > 0) {
-            appendText(String(characters, start, length))
-        }
+        if (length <= 0 || !isCollectingRunText()) return
+        appendText(String(characters, start, length))
     }
+
+    private fun isCollectingRunText(): Boolean =
+        inText && inRun && inParagraph && !inRunProperties
 
     override fun endElement(uri: String?, localName: String?, qName: String?) {
         when (xmlName(localName, qName)) {

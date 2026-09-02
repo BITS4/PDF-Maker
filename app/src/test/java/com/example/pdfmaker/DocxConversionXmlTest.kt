@@ -43,4 +43,33 @@ class DocxConversionXmlTest {
             parseConversionDocument("<document><body><p>", emptyMap())
         }
     }
+
+    @Test
+    fun `ignores text outside document runs and run property nodes`() {
+        val document = """
+            <w:document xmlns:w="urn:w">
+              outside
+              <w:body>
+                body text
+                <w:p><w:r><w:rPr><w:b>property text</w:b></w:rPr><w:t>Visible</w:t></w:r></w:p>
+              </w:body>
+            </w:document>
+        """.trimIndent()
+
+        val paragraph = parseConversionDocument(document, emptyMap())
+            .filterIsInstance<DocBlock.Paragraph>()
+            .single()
+
+        assertEquals("Visible", paragraph.runs.single().text)
+    }
+
+    @Test
+    fun `rejects entity declarations before parser expansion`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            parseConversionDocument(
+                "<!DOCTYPE document [<!ENTITY secret 'expanded'>]><document>&secret;</document>",
+                emptyMap(),
+            )
+        }
+    }
 }
