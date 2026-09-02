@@ -70,48 +70,52 @@ object SecureDocumentCodec {
     fun isEncrypted(bytes: ByteArray): Boolean =
         bytes.hasMagic(AUTHENTICATED_DOCUMENT_MAGIC) || bytes.hasMagic(LEGACY_DOCUMENT_MAGIC)
 
-    private fun decryptAuthenticated(encrypted: ByteArray, password: String): ByteArray? = try {
+    private fun decryptAuthenticated(encrypted: ByteArray, password: String): ByteArray? {
         if (encrypted.size < MIN_V2_SIZE) return null
-        val buffer = ByteBuffer.wrap(encrypted)
-        val magic = ByteArray(8).also { buffer.get(it) }
-        val iterations = buffer.int
-        if (!MessageDigest.isEqual(magic, AUTHENTICATED_DOCUMENT_MAGIC.toByteArray(Charsets.US_ASCII)) ||
-            iterations !in MIN_ITERATIONS..MAX_ITERATIONS
-        ) {
-            return null
+        return try {
+            val buffer = ByteBuffer.wrap(encrypted)
+            val magic = ByteArray(8).also { buffer.get(it) }
+            val iterations = buffer.int
+            if (!MessageDigest.isEqual(magic, AUTHENTICATED_DOCUMENT_MAGIC.toByteArray(Charsets.US_ASCII)) ||
+                iterations !in MIN_ITERATIONS..MAX_ITERATIONS
+            ) {
+                return null
+            }
+            val salt = ByteArray(SALT_SIZE).also { buffer.get(it) }
+            val nonce = ByteArray(NONCE_SIZE).also { buffer.get(it) }
+            val ciphertext = ByteArray(buffer.remaining()).also { buffer.get(it) }
+            val header = encrypted.copyOfRange(0, V2_HEADER_SIZE)
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(
+                Cipher.DECRYPT_MODE,
+                SecretKeySpec(deriveKey(password, salt, iterations), "AES"),
+                GCMParameterSpec(TAG_BITS, nonce),
+            )
+            cipher.updateAAD(header)
+            cipher.doFinal(ciphertext)
+        } catch (_: AEADBadTagException) {
+            null
+        } catch (_: Exception) {
+            null
         }
-        val salt = ByteArray(SALT_SIZE).also { buffer.get(it) }
-        val nonce = ByteArray(NONCE_SIZE).also { buffer.get(it) }
-        val ciphertext = ByteArray(buffer.remaining()).also { buffer.get(it) }
-        val header = encrypted.copyOfRange(0, V2_HEADER_SIZE)
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(
-            Cipher.DECRYPT_MODE,
-            SecretKeySpec(deriveKey(password, salt, iterations), "AES"),
-            GCMParameterSpec(TAG_BITS, nonce),
-        )
-        cipher.updateAAD(header)
-        cipher.doFinal(ciphertext)
-    } catch (_: AEADBadTagException) {
-        null
-    } catch (_: Exception) {
-        null
     }
 
-    private fun decryptLegacy(encrypted: ByteArray, password: String): ByteArray? = try {
+    private fun decryptLegacy(encrypted: ByteArray, password: String): ByteArray? {
         if (encrypted.size <= LEGACY_HEADER_SIZE) return null
-        val salt = encrypted.copyOfRange(8, 24)
-        val iv = encrypted.copyOfRange(24, 40)
-        val ciphertext = encrypted.copyOfRange(40, encrypted.size)
-        val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
-        cipher.init(
-            Cipher.DECRYPT_MODE,
-            SecretKeySpec(deriveKey(password, salt, 65_536), "AES"),
-            IvParameterSpec(iv),
-        )
-        cipher.doFinal(ciphertext)
-    } catch (_: Exception) {
-        null
+        return try {
+            val salt = encrypted.copyOfRange(8, 24)
+            val iv = encrypted.copyOfRange(24, 40)
+            val ciphertext = encrypted.copyOfRange(40, encrypted.size)
+            val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
+            cipher.init(
+                Cipher.DECRYPT_MODE,
+                SecretKeySpec(deriveKey(password, salt, 65_536), "AES"),
+                IvParameterSpec(iv),
+            )
+            cipher.doFinal(ciphertext)
+        } catch (_: Exception) {
+            null
+        }
     }
 
     private fun deriveKey(password: String, salt: ByteArray, iterations: Int): ByteArray {
@@ -132,35 +136,42 @@ object SecureDocumentCodec {
 object SecureDocumentStore {
     const val MAX_DOCUMENT_BYTES = 100L * 1024L * 1024L
 
-    fun lockInPlace(file: File, password: String): String? = try {
-        validateWritableDocument(file)
-        if (password.length !in 4..128) return "Password must contain 4 to 128 characters"
-        val bytes = readBounded(file)
-        if (SecureDocumentCodec.isEncrypted(bytes)) return "File is already locked"
-        OutputStore.replaceAtomically(file, SecureDocumentCodec.encrypt(bytes, password))
-        null
-    } catch (error: Exception) {
-        safeError("Could not lock file", error)
-    }
-
-    fun unlockInPlace(file: File, password: String): String? = try {
-        validateWritableDocument(file)
-        val encrypted = readBounded(file)
-        val plaintext = SecureDocumentCodec.decrypt(encrypted, password) ?: return "Wrong password or damaged file"
-        OutputStore.replaceAtomically(file, plaintext)
-        null
-    } catch (error: Exception) {
-        safeError("Could not unlock file", error)
-    }
-
-    fun isLocked(file: File): Boolean = try {
-        if (!file.isFile || file.length() < 8) return false
-        file.inputStream().use { input ->
-            val header = ByteArray(8)
-            input.read(header) == header.size && SecureDocumentCodec.isEncrypted(header)
+    fun lockInPlace(file: File, password: String): String? {
+        return try {
+            validateWritableDocument(file)
+            if (password.length !in 4..128) return "Password must contain 4 to 128 characters"
+            val bytes = readBounded(file)
+            if (SecureDocumentCodec.isEncrypted(bytes)) return "File is already locked"
+            OutputStore.replaceAtomically(file, SecureDocumentCodec.encrypt(bytes, password))
+            null
+        } catch (error: Exception) {
+            safeError("Could not lock file", error)
         }
-    } catch (_: Exception) {
-        false
+    }
+
+    fun unlockInPlace(file: File, password: String): String? {
+        return try {
+            validateWritableDocument(file)
+            val encrypted = readBounded(file)
+            val plaintext = SecureDocumentCodec.decrypt(encrypted, password)
+                ?: return "Wrong password or damaged file"
+            OutputStore.replaceAtomically(file, plaintext)
+            null
+        } catch (error: Exception) {
+            safeError("Could not unlock file", error)
+        }
+    }
+
+    fun isLocked(file: File): Boolean {
+        if (!file.isFile || file.length() < 8) return false
+        return try {
+            file.inputStream().use { input ->
+                val header = ByteArray(8)
+                input.read(header) == header.size && SecureDocumentCodec.isEncrypted(header)
+            }
+        } catch (_: Exception) {
+            false
+        }
     }
 
     fun encryptedCopy(context: Context, bytes: ByteArray, password: String, baseName: String): Pair<String, String>? =

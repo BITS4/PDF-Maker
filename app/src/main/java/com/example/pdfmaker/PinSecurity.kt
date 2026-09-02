@@ -53,19 +53,21 @@ object PinCredential {
         }
     }
 
-    private fun parse(encoded: String): ParsedCredential? = try {
-        val parts = encoded.split('$')
-        if (parts.size != 5 || parts[0] != VERSION) return null
-        val pinLength = parts[1].toInt()
-        val iterations = parts[2].toInt()
-        val salt = Base64.getDecoder().decode(parts[3])
-        val hash = Base64.getDecoder().decode(parts[4])
-        if (pinLength !in 4..6 || iterations < 1_000 || salt.size != SALT_BYTES || hash.size != HASH_BITS / 8) {
-            return null
+    private fun parse(encoded: String): ParsedCredential? {
+        return try {
+            val parts = encoded.split('$')
+            if (parts.size != 5 || parts[0] != VERSION) return null
+            val pinLength = parts[1].toInt()
+            val iterations = parts[2].toInt()
+            val salt = Base64.getDecoder().decode(parts[3])
+            val hash = Base64.getDecoder().decode(parts[4])
+            if (pinLength !in 4..6 || iterations < 1_000 || salt.size != SALT_BYTES || hash.size != HASH_BITS / 8) {
+                return null
+            }
+            ParsedCredential(pinLength, iterations, salt, hash)
+        } catch (_: IllegalArgumentException) {
+            null
         }
-        ParsedCredential(pinLength, iterations, salt, hash)
-    } catch (_: IllegalArgumentException) {
-        null
     }
 
     private data class ParsedCredential(
