@@ -4,6 +4,15 @@ import android.util.Log
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
 
+internal fun boundedSpreadsheetText(
+    currentLength: Int,
+    value: String,
+    maximumLength: Int,
+): String {
+    require(currentLength >= 0 && maximumLength > 0) { "Spreadsheet text limits are invalid" }
+    return value.take((maximumLength - currentLength).coerceAtLeast(0))
+}
+
 internal fun parseViewerSharedStrings(
     xml: String,
     maximumStrings: Int = MAX_VIEWER_TABLE_ROWS * MAX_VIEWER_TABLE_COLUMNS,
@@ -23,8 +32,8 @@ internal fun parseViewerSharedStrings(
                         inText = true
                         text.clear()
                     }
-                XmlPullParser.TEXT -> if (inText && text.length < maximumCellCharacters) {
-                    text.append(parser.text.take(maximumCellCharacters - text.length))
+                XmlPullParser.TEXT -> if (inText) {
+                    text.append(boundedSpreadsheetText(text.length, parser.text, maximumCellCharacters))
                 }
                 XmlPullParser.END_TAG ->
                     if (parser.name == "t") {
@@ -74,8 +83,8 @@ internal fun parseViewerSheet(
                             value.clear()
                         }
                     }
-                XmlPullParser.TEXT -> if (inValue && value.length < maximumCellCharacters) {
-                    value.append(parser.text.take(maximumCellCharacters - value.length))
+                XmlPullParser.TEXT -> if (inValue) {
+                    value.append(boundedSpreadsheetText(value.length, parser.text, maximumCellCharacters))
                 }
                 XmlPullParser.END_TAG ->
                     when (parser.name) {

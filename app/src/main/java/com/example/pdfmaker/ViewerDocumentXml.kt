@@ -4,6 +4,15 @@ import android.util.Log
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
 
+internal fun boundedViewerTextFragment(
+    currentLength: Int,
+    value: String,
+    maximumLength: Int = MAX_VIEWER_CELL_CHARACTERS,
+): String {
+    require(currentLength >= 0 && maximumLength > 0) { "Viewer text limits are invalid" }
+    return value.take((maximumLength - currentLength).coerceAtLeast(0))
+}
+
 internal fun parseViewerRelationships(xml: String): Map<String, String> {
     val relationships = mutableMapOf<String, String>()
     return try {
@@ -101,7 +110,7 @@ internal fun parseViewerDocument(
                                 flushParagraph()
                                 addBlock(DocBlock.PageBreak)
                             } else {
-                                if (runText.length < MAX_VIEWER_CELL_CHARACTERS) runText.append('\n')
+                                runText.append(boundedViewerTextFragment(runText.length, "\n"))
                             }
                         }
                         "blip" ->
@@ -112,10 +121,8 @@ internal fun parseViewerDocument(
                                 addBlock(DocBlock.ImageBlock(imageName))
                             }
                     }
-                XmlPullParser.TEXT -> if (
-                    inRun && inParagraph && !inRunProperties && runText.length < MAX_VIEWER_CELL_CHARACTERS
-                ) {
-                    runText.append(parser.text.take(MAX_VIEWER_CELL_CHARACTERS - runText.length))
+                XmlPullParser.TEXT -> if (inRun && inParagraph && !inRunProperties) {
+                    runText.append(boundedViewerTextFragment(runText.length, parser.text))
                 }
                 XmlPullParser.END_TAG ->
                     when (name) {
