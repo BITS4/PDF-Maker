@@ -1,8 +1,8 @@
 package com.example.pdfmaker
 
-import android.graphics.Bitmap
 import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -32,7 +32,6 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -225,56 +224,61 @@ fun ImageReviewScreen(
             onClick = {
                 isConverting = true
                 scope.launch(Dispatchers.IO) {
-                    val outFileName = fileName.ifBlank { "scan_${System.currentTimeMillis()}" } + ".pdf"
-                    val outFile = File(getPdfMakerDir(context), outFileName)
-                    val pdfDoc  = PdfDocument()
-                    editStates.forEachIndexed { idx, es ->
-                        val bmp = es.finalBitmap ?: es.originalBitmap ?: return@forEachIndexed
-                        val w   = bmp.width.coerceAtLeast(1)
-                        val h   = bmp.height.coerceAtLeast(1)
-                        val info = PdfDocument.PageInfo.Builder(w, h, idx + 1).create()
-                        val pg   = pdfDoc.startPage(info)
-                        pg.canvas.drawBitmap(bmp, 0f, 0f, Paint())
-                        pdfDoc.finishPage(pg)
-                    }
-                    outFile.outputStream().use { pdfDoc.writeTo(it) }
-                    pdfDoc.close()
-
-                    val finalPath: String
-                    val finalName: String
-                    if (usePassword && password.isNotEmpty()) {
-                        val err = lockFileInPlace(outFile.absolutePath, password)
-                        if (err != null) {
-                            // Lock failed — still return unencrypted file
+                    val bitmaps = editStates.mapNotNull { it.finalBitmap ?: it.originalBitmap }
+                    val result = ImagePdfExport.write(
+                        directory = getPdfMakerDir(context),
+                        requestedName = fileName.ifBlank { "scan_${System.currentTimeMillis()}" },
+                        password = password.takeIf { usePassword },
+                    ) { output ->
+                        val pdfDocument = PdfDocument()
+                        try {
+                            require(bitmaps.isNotEmpty()) { "No decoded images are available" }
+                            bitmaps.forEachIndexed { index, bitmap ->
+                                val info = PdfDocument.PageInfo.Builder(
+                                    bitmap.width.coerceAtLeast(1),
+                                    bitmap.height.coerceAtLeast(1),
+                                    index + 1,
+                                ).create()
+                                val page = pdfDocument.startPage(info)
+                                page.canvas.drawBitmap(bitmap, 0f, 0f, Paint())
+                                pdfDocument.finishPage(page)
+                            }
+                            pdfDocument.writeTo(output)
+                        } finally {
+                            pdfDocument.close()
                         }
-                        finalPath = outFile.absolutePath
-                        finalName = outFileName
-                    } else {
-                        finalPath = outFile.absolutePath
-                        finalName = outFileName
                     }
-
-                    val dateStr = SimpleDateFormat("MM/dd HH:mm", Locale.getDefault()).format(Date())
-                    val bmp0    = editStates.firstOrNull()?.finalBitmap ?: editStates.firstOrNull()?.originalBitmap
-                    val sizeKb  = outFile.length() / 1024
-                    FileCache.prependFile(
-                        PdfFile(
-                            name         = outFileName.removeSuffix(".pdf"),
-                            filePath     = finalPath,
-                            size         = "${sizeKb} KB",
-                            date         = dateStr,
-                            pageCount    = editStates.size,
-                            lastModified = outFile.lastModified()
-                        )
-                    )
 
                     withContext(Dispatchers.Main) {
                         isConverting = false
-                        onConvertDone(finalPath, finalName)
+                        result.fold(
+                            onSuccess = { output ->
+                                FileCache.prependFile(
+                                    PdfFile(
+                                        name = output.nameWithoutExtension,
+                                        filePath = output.absolutePath,
+                                        size = FileRepository.formatSize(output.length()),
+                                        date = SimpleDateFormat("MM/dd HH:mm", Locale.getDefault()).format(Date()),
+                                        pageCount = bitmaps.size,
+                                        lastModified = output.lastModified(),
+                                    ),
+                                )
+                                password = ""
+                                onConvertDone(output.absolutePath, output.name)
+                            },
+                            onFailure = {
+                                Toast.makeText(
+                                    context,
+                                    "The PDF could not be created safely",
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            },
+                        )
                     }
                 }
             },
-            enabled  = !isConverting && editStates.isNotEmpty(),
+            enabled = !isConverting && editStates.isNotEmpty() &&
+                (!usePassword || password.length in 4..128),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp)
