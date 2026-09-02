@@ -2,18 +2,14 @@ package com.example.pdfmaker
 
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
-import android.os.Environment
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.text.font.FontWeight
 import androidx.core.content.FileProvider
 import com.example.pdfmaker.R
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 
 @Composable
@@ -27,6 +23,8 @@ fun AppNavigation(activity: MainActivity) {
     var resultFilePath by remember { mutableStateOf("") }
     var resultFileName by remember { mutableStateOf("") }
     var importedPdfUri  by remember { mutableStateOf<android.net.Uri?>(null) }
+    var importedDocxUri by remember { mutableStateOf<Uri?>(null) }
+    var importedDocxName by remember { mutableStateOf<String?>(null) }
     var fromMoreTools  by remember { mutableStateOf(false) }
     var fromFiles      by remember { mutableStateOf(false) }
     var pendingEditMode by remember { mutableStateOf("") }  // doodle | add_text | signature
@@ -36,14 +34,6 @@ fun AppNavigation(activity: MainActivity) {
         !activity.getSharedPreferences("pdfmaker_prefs", 0)
              .getBoolean("onboarding_done", false)
     ) }
-    var showStorageDialog by remember {
-        mutableStateOf(
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
-            !Environment.isExternalStorageManager()
-        )
-    }
-
-
     fun navigate(to: Screen) {
         if (to == Screen.HOME) { fromMoreTools = false; fromFiles = false }
         prevScreen = currentScreen; currentScreen = to
@@ -80,31 +70,6 @@ fun AppNavigation(activity: MainActivity) {
     }
 
     // ── All-Files-Access dialog (Android 11+, once per session) ─────────────────
-    if (showStorageDialog) {
-        AlertDialog(
-            onDismissRequest = { showStorageDialog = false },
-            containerColor   = currentCard,
-            title = { Text("Allow File Access", color = currentText, fontWeight = FontWeight.Bold) },
-            text  = {
-                Text(
-                    "Grant \"All Files Access\" so PDFMaker can find all PDFs and documents on your device.",
-                    color = currentTextSecond
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    showStorageDialog = false
-                    activity.openManageAllFilesSettings()
-                }) { Text("Grant Access", color = AccentBlue, fontWeight = FontWeight.Bold) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showStorageDialog = false }) {
-                    Text("Not Now", color = currentTextSecond)
-                }
-            }
-        )
-    }
-
     BackHandler(enabled = currentScreen != Screen.HOME) {
         when (currentScreen) {
             Screen.FILES               -> navigate(Screen.HOME)
@@ -166,27 +131,51 @@ fun AppNavigation(activity: MainActivity) {
     }
 
     // ── Handle "Open with" intent from outside the app ────────────────────
-    LaunchedEffect(activity.incomingUri) {
-        val uri = activity.incomingUri ?: return@LaunchedEffect
-        activity.incomingUri = null   // consume it
-        try {
-            // Copy to our files dir so PdfRenderer can open it
-            val fileName = uri.lastPathSegment
-                ?.substringAfterLast("/")?.substringAfterLast("%2F") ?: "opened_file"
-            val outFile  = java.io.File(getPdfMakerDir(activity), fileName)
-            activity.contentResolver.openInputStream(uri)?.use { input ->
-                outFile.outputStream().use { input.copyTo(it) }
+    val incomingRequest = activity.incomingDocumentRequest
+    LaunchedEffect(incomingRequest) {
+        val request = incomingRequest ?: return@LaunchedEffect
+        val result = withContext(Dispatchers.IO) { SafeDocumentImporter.import(activity, request) }
+        activity.consumeIncomingDocument(request)
+        when (result) {
+            is IncomingImportResult.Imported -> when (result.kind) {
+                IncomingDocumentKind.PDF -> {
+                    val file = result.file
+                    val pdfFile = PdfFile(
+                        name = file.nameWithoutExtension,
+                        filePath = file.absolutePath,
+                        size = FileRepository.formatSize(file.length()),
+                        date = FileRepository.formatDate(file.lastModified()),
+                        lastModified = file.lastModified(),
+                    )
+                    FileCache.prependFile(pdfFile)
+                    openFile(pdfFile)
+                }
+                IncomingDocumentKind.DOCX -> {
+                    importedDocxUri = FileProvider.getUriForFile(
+                        activity,
+                        "${activity.packageName}.provider",
+                        result.file,
+                    )
+                    importedDocxName = result.file.nameWithoutExtension
+                    navigate(Screen.DOCX_TO_PDF)
+                }
+                else -> {
+                    val imageUri = FileProvider.getUriForFile(
+                        activity,
+                        "${activity.packageName}.provider",
+                        result.file,
+                    )
+                    ImageToPdfState.clear()
+                    ImageToPdfState.addUris(listOf(imageUri))
+                    ImageToPdfState.currentEditIndex = 0
+                    addingMore = false
+                    fromSmartScan = false
+                    navigate(Screen.IMAGE_EDIT)
+                }
             }
-            val pf = PdfFile(
-                name     = outFile.nameWithoutExtension,
-                filePath = outFile.absolutePath,
-                size     = "${outFile.length()/1024} KB",
-                date     = "",
-                lastModified = outFile.lastModified()
-            )
-            FileCache.prependFile(pf)
-            openFile(pf)
-        } catch (_: Exception) { }
+            is IncomingImportResult.Rejected ->
+                Toast.makeText(activity, result.message, Toast.LENGTH_LONG).show()
+        }
     }
 
 
@@ -408,8 +397,19 @@ fun AppNavigation(activity: MainActivity) {
             }
         )
         Screen.DOCX_TO_PDF -> DocxToPdfScreen(
-            onBack      = { backToOrigin() },
-            onOpenFile  = { file -> selectedFile = file; navigate(Screen.VIEWER) }
+            onBack = {
+                importedDocxUri = null
+                importedDocxName = null
+                backToOrigin()
+            },
+            onOpenFile = { file ->
+                importedDocxUri = null
+                importedDocxName = null
+                selectedFile = file
+                navigate(Screen.VIEWER)
+            },
+            initialUri = importedDocxUri,
+            initialName = importedDocxName,
         )
 
         Screen.IMPORT_PDF -> ImportPdfScreen(

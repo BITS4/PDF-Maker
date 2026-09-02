@@ -41,7 +41,12 @@ private enum class DocxState { PICK, READY, CONVERTING, DONE, ERROR }
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 @Composable
-fun DocxToPdfScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit) {
+fun DocxToPdfScreen(
+    onBack: () -> Unit,
+    onOpenFile: (PdfFile) -> Unit,
+    initialUri: Uri? = null,
+    initialName: String? = null,
+) {
     val context = LocalContext.current
     val scope   = rememberCoroutineScope()
 
@@ -52,10 +57,18 @@ fun DocxToPdfScreen(onBack: () -> Unit, onOpenFile: (PdfFile) -> Unit) {
     val textSec = Color(0xFF9999BB)
     val accent  = Color(0xFF1565C0)   // Word-blue theme
 
-    var state        by remember { mutableStateOf(DocxState.PICK) }
-    var pickedUri    by remember { mutableStateOf<Uri?>(null) }
-    var pickedName   by remember { mutableStateOf("") }
-    var pickedSizeKb by remember { mutableStateOf(0L) }
+    var state        by remember(initialUri) { mutableStateOf(if (initialUri == null) DocxState.PICK else DocxState.READY) }
+    var pickedUri    by remember(initialUri) { mutableStateOf(initialUri) }
+    var pickedName   by remember(initialUri, initialName) {
+        mutableStateOf(initialName?.let { SafeFileName.baseName(it) }.orEmpty())
+    }
+    var pickedSizeKb by remember(initialUri) {
+        mutableStateOf(
+            initialUri?.let { uri ->
+                context.contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize.coerceAtLeast(0) / 1024 }
+            } ?: 0L,
+        )
+    }
     var progress     by remember { mutableIntStateOf(0) }
     var progressText by remember { mutableStateOf("") }
     var resultFile   by remember { mutableStateOf<File?>(null) }

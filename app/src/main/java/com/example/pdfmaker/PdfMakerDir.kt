@@ -14,8 +14,11 @@ import java.io.File
  * - Users can find their files in any file manager
  */
 fun getPdfMakerDir(context: Context): File {
-    val publicDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
-    val dir = File(publicDir, "PDFMaker")
-    if (!dir.exists()) dir.mkdirs()
-    return dir
+    val root = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)
+        ?: File(context.filesDir, "documents")
+    return File(root, "PDFMaker").also { directory ->
+        check((directory.exists() && directory.isDirectory) || directory.mkdirs()) {
+            "Could not create the application document directory"
+        }
+    }
 }
