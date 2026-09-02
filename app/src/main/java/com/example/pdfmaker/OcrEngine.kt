@@ -13,6 +13,9 @@ import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -26,6 +29,7 @@ internal suspend fun runOcr(
 ) {
     val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     val results = mutableListOf<Pair<Int, String>>()
+    var recognizedCharacters = 0
     try {
         val imported = withContext(Dispatchers.IO) {
             SafeDocumentImporter.import(
@@ -37,35 +41,46 @@ internal suspend fun runOcr(
             is IncomingImportResult.Imported -> imported
             is IncomingImportResult.Rejected -> error(imported.message)
         }
+        currentCoroutineContext().ensureActive()
         try {
             if (document.kind == IncomingDocumentKind.PDF) {
-                val descriptor = ParcelFileDescriptor.open(document.file, ParcelFileDescriptor.MODE_READ_ONLY)
-                val renderer = try {
-                    PdfRenderer(descriptor)
-                } catch (error: Exception) {
-                    descriptor.close()
-                    throw error
-                }
-                try {
-                    val total = renderer.pageCount
-                    require(total in 1..500) { "PDF has an unsafe page count" }
-                    withContext(Dispatchers.Main) { onProgress(0, total) }
-                    for (index in 0 until total) {
-                        recognizePdfPage(renderer, index, recognizer, results)
-                        withContext(Dispatchers.Main) { onProgress(index + 1, total) }
+                ParcelFileDescriptor.open(document.file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
+                    PdfRenderer(descriptor).use { renderer ->
+                        val total = OcrResourcePolicy.requirePdfPageCount(renderer.pageCount)
+                        var renderedPixels = 0L
+                        withContext(Dispatchers.Main) { onProgress(0, total) }
+                        for (index in 0 until total) {
+                            currentCoroutineContext().ensureActive()
+                            val pageResult = recognizePdfPage(
+                                renderer = renderer,
+                                index = index,
+                                recognizer = recognizer,
+                                currentCharacters = recognizedCharacters,
+                                renderedPixels = renderedPixels,
+                            )
+                            recognizedCharacters = pageResult.totalCharacters
+                            renderedPixels = pageResult.totalRenderedPixels
+                            results.add(index + 1 to pageResult.text)
+                            withContext(Dispatchers.Main) { onProgress(index + 1, total) }
+                        }
                     }
-                } finally {
-                    renderer.close()
                 }
             } else {
                 require(document.kind != IncomingDocumentKind.DOCX) { "Choose a PDF or image for OCR" }
+                currentCoroutineContext().ensureActive()
                 withContext(Dispatchers.Main) { onProgress(0, 1) }
                 val bitmap = withContext(Dispatchers.IO) { decodeBoundedOcrImage(document.file) }
                     ?: error("The image could not be decoded safely")
                 try {
-                    val image = InputImage.fromBitmap(bitmap, 0)
-                    val recognized = withContext(Dispatchers.IO) { recognizer.process(image).await() }
-                    results.add(1 to recognized.text.trim())
+                    currentCoroutineContext().ensureActive()
+                    val recognizedText = recognizeBitmapText(bitmap, recognizer)
+                    currentCoroutineContext().ensureActive()
+                    val accepted = OcrResourcePolicy.acceptRecognizedText(
+                        pageNumber = 1,
+                        recognizedText = recognizedText,
+                        currentCharacters = recognizedCharacters,
+                    )
+                    results.add(1 to accepted.text)
                 } finally {
                     bitmap.recycle()
                 }
@@ -74,7 +89,8 @@ internal suspend fun runOcr(
         } finally {
             document.file.delete()
         }
-        withContext(Dispatchers.Main) { onDone(results) }
+        currentCoroutineContext().ensureActive()
+        withContext(Dispatchers.Main) { onDone(results.toList()) }
     } catch (error: CancellationException) {
         throw error
     } catch (error: Exception) {
@@ -88,16 +104,24 @@ internal suspend fun runOcr(
     }
 }
 
+private data class OcrPageResult(
+    val text: String,
+    val totalCharacters: Int,
+    val totalRenderedPixels: Long,
+)
+
 private suspend fun recognizePdfPage(
     renderer: PdfRenderer,
     index: Int,
     recognizer: com.google.mlkit.vision.text.TextRecognizer,
-    results: MutableList<Pair<Int, String>>,
-) {
+    currentCharacters: Int,
+    renderedPixels: Long,
+): OcrPageResult {
+    currentCoroutineContext().ensureActive()
     val page = renderer.openPage(index)
     try {
-        val size = RenderSizing.fitWithin(page.width, page.height, 1_600, allowUpscale = true)
-            ?: error("PDF page has invalid dimensions")
+        val size = OcrResourcePolicy.pdfRenderSize(page.width, page.height)
+        val updatedPixels = OcrResourcePolicy.updatedRenderedPixels(renderedPixels, size.pixelCount)
         val bitmap = Bitmap.createBitmap(size.width, size.height, Bitmap.Config.ARGB_8888)
         try {
             Canvas(bitmap).drawColor(Color.WHITE)
@@ -108,9 +132,19 @@ private suspend fun recognizePdfPage(
                 )
             }
             page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-            val image = InputImage.fromBitmap(bitmap, 0)
-            val recognized = withContext(Dispatchers.IO) { recognizer.process(image).await() }
-            results.add(index + 1 to recognized.text.trim())
+            currentCoroutineContext().ensureActive()
+            val recognizedText = recognizeBitmapText(bitmap, recognizer)
+            currentCoroutineContext().ensureActive()
+            val accepted = OcrResourcePolicy.acceptRecognizedText(
+                pageNumber = index + 1,
+                recognizedText = recognizedText,
+                currentCharacters = currentCharacters,
+            )
+            return OcrPageResult(
+                text = accepted.text,
+                totalCharacters = accepted.totalCharacters,
+                totalRenderedPixels = updatedPixels,
+            )
         } finally {
             bitmap.recycle()
         }
@@ -119,14 +153,28 @@ private suspend fun recognizePdfPage(
     }
 }
 
+private suspend fun recognizeBitmapText(
+    bitmap: Bitmap,
+    recognizer: com.google.mlkit.vision.text.TextRecognizer,
+): String = withContext(Dispatchers.IO) {
+    val task = recognizer.process(InputImage.fromBitmap(bitmap, 0))
+    // ML Kit does not expose cancellation for this task. Finish the active page before
+    // recycling its bitmap, then let the caller observe cancellation before another page.
+    withContext(NonCancellable) { task.await().text }
+}
+
 private fun decodeBoundedOcrImage(file: File): Bitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeFile(file.absolutePath, bounds)
-    val target = RenderSizing.fitWithin(bounds.outWidth, bounds.outHeight, 2_000) ?: return null
-    var sampleSize = 1
-    while (bounds.outWidth / sampleSize > target.width * 2 || bounds.outHeight / sampleSize > target.height * 2) {
-        sampleSize *= 2
-    }
+    val target = OcrResourcePolicy.imageDecodeSize(bounds.outWidth, bounds.outHeight)
+    val sampleSize = OcrResourcePolicy.imageSampleSize(bounds.outWidth, bounds.outHeight, target)
     val options = BitmapFactory.Options().apply { inSampleSize = sampleSize }
-    return BitmapFactory.decodeFile(file.absolutePath, options)
+    val bitmap = BitmapFactory.decodeFile(file.absolutePath, options) ?: return null
+    return try {
+        OcrResourcePolicy.requireDecodedImage(bitmap.width, bitmap.height)
+        bitmap
+    } catch (error: IllegalArgumentException) {
+        bitmap.recycle()
+        throw error
+    }
 }
