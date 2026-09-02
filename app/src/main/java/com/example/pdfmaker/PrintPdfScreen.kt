@@ -36,7 +36,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.io.File
 import java.io.FileOutputStream
-import java.io.InputStream
 
 @Composable
 fun PrintPdfScreen(onBack: () -> Unit) {
@@ -145,8 +144,6 @@ private fun printUri(
         val jobName = name.substringBeforeLast(".")
 
         val adapter = object : PrintDocumentAdapter() {
-            private var inputStream: InputStream? = null
-
             override fun onLayout(
                 oldAttributes: PrintAttributes?,
                 newAttributes: PrintAttributes,
@@ -170,20 +167,21 @@ private fun printUri(
                 callback: WriteResultCallback
             ) {
                 try {
-                    inputStream = context.contentResolver.openInputStream(uri)
-                    FileOutputStream(destination.fileDescriptor).use { out ->
-                        inputStream?.copyTo(out)
+                    SafePdfInput.fromUri(context, uri).use { source ->
+                        source.file.inputStream().use { input ->
+                            FileOutputStream(destination.fileDescriptor).use { output ->
+                                BoundedIo.copy(input, output, SafePdfInput.MAX_PDF_BYTES)
+                                output.flush()
+                            }
+                        }
                     }
                     callback.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
                 } catch (e: Exception) {
-                    callback.onWriteFailed(e.message)
-                } finally {
-                    inputStream?.close()
+                    callback.onWriteFailed(e.message ?: "The PDF could not be printed safely")
                 }
             }
 
             override fun onFinish() {
-                inputStream?.close()
                 onDone()
             }
         }

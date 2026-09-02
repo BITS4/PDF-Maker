@@ -59,4 +59,18 @@ class SafePdfInputTest {
         assertTrue(result.isFailure)
         assertFalse(temporaryFolder.root.listFiles().orEmpty().any())
     }
+
+    @Test
+    fun closesAndDeletesOwnedSnapshotsAfterSpooling() {
+        val staged = temporaryFolder.newFile("print-source.pdf").apply {
+            writeText("%PDF-1.7\nprint content")
+        }
+
+        StagedPdfSource(staged).use { source ->
+            assertTrue(source.file.isFile)
+            assertTrue(source.file.inputStream().use { it.read() } >= 0)
+        }
+
+        assertFalse(staged.exists())
+    }
 }
