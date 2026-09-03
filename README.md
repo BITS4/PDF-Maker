@@ -133,14 +133,15 @@ a running emulator or device:
 ```
 
 Reports are generated under `app/build/reports/`, including Android lint, Detekt, unit-test, and Kover HTML/XML output.
-The verified 2026-09-03 source freeze contains 79 JVM test files with 505 executed tests and 13 connected-test files
-with 47 declared cases, compared with 219 main-source Kotlin files and one debug-only test helper (about one test file
-per 2.39 production/helper files). Coverage counters come from the clean verification run and published reports.
+The verified 2026-09-03 source freeze contains 81 JVM test files with 512 executed tests and 13 connected-test files
+with 47 declared cases, compared with 220 main-source Kotlin files and one debug-only test helper (one automated test
+source per 2.35 production/helper sources). Coverage counters come from the clean verification run and published
+reports.
 The full application report remains unfiltered so UI and Android adapters stay visible rather than disappearing behind
-an inflated percentage. The clean source-freeze report measured the whole app at 20.45% lines, 28.24% branches, and
-30.67% methods. A separately reported critical-domain variant covers document input validation, storage,
+an inflated percentage. The clean source-freeze report measured the whole app at 21.15% lines, 28.48% branches, and
+31.98% methods. A separately reported critical-domain variant covers document input validation, storage,
 encryption/PIN handling, page policies, rendering sizes, office XML generation, and extracted viewer/editor policies;
-that report measured 92.02% lines, 76.81% branches, and 93.68% methods. CI requires at least 90% line and 75% branch
+that report measured 92.02% lines, 76.93% branches, and 93.75% methods. CI requires at least 91% line and 76% branch
 coverage in that domain. Coverage always reruns the complete JVM suite and rebuilds the critical aggregation, so a
 previous focused test cannot satisfy the gate with stale execution data. Raise these measured gates as coverage grows;
 lowering them or narrowing the domain to make a change pass is not acceptable. See

@@ -290,10 +290,10 @@ kover {
             }
             verify {
                 rule("critical-domain line coverage") {
-                    minBound(90, CoverageUnit.LINE)
+                    minBound(91, CoverageUnit.LINE)
                 }
                 rule("critical-domain branch coverage") {
-                    minBound(75, CoverageUnit.BRANCH)
+                    minBound(76, CoverageUnit.BRANCH)
                 }
             }
         }
