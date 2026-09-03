@@ -263,6 +263,7 @@ tasks.register("writeDependencyInventory") {
 tasks.register("checkDependencyInventory") {
     group = "verification"
     description = "Fails when the committed CycloneDX inventory differs from the locked release runtime graph."
+    mustRunAfter("writeDependencyInventory")
     inputs.files(dependencyLockFile, applicationBuildFile, dependencyInventoryFile)
 
     doLast {
