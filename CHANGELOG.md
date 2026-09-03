@@ -7,6 +7,24 @@ Versioning.
 
 No unreleased changes.
 
+## [1.1.0] - 2026-09-03
+
+### Added
+
+- Machine-readable Android application classification and explicit Timber/Sentry observability evidence.
+- A named document input validation boundary with focused size, password, envelope, and malformed-input tests.
+- Emulator-independent API 35 launcher coverage through Robolectric while retaining the managed emulator suite.
+- A committed CycloneDX 1.6 inventory for all 189 locked release-runtime components, enforced against stale changes.
+
+### Changed
+
+- Raised critical-domain coverage enforcement to 91% lines and 76% branches after a clean 512-test run.
+- Renamed CI job identifiers to explicit lint, typecheck, and test gates for unambiguous automation discovery.
+
+### Fixed
+
+- Read thumbnail metadata from the canonical source path so equivalent paths share the same cache identity on every OS.
+
 ## [1.0.0] - 2026-09-03
 
 ### Added
@@ -29,5 +47,6 @@ No unreleased changes.
 - Refreshed Kotlin, AndroidX, Compose, CameraX, Coil, and coroutine dependencies within the API 36/AGP 8
   compatibility line and regenerated strict lock/checksum state.
 
-[Unreleased]: https://github.com/BITS4/PDF-Maker/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/BITS4/PDF-Maker/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/BITS4/PDF-Maker/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/BITS4/PDF-Maker/releases/tag/v1.0.0
