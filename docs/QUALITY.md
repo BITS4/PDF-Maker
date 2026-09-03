@@ -12,12 +12,12 @@ locate, and the release workflow repeats the release-relevant checks from a clea
 | Formatting           | `ktlintCheck`, `:app:ktlintCheck`          | Every Kotlin source and build script follows the enforced style.        |
 | Static analysis      | `:app:detekt`                              | Every Detekt finding fails; no generated baseline is accepted.          |
 | Android analysis     | `:app:lintDebug`                           | Every Android lint warning and error fails the build.                   |
-| Unit behavior        | `:app:testDebugUnitTest`                   | Every JVM unit test must pass.                                          |
+| Host behavior        | `:app:testDebugUnitTest`                   | Every JVM and Robolectric API 35 test must pass without an emulator.    |
 | Global coverage      | `:app:koverXmlReportDebug`                 | The complete, unfiltered app remains visible in XML and HTML reports.   |
 | Critical coverage    | `:app:koverVerifyCritical`                 | At least 90% line and 75% branch coverage in the named critical domain. |
 | Compilation          | `:app:compileDebugKotlin`                  | Kotlin production sources compile on JDK 17.                            |
 | Packaging            | `:app:assembleDebug`, `:app:bundleRelease` | The debug APK and minified release bundle compile.                      |
-| Device behavior      | `:app:connectedDebugAndroidTest`           | Security/platform contracts pass on the CI API 35 emulator.             |
+| Device behavior      | `:app:connectedDebugAndroidTest`           | Hardware/platform contracts pass on the CI API 35 emulator.             |
 | Runtime dependencies | `writeRuntimeOsvManifest` + OSV Scanner    | The locked release graph contains no known vulnerability.               |
 
 At the verified 2026-09-03 source freeze, the repository contains 219 main-source Kotlin files and one debug-only test

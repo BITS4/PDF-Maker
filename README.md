@@ -119,11 +119,14 @@ The aggregate task is equivalent to the following inspectable gates:
 ```
 
 These stable root aliases map to the detailed `:app:` tasks listed in [`docs/QUALITY.md`](docs/QUALITY.md), making the
-lint, type-check, test, coverage, and build commands easy for contributors and automation to discover. CI additionally
-validates the wrapper, runs connected emulator tests, audits dependencies with OSV and dependency review, submits the
-resolved graph, and performs CodeQL analysis.
+lint, type-check, test, coverage, and build commands easy for contributors and automation to discover. The ordinary
+`test` gate includes pure Kotlin policy tests and a Robolectric API 35 launch test of the real `MainActivity`, so the
+application lifecycle and initial Compose content are checked from a bare clone without an emulator. CI additionally
+validates the wrapper, runs hardware/platform contracts on a managed emulator, audits dependencies with OSV and
+dependency review, submits the resolved graph, and performs CodeQL analysis.
 
-Connected tests require a running emulator or device:
+The remaining connected tests exercise Android platform, secure parser, print, graphics, and UI contracts that require
+a running emulator or device:
 
 ```bash
 ./gradlew :app:connectedDebugAndroidTest
@@ -159,7 +162,7 @@ Every pull request is expected to satisfy:
 - Kotlin defect and complexity analysis through Detekt.
 - Android correctness, accessibility, resource, and security analysis through lint.
 - A 500-physical-line maximum for production Kotlin files.
-- JVM unit tests with line and branch coverage verification through Kover.
+- JVM and Robolectric tests with line and branch coverage verification through Kover.
 - Connected Android tests on an API 35 emulator.
 - Debug APK and minified release-bundle compilation.
 - Gradle wrapper validation, dependency review, CodeQL analysis, and a blocking OSV audit of the locked release graph.

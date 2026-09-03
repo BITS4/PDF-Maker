@@ -30,7 +30,7 @@ jobs:
       - name: Validate wrapper integrity
         uses: gradle/actions/wrapper-validation@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
 
-  quality:
+  lint:
     name: Formatting, static analysis, and Android lint
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -84,8 +84,8 @@ jobs:
       - name: Compile Kotlin sources
         run: ./gradlew typecheck --no-daemon --stacktrace --warning-mode all
 
-  unit-tests:
-    name: Unit tests and coverage
+  test:
+    name: JVM, Robolectric, and coverage tests
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -118,7 +118,7 @@ jobs:
 
   build:
     name: Debug APK and release bundle
-    needs: [wrapper-validation, quality, typecheck, unit-tests]
+    needs: [wrapper-validation, lint, typecheck, test]
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -149,7 +149,7 @@ jobs:
 
   instrumented-tests:
     name: Instrumented tests (API 35)
-    needs: [wrapper-validation, quality, typecheck, unit-tests]
+    needs: [wrapper-validation, lint, typecheck, test]
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
