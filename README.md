@@ -168,7 +168,9 @@ Every pull request is expected to satisfy:
 - Gradle wrapper validation, dependency review, CodeQL analysis, and a blocking OSV audit of the locked release graph.
 
 Dependency versions live in `gradle/libs.versions.toml`, resolved versions are committed in the Gradle lock state, and
-artifact integrity is recorded in `gradle/verification-metadata.xml`. Dependabot proposes reviewable updates weekly.
+artifact integrity is recorded in `gradle/verification-metadata.xml`. The committed CycloneDX 1.6
+[`bom.cdx.json`](bom.cdx.json) enumerates all 189 locked release-runtime components, and the blocking lint gate rejects
+a stale inventory. Dependabot proposes reviewable updates weekly.
 
 ## Architecture
 

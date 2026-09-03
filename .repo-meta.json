@@ -7,6 +7,12 @@
   "application_module": "app",
   "infrastructure_as_code": false,
   "service_runtime": false,
+  "dependency_manifest": "gradle/libs.versions.toml",
+  "dependency_lockfiles": [
+    "app/gradle.lockfile",
+    "settings-gradle.lockfile"
+  ],
+  "sbom": "bom.cdx.json",
   "logging_framework": "Timber",
   "error_tracking": "Sentry Android"
 }

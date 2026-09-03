@@ -51,7 +51,10 @@ The coverage scopes and numeric gates are documented in [`docs/QUALITY.md`](docs
 ## Dependency updates
 
 Dependency updates belong in their own commit or pull request. Review release notes, refresh lock and verification
-metadata, run the entire gate, and record deferred major upgrades in `docs/DEPENDENCIES.md`.
+metadata, regenerate `bom.cdx.json`, run the entire gate, and record deferred major upgrades in
+`docs/DEPENDENCIES.md`. The version catalog is the source of truth for direct dependency declarations, the Gradle lock
+files are the source of truth for resolution, and `gradle/verification-metadata.xml` is the source of truth for
+artifact checksums; generated inventory must agree with all three.
 
 ## Security and privacy
 

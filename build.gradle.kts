@@ -33,6 +33,60 @@ subprojects {
     }
 }
 
+fun lockedReleaseRuntimeCoordinates(lockFile: File): List<Triple<String, String, String>> {
+    val safePart = Regex("[A-Za-z0-9_.+\\-]+")
+    return lockFile
+        .readLines(Charsets.UTF_8)
+        .asSequence()
+        .filterNot { line -> line.isBlank() || line.startsWith('#') || line.startsWith("empty=") }
+        .mapNotNull { line ->
+            val (coordinate, configurations) =
+                line.split('=', limit = 2).takeIf { it.size == 2 }
+                    ?: throw GradleException("Unexpected Gradle lock entry: $line")
+            if ("releaseRuntimeClasspath" !in configurations.split(',')) return@mapNotNull null
+
+            val parts = coordinate.split(':')
+            if (parts.size != 3 || parts.any { part -> !safePart.matches(part) }) {
+                throw GradleException("Cannot safely export Maven coordinate: $coordinate")
+            }
+            Triple(parts[0], parts[1], parts[2])
+        }.distinct()
+        .sortedWith(compareBy({ it.first }, { it.second }, { it.third }))
+        .toList()
+        .ifEmpty { throw GradleException("No locked releaseRuntimeClasspath dependencies were found") }
+}
+
+fun cycloneDxInventory(
+    lockFile: File,
+    applicationVersion: String,
+): String {
+    val components =
+        lockedReleaseRuntimeCoordinates(lockFile).joinToString(",\n") { (group, name, version) ->
+            val purl = "pkg:maven/$group/$name@$version"
+            """    {"type":"library","bom-ref":"$purl","group":"$group","name":"$name","version":"$version","scope":"required","purl":"$purl"}"""
+        }
+    return """{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "PDF Maker",
+      "version": "$applicationVersion"
+    },
+    "properties": [
+      {"name": "pdf-maker:source-configuration", "value": "releaseRuntimeClasspath"},
+      {"name": "pdf-maker:lockfile", "value": "app/gradle.lockfile"}
+    ]
+  },
+  "components": [
+$components
+  ]
+}
+"""
+}
+
 val productionKotlin =
     fileTree("app/src/main") {
         include("**/*.kt")
@@ -98,6 +152,7 @@ tasks.register("lint") {
     group = "verification"
     description = "Runs Kotlin formatting, Detekt, Android lint, and the production file-size gate."
     dependsOn(
+        "checkDependencyInventory",
         "checkPrivacySafeLogging",
         "checkSourceFileSize",
         "ktlintCheck",
@@ -151,30 +206,7 @@ tasks.register("writeRuntimeOsvManifest") {
     outputs.file(outputFile)
 
     doLast {
-        val safePart = Regex("[A-Za-z0-9_.+\\-]+")
-        val runtimeCoordinates =
-            lockFile.asFile
-                .readLines(Charsets.UTF_8)
-                .asSequence()
-                .filterNot { line -> line.isBlank() || line.startsWith('#') || line.startsWith("empty=") }
-                .mapNotNull { line ->
-                    val (coordinate, configurations) =
-                        line.split('=', limit = 2).takeIf { it.size == 2 }
-                            ?: throw GradleException("Unexpected Gradle lock entry: $line")
-                    if ("releaseRuntimeClasspath" !in configurations.split(',')) return@mapNotNull null
-
-                    val parts = coordinate.split(':')
-                    if (parts.size != 3 || parts.any { part -> !safePart.matches(part) }) {
-                        throw GradleException("Cannot safely export Maven coordinate: $coordinate")
-                    }
-                    Triple(parts[0], parts[1], parts[2])
-                }.distinct()
-                .sortedWith(compareBy({ it.first }, { it.second }, { it.third }))
-                .toList()
-
-        if (runtimeCoordinates.isEmpty()) {
-            throw GradleException("No locked releaseRuntimeClasspath dependencies were found")
-        }
+        val runtimeCoordinates = lockedReleaseRuntimeCoordinates(lockFile.asFile)
 
         val packages =
             runtimeCoordinates.joinToString(",\n") { (group, name, version) ->
@@ -196,6 +228,52 @@ $packages
 """,
                 Charsets.UTF_8,
             )
+        }
+    }
+}
+
+val dependencyLockFile = layout.projectDirectory.file("app/gradle.lockfile")
+val dependencyInventoryFile = layout.projectDirectory.file("bom.cdx.json")
+val applicationBuildFile = layout.projectDirectory.file("app/build.gradle.kts")
+
+fun currentApplicationVersion(buildFile: File): String =
+    Regex("""(?m)^\s*versionName\s*=\s*"([^"]+)"\s*$""")
+        .find(buildFile.readText(Charsets.UTF_8))
+        ?.groupValues
+        ?.get(1)
+        ?: throw GradleException("Could not read versionName from app/build.gradle.kts")
+
+tasks.register("writeDependencyInventory") {
+    group = "verification"
+    description = "Writes the deterministic CycloneDX inventory for the locked release runtime graph."
+    inputs.files(dependencyLockFile, applicationBuildFile)
+    outputs.file(dependencyInventoryFile)
+
+    doLast {
+        dependencyInventoryFile.asFile.writeText(
+            cycloneDxInventory(
+                dependencyLockFile.asFile,
+                currentApplicationVersion(applicationBuildFile.asFile),
+            ),
+            Charsets.UTF_8,
+        )
+    }
+}
+
+tasks.register("checkDependencyInventory") {
+    group = "verification"
+    description = "Fails when the committed CycloneDX inventory differs from the locked release runtime graph."
+    inputs.files(dependencyLockFile, applicationBuildFile, dependencyInventoryFile)
+
+    doLast {
+        val expected =
+            cycloneDxInventory(
+                dependencyLockFile.asFile,
+                currentApplicationVersion(applicationBuildFile.asFile),
+            )
+        val committed = dependencyInventoryFile.asFile.readText(Charsets.UTF_8)
+        if (committed != expected) {
+            throw GradleException("bom.cdx.json is stale; regenerate it with writeDependencyInventory")
         }
     }
 }

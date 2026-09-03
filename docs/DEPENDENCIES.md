@@ -7,9 +7,23 @@
 - Resolved application graph: `app/gradle.lockfile`
 - Artifact integrity: `gradle/verification-metadata.xml`
 - Gradle runtime: `gradle/wrapper/gradle-wrapper.properties`
+- Machine-readable release inventory: `bom.cdx.json`
 
 Literal dependency coordinates should not be added to module build files. Dynamic versions and snapshots are not
 accepted.
+
+## Auditable dependency snapshot
+
+The 2026-09-03 reviewed graph contains 21 direct application-runtime declarations, eight direct test/debug
+declarations, and six build-plugin declarations. Resolving the locked `releaseRuntimeClasspath` produces 189 unique
+Maven components; all 189 are recorded with package URLs in the committed CycloneDX 1.6 `bom.cdx.json`. The larger
+458-entry application lockfile also covers compile, unit-test, connected-test, debug, and release configurations and
+must not be presented as the shipped runtime footprint.
+
+`writeDependencyInventory` deterministically regenerates the SBOM from the release entries in
+`app/gradle.lockfile`. `checkDependencyInventory` compares that output byte-for-byte with the committed file and is a
+dependency of the blocking root `lint` task, so a version or lock change cannot merge with stale inventory evidence.
+The separate `writeRuntimeOsvManifest` task exports the same 189-component release graph to the OSV audit job.
 
 ## Reviewed platform baseline
 
