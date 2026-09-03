@@ -272,7 +272,11 @@ tasks.register("checkDependencyInventory") {
                 dependencyLockFile.asFile,
                 currentApplicationVersion(applicationBuildFile.asFile),
             )
-        val committed = dependencyInventoryFile.asFile.readText(Charsets.UTF_8)
+        val committed =
+            dependencyInventoryFile.asFile
+                .readText(Charsets.UTF_8)
+                .replace("\r\n", "\n")
+                .replace('\r', '\n')
         if (committed != expected) {
             throw GradleException("bom.cdx.json is stale; regenerate it with writeDependencyInventory")
         }

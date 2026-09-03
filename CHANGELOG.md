@@ -24,6 +24,7 @@ No unreleased changes.
 ### Fixed
 
 - Read thumbnail metadata from the canonical source path so equivalent paths share the same cache identity on every OS.
+- Made committed dependency-inventory verification invariant to platform newline conversion.
 
 ## [1.0.0] - 2026-09-03
 

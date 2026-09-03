@@ -21,9 +21,10 @@ Maven components; all 189 are recorded with package URLs in the committed Cyclon
 must not be presented as the shipped runtime footprint.
 
 `writeDependencyInventory` deterministically regenerates the SBOM from the release entries in
-`app/gradle.lockfile`. `checkDependencyInventory` compares that output byte-for-byte with the committed file and is a
-dependency of the blocking root `lint` task, so a version or lock change cannot merge with stale inventory evidence.
-The separate `writeRuntimeOsvManifest` task exports the same 189-component release graph to the OSV audit job.
+`app/gradle.lockfile`. `checkDependencyInventory` compares that content with the committed file after portable newline
+normalization and is a dependency of the blocking root `lint` task, so a version or lock change cannot merge with stale
+inventory evidence. The separate `writeRuntimeOsvManifest` task exports the same 189-component release graph to the
+OSV audit job.
 
 ## Reviewed platform baseline
 
