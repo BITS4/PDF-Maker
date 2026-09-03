@@ -11,11 +11,12 @@ internal object ThumbnailCachePolicy {
         sizePx: Int,
     ): ThumbnailCacheKey {
         val file = File(filePath)
+        val canonicalFile = runCatching { file.canonicalFile }.getOrElse { file.absoluteFile }
         return ThumbnailCacheKey(
-            canonicalPath = runCatching { file.canonicalPath }.getOrElse { file.absolutePath },
+            canonicalPath = canonicalFile.path,
             requestedSizePx = sizePx,
-            sourceBytes = file.length(),
-            lastModifiedMillis = file.lastModified(),
+            sourceBytes = canonicalFile.length(),
+            lastModifiedMillis = canonicalFile.lastModified(),
         )
     }
 

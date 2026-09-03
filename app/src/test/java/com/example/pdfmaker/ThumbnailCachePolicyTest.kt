@@ -25,11 +25,14 @@ class ThumbnailCachePolicyTest {
     fun `equivalent paths resolve to the same cache identity`() {
         val source = temporaryFolder.newFile("sample.pdf").apply { writeText("pdf") }
         val alternate = requireNotNull(source.parentFile).resolve("folder/../${source.name}")
+        val key = ThumbnailCachePolicy.key(alternate.path, 200)
 
         assertEquals(
             ThumbnailCachePolicy.key(source.path, 200),
-            ThumbnailCachePolicy.key(alternate.path, 200),
+            key,
         )
+        assertEquals(3L, key.sourceBytes)
+        assertNotEquals(0L, key.lastModifiedMillis)
     }
 
     @Test
