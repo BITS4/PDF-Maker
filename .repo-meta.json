@@ -1,0 +1,12 @@
+{
+  "project_type": "android_application",
+  "category": "mobile_application",
+  "platform": "android",
+  "primary_language": "kotlin",
+  "ui_framework": "jetpack_compose",
+  "application_module": "app",
+  "infrastructure_as_code": false,
+  "service_runtime": false,
+  "logging_framework": "Timber",
+  "error_tracking": "Sentry Android"
+}

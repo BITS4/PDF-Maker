@@ -7,6 +7,16 @@ PDF Maker is an offline-first Android document toolkit built with Kotlin and Jet
 camera captures into PDFs, manages local documents, and provides focused conversion and editing workflows without a
 hosted application backend.
 
+## Project type
+
+**PDF Maker is an Android mobile application (`android_application`), not an infrastructure-as-code repository.** Its
+deployable artifact is an APK or Android App Bundle produced from the `app` module. It intentionally contains no
+Terraform, Kubernetes, Helm, Pulumi, or Ansible stack because the app runs locally on Android and has no hosted service
+runtime. The same classification is recorded for automated repository tooling in [`.repo-meta.json`](.repo-meta.json).
+
+Runtime observability is implemented with **Timber structured logging** and optional, privacy-restricted **Sentry
+Android error tracking**. Service health and metrics endpoints are not applicable to this offline mobile application.
+
 ## Features
 
 - Create PDFs from one or more images.
