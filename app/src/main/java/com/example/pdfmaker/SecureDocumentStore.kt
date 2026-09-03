@@ -18,8 +18,8 @@ import java.util.concurrent.CancellationException
 
 /** Applies the secure-document codec to application-owned files using atomic replacement. */
 object SecureDocumentStore {
-    const val MAX_DOCUMENT_BYTES = SecureDocumentLimits.MAX_PLAINTEXT_BYTES
-    const val MAX_ENCRYPTED_DOCUMENT_BYTES = SecureDocumentLimits.MAX_ENCRYPTED_BYTES
+    const val MAX_DOCUMENT_BYTES = DocumentInputValidator.MAX_PLAINTEXT_BYTES
+    const val MAX_ENCRYPTED_DOCUMENT_BYTES = DocumentInputValidator.MAX_ENCRYPTED_BYTES
 
     @Synchronized
     fun lockInPlace(
@@ -35,7 +35,7 @@ object SecureDocumentStore {
             val target = validateWritableFile(file)
             if (password.length !in 4..128) return@safely "Password must contain 4 to 128 characters"
             if (isLocked(target)) return@safely "File is already locked"
-            val plaintextLength = SecureDocumentLimits.requirePlaintextLength(target.length())
+            val plaintextLength = DocumentInputValidator.requirePlaintextLength(target.length())
             transformAtomically(target) { input, output ->
                 beforeChunk()
                 SecureDocumentCodec.encrypt(
@@ -62,7 +62,7 @@ object SecureDocumentStore {
             },
         ) {
             val target = validateWritableFile(file)
-            val encryptedLength = SecureDocumentLimits.requireEncryptedLength(target.length())
+            val encryptedLength = DocumentInputValidator.requireEncryptedLength(target.length())
             val decrypted =
                 transformAtomically(
                     target = target,
@@ -109,7 +109,7 @@ object SecureDocumentStore {
         baseName: String,
     ): Pair<String, String>? =
         safely(onFailure = { null }) {
-            SecureDocumentLimits.requirePlaintextLength(bytes.size.toLong())
+            DocumentInputValidator.requirePlaintextLength(bytes.size.toLong())
             SecureDocumentTypePolicy.requirePlainPdf(
                 bytes.copyOfRange(0, minOf(bytes.size, SecureDocumentTypePolicy.SIGNATURE_BYTES)),
             )
@@ -135,7 +135,7 @@ object SecureDocumentStore {
         safely(onFailure = { null }) {
             val inputFile = source.canonicalFile
             require(inputFile.isFile && inputFile.canRead()) { "Locked file is unavailable" }
-            val encryptedLength = SecureDocumentLimits.requireEncryptedLength(inputFile.length())
+            val encryptedLength = DocumentInputValidator.requireEncryptedLength(inputFile.length())
             OutputStore.writeUnique(
                 destinationDirectory,
                 "pdfmaker-unlocked",

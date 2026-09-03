@@ -18,30 +18,6 @@ import javax.crypto.spec.SecretKeySpec
 internal const val LEGACY_DOCUMENT_MAGIC = "PDFLOCK1"
 internal const val AUTHENTICATED_DOCUMENT_MAGIC = "PDFLOCK2"
 
-/** Explicit wire-size limits shared by the byte-array and streaming codec paths. */
-object SecureDocumentLimits {
-    const val MAX_PLAINTEXT_BYTES = 100L * 1024L * 1024L
-    const val AUTHENTICATED_OVERHEAD_BYTES = 8L + Int.SIZE_BYTES + 16L + 12L + 16L
-    const val MAX_ENCRYPTED_BYTES = MAX_PLAINTEXT_BYTES + AUTHENTICATED_OVERHEAD_BYTES
-    const val MIN_ENCRYPTED_BYTES = AUTHENTICATED_OVERHEAD_BYTES + 1L
-
-    fun requirePlaintextLength(length: Long): Long {
-        require(length in 1..MAX_PLAINTEXT_BYTES) {
-            "File is empty or exceeds the 100 MB safety limit"
-        }
-        return length
-    }
-
-    fun requireEncryptedLength(length: Long): Long {
-        require(length in MIN_ENCRYPTED_BYTES..MAX_ENCRYPTED_BYTES) {
-            "Locked file is empty or exceeds its safety limit"
-        }
-        return length
-    }
-
-    fun authenticatedLength(plaintextLength: Long): Long = Math.addExact(requirePlaintextLength(plaintextLength), AUTHENTICATED_OVERHEAD_BYTES)
-}
-
 /** Versioned authenticated encryption with read compatibility for the original CBC format. */
 object SecureDocumentCodec {
     private const val ITERATIONS = 210_000
@@ -65,7 +41,7 @@ object SecureDocumentCodec {
         random: SecureRandom = SecureRandom(),
         iterations: Int = ITERATIONS,
     ): ByteArray {
-        SecureDocumentLimits.requirePlaintextLength(plaintext.size.toLong())
+        DocumentInputValidator.requirePlaintextLength(plaintext.size.toLong())
         validatePasswordAndIterations(password, iterations)
 
         val header = newAuthenticatedHeader(random, iterations)
@@ -92,7 +68,7 @@ object SecureDocumentCodec {
         iterations: Int = ITERATIONS,
         beforeChunk: () -> Unit = {},
     ): Long {
-        SecureDocumentLimits.requirePlaintextLength(plaintextLength)
+        DocumentInputValidator.requirePlaintextLength(plaintextLength)
         validatePasswordAndIterations(password, iterations)
 
         val header = newAuthenticatedHeader(random, iterations)
@@ -109,7 +85,7 @@ object SecureDocumentCodec {
                 beforeChunk = beforeChunk,
             )
         val written = header.size.toLong() + payloadBytes
-        check(written == SecureDocumentLimits.authenticatedLength(plaintextLength)) {
+        check(written == DocumentInputValidator.authenticatedLength(plaintextLength)) {
             "Encrypted document length is inconsistent"
         }
         return written
@@ -119,12 +95,8 @@ object SecureDocumentCodec {
         encrypted: ByteArray,
         password: String,
     ): ByteArray? {
-        if (password.length !in 4..128) return null
-        if (encrypted.size.toLong() !in
-            SecureDocumentLimits.MIN_ENCRYPTED_BYTES..SecureDocumentLimits.MAX_ENCRYPTED_BYTES
-        ) {
-            return null
-        }
+        if (!DocumentInputValidator.isPasswordAccepted(password)) return null
+        if (!DocumentInputValidator.isSupportedEncryptedDocument(encrypted)) return null
         return when {
             encrypted.hasMagic(AUTHENTICATED_DOCUMENT_MAGIC) -> decryptAuthenticated(encrypted, password)
             encrypted.hasMagic(LEGACY_DOCUMENT_MAGIC) -> decryptLegacy(encrypted, password)
@@ -132,7 +104,7 @@ object SecureDocumentCodec {
         }
     }
 
-    fun isEncrypted(bytes: ByteArray): Boolean = bytes.hasMagic(AUTHENTICATED_DOCUMENT_MAGIC) || bytes.hasMagic(LEGACY_DOCUMENT_MAGIC)
+    fun isEncrypted(bytes: ByteArray): Boolean = DocumentInputValidator.hasSupportedMagic(bytes)
 
     /** Decrypts V2 and legacy files while keeping any unauthenticated output in caller-owned temporary storage. */
     internal fun decrypt(
@@ -142,8 +114,8 @@ object SecureDocumentCodec {
         password: String,
         beforeChunk: () -> Unit = {},
     ): Boolean {
-        if (password.length !in 4..128 || encryptedLength !in
-            SecureDocumentLimits.MIN_ENCRYPTED_BYTES..SecureDocumentLimits.MAX_ENCRYPTED_BYTES
+        if (!DocumentInputValidator.isPasswordAccepted(password) ||
+            !DocumentInputValidator.isEncryptedLengthAccepted(encryptedLength)
         ) {
             return false
         }
@@ -252,7 +224,7 @@ object SecureDocumentCodec {
             expectedInputBytes = ciphertextLength,
             output = output,
             cipher = cipher,
-            maximumOutputBytes = SecureDocumentLimits.MAX_PLAINTEXT_BYTES,
+            maximumOutputBytes = DocumentInputValidator.MAX_PLAINTEXT_BYTES,
             clearTransformedBytes = true,
             beforeChunk = beforeChunk,
         )
@@ -278,7 +250,7 @@ object SecureDocumentCodec {
             expectedInputBytes = ciphertextLength,
             output = output,
             cipher = cipher,
-            maximumOutputBytes = SecureDocumentLimits.MAX_PLAINTEXT_BYTES,
+            maximumOutputBytes = DocumentInputValidator.MAX_PLAINTEXT_BYTES,
             clearTransformedBytes = true,
             beforeChunk = beforeChunk,
         )
@@ -458,7 +430,7 @@ object SecureDocumentCodec {
         password: String,
         iterations: Int,
     ) {
-        require(password.length in 4..128) { "Password must contain 4 to 128 characters" }
+        DocumentInputValidator.requirePassword(password)
         require(iterations in MIN_ITERATIONS..MAX_ITERATIONS) { "Invalid key derivation work factor" }
     }
 

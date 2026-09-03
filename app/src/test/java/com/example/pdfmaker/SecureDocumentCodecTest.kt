@@ -88,7 +88,7 @@ class SecureDocumentCodecTest {
             )
         val encrypted = encryptedOutput.toByteArray()
 
-        assertEquals(plaintext.size.toLong() + SecureDocumentLimits.AUTHENTICATED_OVERHEAD_BYTES, encryptedLength)
+        assertEquals(plaintext.size.toLong() + DocumentInputValidator.AUTHENTICATED_OVERHEAD_BYTES, encryptedLength)
         assertEquals(encryptedLength, encrypted.size.toLong())
         val decryptedOutput = ByteArrayOutputStream()
         assertTrue(
@@ -200,26 +200,26 @@ class SecureDocumentCodecTest {
     @Test
     fun sizePolicyAccountsForAuthenticatedHeaderAndTagAtBothBoundaries() {
         assertEquals(
-            SecureDocumentLimits.MAX_ENCRYPTED_BYTES,
-            SecureDocumentLimits.authenticatedLength(SecureDocumentLimits.MAX_PLAINTEXT_BYTES),
+            DocumentInputValidator.MAX_ENCRYPTED_BYTES,
+            DocumentInputValidator.authenticatedLength(DocumentInputValidator.MAX_PLAINTEXT_BYTES),
         )
         assertEquals(
-            SecureDocumentLimits.MAX_PLAINTEXT_BYTES,
-            SecureDocumentLimits.requirePlaintextLength(SecureDocumentLimits.MAX_PLAINTEXT_BYTES),
+            DocumentInputValidator.MAX_PLAINTEXT_BYTES,
+            DocumentInputValidator.requirePlaintextLength(DocumentInputValidator.MAX_PLAINTEXT_BYTES),
         )
         assertEquals(
-            SecureDocumentLimits.MAX_ENCRYPTED_BYTES,
-            SecureDocumentLimits.requireEncryptedLength(SecureDocumentLimits.MAX_ENCRYPTED_BYTES),
+            DocumentInputValidator.MAX_ENCRYPTED_BYTES,
+            DocumentInputValidator.requireEncryptedLength(DocumentInputValidator.MAX_ENCRYPTED_BYTES),
         )
-        listOf(0L, SecureDocumentLimits.MAX_PLAINTEXT_BYTES + 1).forEach { length ->
-            expectIllegalArgument { SecureDocumentLimits.requirePlaintextLength(length) }
+        listOf(0L, DocumentInputValidator.MAX_PLAINTEXT_BYTES + 1).forEach { length ->
+            expectIllegalArgument { DocumentInputValidator.requirePlaintextLength(length) }
         }
         listOf(
             0L,
-            SecureDocumentLimits.MIN_ENCRYPTED_BYTES - 1,
-            SecureDocumentLimits.MAX_ENCRYPTED_BYTES + 1,
+            DocumentInputValidator.MIN_ENCRYPTED_BYTES - 1,
+            DocumentInputValidator.MAX_ENCRYPTED_BYTES + 1,
         ).forEach { length ->
-            expectIllegalArgument { SecureDocumentLimits.requireEncryptedLength(length) }
+            expectIllegalArgument { DocumentInputValidator.requireEncryptedLength(length) }
         }
     }
 
@@ -342,7 +342,7 @@ class SecureDocumentStoreTest {
     @Test
     fun encryptedWireLimitIncludesV2Overhead() {
         assertEquals(
-            SecureDocumentStore.MAX_DOCUMENT_BYTES + SecureDocumentLimits.AUTHENTICATED_OVERHEAD_BYTES,
+            SecureDocumentStore.MAX_DOCUMENT_BYTES + DocumentInputValidator.AUTHENTICATED_OVERHEAD_BYTES,
             SecureDocumentStore.MAX_ENCRYPTED_DOCUMENT_BYTES,
         )
         val oversized = File(temporaryFolder.root, "oversized-locked.pdf")
