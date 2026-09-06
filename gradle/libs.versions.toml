@@ -20,7 +20,7 @@ ktlintGradle = "14.2.0"
 ktlintEngine = "1.8.0"
 lifecycleRuntimeCompose = "2.10.0"
 mlKitTextRecognition = "16.0.1"
-sentryAndroid = "8.54.0"
+sentryAndroid = "8.55.0"
 timber = "5.0.1"
 
 [libraries]
