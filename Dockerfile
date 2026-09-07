@@ -2,9 +2,9 @@
 
 # Both toolchain images are immutable. The Android image ships JDK 21, so copy the
 # repository's supported JDK 17 into it instead of silently building on a newer JVM.
-FROM eclipse-temurin:17-jdk-jammy@sha256:400014962ad7224461f945bb1cc3d7d5a1927ce15b8245b72d9cedcda554cd2a AS jdk
+FROM eclipse-temurin:25-jdk-jammy@sha256:89565961a318534f01c971c7b1d030e60713c66995b887c94010cef938dbc53e AS jdk
 
-FROM ghcr.io/cirruslabs/android-sdk:36@sha256:d9c965f2373f9c8cc023b207cdcc7d21508f98e6a45ab66462fe41aa9f866dea AS development
+FROM ghcr.io/cirruslabs/android-sdk:36@sha256:f9b3ea9ed2b5fc9522adae82c7b4622ab7aa54207ef532c8e615a347dca08f31 AS development
 
 COPY --from=jdk /opt/java/openjdk /opt/java/openjdk
 
